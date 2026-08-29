@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "441459768409",
+    "project_id": "carelink-30dde",
+    "storage_bucket": "carelink-30dde.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:441459768409:android:7099e885d120ddcd298548",
+        "android_client_info": {
+          "package_name": "com.example.carelink"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA4THdcrP25CT5AN9AVar4-BUIqI8r7FE0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
