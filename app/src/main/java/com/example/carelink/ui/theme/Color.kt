@@ -8,6 +8,7 @@ val CareLinkError = Color(0xFF9C4D5D)
 val CareLinkMessage = Color(0xFF396774)
 val CareLinkPrompt = Color(0xFF5B6375)
 val CareLinkBackground = Color(0xFFDCEEEF)
+val CareLinkPrimaryAction = Color(0xFF426B36)
 
 // General UI colors
 val CareLinkSurface = Color(0xFFFFFFFF)

@@ -5,7 +5,7 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 
 private val CareLinkColorScheme = lightColorScheme(
-    primary = CareLinkMessage,
+    primary = CareLinkPrimaryAction,
     onPrimary = CareLinkTextOnDark,
 
     secondary = CareLinkPrompt,
