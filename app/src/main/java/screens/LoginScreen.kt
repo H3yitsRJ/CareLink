@@ -61,8 +61,9 @@ fun LoginScreen(
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 28.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
         ) {
+
+            Spacer(modifier = Modifier.height(120.dp))
 
             // Temporary logo until we add the real CareLink image
             Text(
@@ -72,7 +73,7 @@ fun LoginScreen(
                 color = Color(0xFF4DB7C5)
             )
 
-            Spacer(modifier = Modifier.height(55.dp))
+            Spacer(modifier = Modifier.height(48.dp))
 
             Card(
                 modifier = Modifier.fillMaxWidth(),
@@ -83,7 +84,8 @@ fun LoginScreen(
             ) {
 
                 Column(
-                    modifier = Modifier.padding(20.dp)
+                    modifier = Modifier.padding(
+                    horizontal = 18.dp, vertical = 16.dp)
                 ) {
 
                     Text(
@@ -101,11 +103,11 @@ fun LoginScreen(
                             Text("Email")
                         },
                         singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth().height(52.dp),
                         shape = RoundedCornerShape(6.dp)
                     )
 
-                    Spacer(modifier = Modifier.height(18.dp))
+                    Spacer(modifier = Modifier.height(14.dp))
 
                     Text(
                         text = "Password",
@@ -123,11 +125,11 @@ fun LoginScreen(
                         },
                         singleLine = true,
                         visualTransformation = PasswordVisualTransformation(),
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth().height(52.dp),
                         shape = RoundedCornerShape(6.dp)
                     )
 
-                    Spacer(modifier = Modifier.height(14.dp))
+                    Spacer(modifier = Modifier.height(10.dp))
 
                     Text(
                         text = "Forgot password?",
@@ -138,13 +140,13 @@ fun LoginScreen(
                         }
                     )
 
-                    Spacer(modifier = Modifier.height(20.dp))
+                    Spacer(modifier = Modifier.height(16.dp))
 
                     Button(
                         onClick = {
                             onSignInClick()
                         },
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth().height(48.dp),
                         shape = RoundedCornerShape(6.dp),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = darkButtonColor
@@ -158,7 +160,7 @@ fun LoginScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(18.dp))
 
             OutlinedButton(
                 onClick = {
