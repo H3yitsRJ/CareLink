@@ -12,6 +12,11 @@ import com.example.carelink.ui.theme.CareLinkTheme
 import android.util.Log
 import com.google.firebase.firestore.FirebaseFirestore
 import com.example.carelink.screens.CreateAccountScreen
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import com.google.firebase.auth.FirebaseAuth
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -33,7 +38,47 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             CareLinkTheme {
-                CreateAccountScreen()
+
+                val auth = FirebaseAuth.getInstance()
+
+                var isSubmitting by remember {
+                    mutableStateOf(false)
+                }
+
+                var submitError by remember {
+                    mutableStateOf<String?>(null)
+                }
+
+                var accountCreated by remember {
+                    mutableStateOf(false)
+                }
+
+                CreateAccountScreen(
+                    isSubmitting = isSubmitting,
+                    submitError = submitError,
+                    accountCreated = accountCreated,
+
+                    onCreateAccount = { details ->
+
+                        isSubmitting = true
+                        submitError = null
+
+                        auth.createUserWithEmailAndPassword(
+                            details.email,
+                            details.password
+                        )
+                            .addOnSuccessListener {
+                                isSubmitting = false
+                                accountCreated = true
+                            }
+                            .addOnFailureListener { exception ->
+                                isSubmitting = false
+                                submitError =
+                                    exception.localizedMessage
+                                        ?: "Unable to create account."
+                            }
+                    }
+                )
             }
         }
     }
