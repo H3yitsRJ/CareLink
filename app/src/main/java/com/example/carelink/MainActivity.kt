@@ -17,6 +17,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import com.google.firebase.auth.FirebaseAuth
+import com.example.carelink.screens.LoginScreen
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -53,32 +54,43 @@ class MainActivity : ComponentActivity() {
                     mutableStateOf(false)
                 }
 
-                CreateAccountScreen(
-                    isSubmitting = isSubmitting,
-                    submitError = submitError,
-                    accountCreated = accountCreated,
+                var showLoginScreen by remember {
+                    mutableStateOf(false)
+                }
 
-                    onCreateAccount = { details ->
+                if (showLoginScreen) {
+                    LoginScreen(
+                        onCreateAccountClick = { showLoginScreen = false }
+                    )
+                } else {
+                    CreateAccountScreen(
+                        isSubmitting = isSubmitting,
+                        submitError = submitError,
+                        accountCreated = accountCreated,
 
-                        isSubmitting = true
-                        submitError = null
+                        onCreateAccount = { details ->
 
-                        auth.createUserWithEmailAndPassword(
-                            details.email,
-                            details.password
-                        )
-                            .addOnSuccessListener {
-                                isSubmitting = false
-                                accountCreated = true
-                            }
-                            .addOnFailureListener { exception ->
-                                isSubmitting = false
-                                submitError =
-                                    exception.localizedMessage
-                                        ?: "Unable to create account."
-                            }
-                    }
-                )
+                            isSubmitting = true
+                            submitError = null
+
+                            auth.createUserWithEmailAndPassword(
+                                details.email,
+                                details.password
+                            )
+                                .addOnSuccessListener {
+                                    isSubmitting = false
+                                    accountCreated = true
+                                }
+                                .addOnFailureListener { exception ->
+                                    isSubmitting = false
+                                    submitError =
+                                        exception.localizedMessage
+                                            ?: "Unable to create account."
+                                }
+                        },
+                        onSignIn = { showLoginScreen = true }
+                    )
+                }
             }
         }
     }
