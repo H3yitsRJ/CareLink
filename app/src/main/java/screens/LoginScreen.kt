@@ -1,8 +1,8 @@
-package com.example.carelink.screens
+package screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
+//import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -18,7 +18,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.MaterialTheme
+//import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -30,10 +30,16 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontWeight
+//import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.Image
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.layout.ContentScale
+import com.example.carelink.R
+import androidx.compose.foundation.layout.width
+
 
 @Composable
 fun LoginScreen(
@@ -66,11 +72,11 @@ fun LoginScreen(
             Spacer(modifier = Modifier.height(120.dp))
 
             // Temporary logo until we add the real CareLink image
-            Text(
-                text = "CareLink",
-                fontSize = 28.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color(0xFF4DB7C5)
+            Image(
+                painter = painterResource(id = R.drawable.carelink_logo),
+                contentDescription = "CareLink logo",
+                modifier = Modifier.width(250.dp).height(175.dp),
+                contentScale = ContentScale.Fit
             )
 
             Spacer(modifier = Modifier.height(48.dp))
