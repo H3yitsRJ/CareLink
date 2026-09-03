@@ -10,12 +10,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import com.example.carelink.ui.theme.CareLinkTheme
 import android.util.Log
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawingPadding
 import com.google.firebase.firestore.FirebaseFirestore
 import com.example.carelink.screens.CreateAccountScreen
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.unit.dp
 import com.google.firebase.auth.FirebaseAuth
 import screens.LoginScreen
 
@@ -41,6 +44,9 @@ class MainActivity : ComponentActivity() {
             CareLinkTheme {
 
                 val auth = FirebaseAuth.getInstance()
+                var isAuthenticated by remember {
+                    mutableStateOf(auth.currentUser != null)
+                }
 
                 var isSubmitting by remember {
                     mutableStateOf(false)
@@ -58,9 +64,31 @@ class MainActivity : ComponentActivity() {
                     mutableStateOf(false)
                 }
 
-                if (showLoginScreen) {
+                // TODO: Remove this temporary signed-in message once the Dashboard screen
+// is complete. Replace it with navigation to the CareLink Dashboard.
+                if (isAuthenticated) {
+                    Text(
+                        text = "User is signed in",
+                        modifier = Modifier
+                            .safeDrawingPadding()
+                            .padding(24.dp)
+                    )
+                } else if (showLoginScreen) {
                     LoginScreen(
-                        onCreateAccountClick = { showLoginScreen = false }
+                        onSignInClick = { email, password ->
+                            auth.signInWithEmailAndPassword(email, password)
+                                .addOnSuccessListener {
+                                    isAuthenticated = true
+                                }
+                                .addOnFailureListener { exception ->
+                                    submitError =
+                                        exception.localizedMessage
+                                            ?: "Unable to sign in."
+                                }
+                        },
+                        onCreateAccountClick = {
+                            showLoginScreen = false
+                        }
                     )
                 } else {
                     CreateAccountScreen(
@@ -80,6 +108,7 @@ class MainActivity : ComponentActivity() {
                                 .addOnSuccessListener {
                                     isSubmitting = false
                                     accountCreated = true
+                                    isAuthenticated = true
                                 }
                                 .addOnFailureListener { exception ->
                                     isSubmitting = false
