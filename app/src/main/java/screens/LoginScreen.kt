@@ -48,7 +48,7 @@ import androidx.compose.ui.text.input.VisualTransformation
 
 @Composable
 fun LoginScreen(
-    onSignInClick: () -> Unit = {},
+    onSignInClick: (String, String) -> Unit = { _, _ -> },
     onCreateAccountClick: () -> Unit = {},
     onForgotPasswordClick: () -> Unit = {}
 ) {
@@ -189,7 +189,10 @@ fun LoginScreen(
 
                     Button(
                         onClick = {
-                            onSignInClick()
+                            onSignInClick(
+                                email.trim(),
+                                password
+                            )
                         },
                         modifier = Modifier.fillMaxWidth().height(48.dp),
                         shape = RoundedCornerShape(6.dp),
