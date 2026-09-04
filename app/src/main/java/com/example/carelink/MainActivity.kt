@@ -21,6 +21,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.unit.dp
 import com.google.firebase.auth.FirebaseAuth
 import screens.LoginScreen
+import com.example.carelink.screens.CreateProfileScreen
+import androidx.compose.runtime.LaunchedEffect
+import com.example.carelink.screens.DashboardScreen
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -64,15 +67,74 @@ class MainActivity : ComponentActivity() {
                     mutableStateOf(false)
                 }
 
-                // TODO: Remove this temporary signed-in message once the Dashboard screen
-// is complete. Replace it with navigation to the CareLink Dashboard.
-                if (isAuthenticated) {
-                    Text(
-                        text = "User is signed in",
-                        modifier = Modifier
-                            .safeDrawingPadding()
-                            .padding(24.dp)
+                var hasProfile by remember {
+                    mutableStateOf<Boolean?>(null)
+                }
+
+                var fullName by remember {
+                    mutableStateOf("")
+                }
+                LaunchedEffect(isAuthenticated) {
+                    val user = auth.currentUser
+
+                    if (isAuthenticated && user != null) {
+                        db.collection("users")
+                            .document(user.uid)
+                            .get()
+                            .addOnSuccessListener { document ->
+                                hasProfile = document.exists()
+
+                                if (document.exists()) {
+                                    fullName = document.getString("fullName") ?: ""
+                                }
+                            }
+                            .addOnFailureListener {
+                                hasProfile = false
+                            }
+                    } else {
+                        hasProfile = false
+                    }
+                }
+
+                if (isAuthenticated && hasProfile == false) {
+                    CreateProfileScreen(
+                        onSaveProfile = { fullName, dateOfBirth, phoneNumber, primaryPhysician, preferredPharmacy ->
+
+                            val user = auth.currentUser
+
+                            if (user != null) {
+                                val profileData = hashMapOf(
+                                    "fullName" to fullName,
+                                    "dateOfBirth" to dateOfBirth,
+                                    "phoneNumber" to phoneNumber,
+                                    "primaryPhysician" to primaryPhysician,
+                                    "preferredPharmacy" to preferredPharmacy,
+                                    "email" to (user.email ?: "")
+                                )
+
+                                db.collection("users")
+                                    .document(user.uid)
+                                    .set(profileData)
+                                    .addOnSuccessListener {
+                                        Log.d("ProfileSetup", "Profile saved successfully")
+                                    }
+                                    .addOnFailureListener { exception ->
+                                        Log.e("ProfileSetup", "Profile save failed", exception)
+                                    }
+                            }
+                        },
+                        onCancel = {
+                            auth.signOut()
+                            isAuthenticated = false
+                            showLoginScreen = true
+                        }
                     )
+
+                } else if (isAuthenticated && hasProfile == true) {
+                    DashboardScreen(
+                        fullName = fullName
+                    )
+
                 } else if (showLoginScreen) {
                     LoginScreen(
                         onSignInClick = { email, password ->
