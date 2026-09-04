@@ -1,11 +1,7 @@
 package navigation
 
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.List
-import androidx.compose.material.icons.filled.DateRange
-import androidx.compose.material.icons.filled.Star
+import androidx.compose.ui.res.painterResource
+import com.example.carelink.R
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -16,10 +12,14 @@ fun BottomNavBar() {
 
     NavigationBar {
 
-        NavigationBarItem(selected = false,
-        onClick = { },
-        icon = {
-            Icon(Icons.Default.Home, "Home")
+        NavigationBarItem(
+            selected = false,
+            onClick = { },
+            icon = {
+                Icon(
+                    painter = painterResource(R.drawable.home_icon),
+                    contentDescription = "Home"
+                )
             }
         )
 
@@ -27,7 +27,10 @@ fun BottomNavBar() {
             selected = false,
             onClick = { },
             icon = {
-                Icon(Icons.Default.Star, "Medication")
+                Icon(
+                    painter = painterResource(R.drawable.medications_icon),
+                    contentDescription = "Medications"
+                )
             }
         )
 
@@ -35,7 +38,10 @@ fun BottomNavBar() {
             selected = false,
             onClick = { },
             icon = {
-                Icon(Icons.Default.DateRange, "Calendar")
+                Icon(
+                    painter = painterResource(R.drawable.calendar_icon),
+                    contentDescription = "Calendar"
+                )
             }
         )
 
@@ -43,7 +49,10 @@ fun BottomNavBar() {
             selected = false,
             onClick = { },
             icon = {
-                Icon(Icons.Default.List, "Tasks")
+                Icon(
+                    painter = painterResource(R.drawable.care_tasks_icon),
+                    contentDescription = "Tasks"
+                )
             }
         )
 
@@ -51,7 +60,10 @@ fun BottomNavBar() {
             selected = false,
             onClick = { },
             icon = {
-                Icon(Icons.Default.Person, "Profile")
+                Icon(
+                    painter = painterResource(R.drawable.profile_icon),
+                    contentDescription = "Profile"
+                )
             }
         )
     }
