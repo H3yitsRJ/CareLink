@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Firebase's local emulators use HTTP. Keep this permission out of release builds. -->
+    <application android:usesCleartextTraffic="true" />
+
+</manifest>

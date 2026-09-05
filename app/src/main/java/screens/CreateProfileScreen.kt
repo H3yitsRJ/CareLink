@@ -41,6 +41,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.example.carelink.ui.theme.CareLinkTheme
 
+// One value object lets the caller save the profile as a single operation.
 data class PatientProfileDetails(
     val firstName: String,
     val lastName: String,
@@ -73,6 +74,7 @@ internal data class ProfileErrors(
         ).any { it != null }
 }
 
+// Optional fields are checked only when the patient enters a value.
 internal fun validateProfile(
     firstName: String,
     lastName: String,
@@ -109,6 +111,7 @@ internal fun validateProfile(
     }
 )
 
+// This checks the agreed display format without introducing a date dependency into the form.
 private fun isValidDateOfBirth(value: String): Boolean {
     val parts = value.trim().split("/")
     if (parts.size != 3 || parts[0].length != 2 || parts[1].length != 2 || parts[2].length != 4) {
@@ -127,6 +130,7 @@ fun CreateProfileScreen(
     saveError: String? = null,
     onSaveProfile: (PatientProfileDetails) -> Unit = {}
 ) {
+    // Saveable form state prevents a long profile form from resetting after rotation.
     var firstName by rememberSaveable { mutableStateOf("") }
     var lastName by rememberSaveable { mutableStateOf("") }
     var preferredName by rememberSaveable { mutableStateOf("") }
@@ -156,6 +160,7 @@ fun CreateProfileScreen(
     }
 
     fun save() {
+        // Normalize whitespace and the state code only after validation succeeds.
         attemptedSave = true
         val currentErrors = validateProfile(
             firstName,
@@ -356,6 +361,7 @@ fun CreateProfileScreen(
 }
 
 @Composable
+// This helper centralizes accessible errors and keyboard focus behavior.
 private fun ProfileTextField(
     value: String,
     onValueChange: (String) -> Unit,

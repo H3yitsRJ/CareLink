@@ -14,8 +14,13 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.example.carelink.ui.theme.CareLinkTheme
 
+enum class BottomNavDestination { Home, Medications, Appointments, CareTasks, Profile }
+
 @Composable
-fun BottomNavBar() {
+fun BottomNavBar(
+    selectedDestination: BottomNavDestination = BottomNavDestination.Home,
+    onDestinationSelected: (BottomNavDestination) -> Unit = {}
+) {
     Surface(
         modifier = Modifier.padding(3.dp),
         shape = RoundedCornerShape(24.dp)
@@ -23,8 +28,8 @@ fun BottomNavBar() {
         NavigationBar() {
 
             NavigationBarItem(
-                selected = false,
-                onClick = { },
+                selected = selectedDestination == BottomNavDestination.Home,
+                onClick = { onDestinationSelected(BottomNavDestination.Home) },
                 icon = {
                     Icon(
                         painter = painterResource(R.drawable.home_icon),
@@ -34,8 +39,8 @@ fun BottomNavBar() {
             )
 
             NavigationBarItem(
-                selected = false,
-                onClick = { },
+                selected = selectedDestination == BottomNavDestination.Medications,
+                onClick = { onDestinationSelected(BottomNavDestination.Medications) },
                 icon = {
                     Icon(
                         painter = painterResource(R.drawable.medications_icon),
@@ -45,30 +50,30 @@ fun BottomNavBar() {
             )
 
             NavigationBarItem(
-                selected = false,
-                onClick = { },
+                selected = selectedDestination == BottomNavDestination.Appointments,
+                onClick = { onDestinationSelected(BottomNavDestination.Appointments) },
                 icon = {
                     Icon(
                         painter = painterResource(R.drawable.calendar_icon),
-                        contentDescription = "Calendar"
+                        contentDescription = "Appointments"
                     )
                 }
             )
 
             NavigationBarItem(
-                selected = false,
-                onClick = { },
+                selected = selectedDestination == BottomNavDestination.CareTasks,
+                onClick = { onDestinationSelected(BottomNavDestination.CareTasks) },
                 icon = {
                     Icon(
                         painter = painterResource(R.drawable.care_tasks_icon),
-                        contentDescription = "Tasks"
+                        contentDescription = "Care tasks"
                     )
                 }
             )
 
             NavigationBarItem(
-                selected = false,
-                onClick = { },
+                selected = selectedDestination == BottomNavDestination.Profile,
+                onClick = { onDestinationSelected(BottomNavDestination.Profile) },
                 icon = {
                     Icon(
                         painter = painterResource(R.drawable.profile_icon),
@@ -84,6 +89,6 @@ fun BottomNavBar() {
 @Composable
 private fun BottomNavPreview() {
     CareLinkTheme {
-        BottomNavBar()
+        BottomNavBar(BottomNavDestination.Home) {}
     }
 }

@@ -4,6 +4,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 
+// Semantic colors let screens ask for an action, error, or surface color by purpose.
 private val CareLinkColorScheme = lightColorScheme(
     primary = CareLinkPrimaryAction,
     onPrimary = CareLinkTextOnDark,
@@ -25,6 +26,7 @@ private val CareLinkColorScheme = lightColorScheme(
 )
 
 @Composable
+// Every screen enters through one theme so typography and colors stay consistent.
 fun CareLinkTheme(
     content: @Composable () -> Unit
 ) {
