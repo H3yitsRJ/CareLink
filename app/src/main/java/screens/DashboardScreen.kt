@@ -1,5 +1,5 @@
 package com.example.carelink.screens
-
+import navigation.BottomNavBar
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -30,6 +30,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Button
+import androidx.compose.material3.Scaffold
+
 @Composable
 fun DashboardScreen(
     fullName: String
@@ -37,14 +39,19 @@ fun DashboardScreen(
     var medicationStatus by remember {
         mutableStateOf("Taken")
     }
+    Scaffold(
+        bottomBar = {
+            BottomNavBar()
+        }
+    ) { innerPadding ->
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
-            .safeDrawingPadding()
-            .padding(horizontal = 24.dp)
-    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background)
+                .padding(innerPadding)
+                .padding(horizontal = 24.dp)
+        ) {
 
         Spacer(modifier = Modifier.height(24.dp))
 
@@ -316,4 +323,5 @@ fun DashboardScreen(
             }
         }
     }
+}
 }
