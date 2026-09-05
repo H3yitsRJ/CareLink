@@ -122,8 +122,9 @@ CareLink is being developed as a collaborative capstone project.
 **Project Team:**
 
 - Timothy Jackson
-- [Team Member Name]
-- [Team Member Name]
+- Katie Lavely
+- Robert Tobiasz
+- RJ Vogel
 
 Additional contributors will be added as development continues.
 
@@ -164,7 +165,7 @@ Planned development for CareLink includes:
 
 - Complete all Android application screens
 - Complete navigation between screens
-- Implement user authentication
+- Continue testing user authentication
 - Connect application data to Firebase
 - Implement medication management
 - Implement appointment management
