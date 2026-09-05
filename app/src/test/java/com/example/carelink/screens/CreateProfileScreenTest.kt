@@ -5,6 +5,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
+// Profile tests cover required fields and optional-field formatting rules.
 class CreateProfileScreenTest {
     @Test
     fun validProfileHasNoErrors() {

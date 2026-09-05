@@ -1,6 +1,7 @@
 package com.example.carelink.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -36,18 +37,21 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import com.example.carelink.R
 import com.example.carelink.ui.theme.CareLinkTheme
 
+// The screen returns only the values Firebase Authentication needs.
 data class RegistrationDetails(
     val email: String,
     val password: String
@@ -62,6 +66,7 @@ internal data class RegistrationErrors(
         get() = listOf(email, password, confirmPassword).any { it != null }
 }
 
+// Validation stays outside Compose so unit tests can run without an Android device.
 internal fun validateRegistration(
     email: String,
     password: String,
@@ -99,6 +104,7 @@ fun CreateAccountScreen(
     onContinueToProfile: () -> Unit = {},
     onSignIn: () -> Unit = {}
 ) {
+    // Saveable fields survive rotation without moving unfinished passwords into a repository.
     var email by rememberSaveable { mutableStateOf("") }
     var password by rememberSaveable { mutableStateOf("") }
     var confirmPassword by rememberSaveable { mutableStateOf("") }
@@ -106,6 +112,7 @@ fun CreateAccountScreen(
     var showConfirmPassword by rememberSaveable { mutableStateOf(false) }
     var attemptedSubmit by rememberSaveable { mutableStateOf(false) }
 
+    // Delay validation messages until the patient has tried to submit once.
     val errors = remember(email, password, confirmPassword, attemptedSubmit) {
         if (attemptedSubmit) {
             validateRegistration(email, password, confirmPassword)
@@ -115,6 +122,7 @@ fun CreateAccountScreen(
     }
 
     fun submit() {
+        // The parent performs the Firebase request and reports busy or error state back here.
         attemptedSubmit = true
         val currentErrors = validateRegistration(email, password, confirmPassword)
         if (!currentErrors.hasErrors && !isSubmitting) {
@@ -151,11 +159,13 @@ fun CreateAccountScreen(
                     modifier = Modifier.fillMaxWidth(),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Text(
-                        text = "CareLink",
-                        color = MaterialTheme.colorScheme.primary,
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold
+                    Image(
+                        painter = painterResource(R.drawable.carelink_logo),
+                        contentDescription = "CareLink",
+                        contentScale = ContentScale.Fit,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(104.dp)
                     )
                     Text(
                         text = "Create your account",
@@ -273,6 +283,7 @@ fun CreateAccountScreen(
 }
 
 @Composable
+// Shared field behavior keeps focus movement, errors, and password actions consistent.
 private fun RegistrationTextField(
     value: String,
     onValueChange: (String) -> Unit,
@@ -327,6 +338,7 @@ private fun RegistrationTextField(
 }
 
 @Composable
+// A separate success state prevents the form from accepting a second submission.
 private fun RegistrationSuccess(
     onContinue: () -> Unit,
     modifier: Modifier = Modifier

@@ -1,5 +1,6 @@
 *.iml
 .gradle
+/.gradle-user
 /local.properties
 /.idea/caches
 /.idea/libraries
@@ -13,3 +14,7 @@
 .externalNativeBuild
 .cxx
 local.properties
+.firebase/
+firebase-debug.log
+firestore-debug.log
+ui-debug.log

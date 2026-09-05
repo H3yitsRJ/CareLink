@@ -4,6 +4,10 @@ plugins {
     id("com.google.gms.google-services")
 }
 
+val useFirebaseEmulators = providers.gradleProperty("useFirebaseEmulators")
+    .map(String::toBoolean)
+    .orElse(false)
+
 android {
     namespace = "com.example.carelink"
     compileSdk {
@@ -23,6 +27,9 @@ android {
     }
 
     buildTypes {
+        debug {
+            buildConfigField("boolean", "USE_FIREBASE_EMULATORS", useFirebaseEmulators.get().toString())
+        }
         release {
             isMinifyEnabled = false
             proguardFiles(
@@ -36,6 +43,7 @@ android {
         targetCompatibility = JavaVersion.VERSION_11
     }
     buildFeatures {
+        buildConfig = true
         compose = true
     }
 }

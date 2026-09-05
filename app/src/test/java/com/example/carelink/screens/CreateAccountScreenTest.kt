@@ -5,6 +5,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
+// Registration rules run as plain unit tests instead of slower device tests.
 class CreateAccountScreenTest {
     @Test
     fun validRegistrationHasNoErrors() {
