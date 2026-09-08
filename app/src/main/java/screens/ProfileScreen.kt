@@ -1,4 +1,4 @@
-package com.example.carelink.screens
+package screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable

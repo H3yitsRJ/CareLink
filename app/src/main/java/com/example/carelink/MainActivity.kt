@@ -6,7 +6,6 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -26,7 +25,7 @@ import com.example.carelink.screens.LoginScreen
 import com.example.carelink.screens.LogoutScreen
 import com.example.carelink.screens.MedicationsScreen
 import com.example.carelink.screens.PasswordResetEmailScreen
-import com.example.carelink.screens.ProfileScreen
+import screens.ProfileScreen
 import com.example.carelink.screens.SettingsScreen
 import com.example.carelink.ui.theme.CareLinkTheme
 import com.google.firebase.auth.FirebaseAuth

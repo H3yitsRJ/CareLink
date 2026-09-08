@@ -1,5 +1,3 @@
-package com.example.carelink
-
 class FakeAuthRepository {
 
     private val users = mutableMapOf<String, String>()

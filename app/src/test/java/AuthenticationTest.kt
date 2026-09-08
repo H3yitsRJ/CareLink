@@ -1,5 +1,3 @@
-package com.example.carelink
-
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
