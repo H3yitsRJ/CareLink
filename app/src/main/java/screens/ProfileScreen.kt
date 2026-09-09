@@ -1,4 +1,4 @@
-package screens
+package com.example.carelink.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -28,26 +28,66 @@ fun ProfileScreen(
     onOpenSettings: () -> Unit,
     onNavigate: (BottomNavDestination) -> Unit
 ) {
-    Scaffold(bottomBar = {
-        BottomNavBar(BottomNavDestination.Profile, onNavigate)
-    }) { innerPadding ->
+    Scaffold(
+        bottomBar = {
+            BottomNavBar(
+                selectedDestination = BottomNavDestination.Profile,
+                onDestinationSelected = onNavigate
+            )
+        }
+    ) { innerPadding ->
+
         Column(
-            Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)
-                .padding(innerPadding).padding(16.dp)
+            modifier = Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background)
+                .padding(innerPadding)
+                .padding(16.dp)
         ) {
-            Text("Profile", style = MaterialTheme.typography.headlineLarge)
+
+            Text(
+                text = "Profile",
+                style = MaterialTheme.typography.headlineLarge
+            )
+
             if (fullName.isNotBlank()) {
-                Text(fullName, Modifier.padding(top = 24.dp), style = MaterialTheme.typography.titleLarge)
+                Text(
+                    text = fullName,
+                    modifier = Modifier.padding(top = 24.dp),
+                    style = MaterialTheme.typography.titleLarge
+                )
             }
-            if (email.isNotBlank()) Text(email, color = MaterialTheme.colorScheme.onSurfaceVariant)
+
+            if (email.isNotBlank()) {
+                Text(
+                    text = email,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
             Row(
-                Modifier.fillMaxWidth().padding(top = 24.dp).sizeIn(minHeight = 56.dp)
-                    .clickable(onClickLabel = "Open settings", onClick = onOpenSettings)
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 24.dp)
+                    .sizeIn(minHeight = 56.dp)
+                    .clickable(
+                        onClickLabel = "Open settings",
+                        onClick = onOpenSettings
+                    )
                     .padding(horizontal = 4.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("Settings", Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
-                Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null)
+                Text(
+                    text = "Settings",
+                    modifier = Modifier.weight(1f),
+                    style = MaterialTheme.typography.bodyLarge
+                )
+
+                Icon(
+                    imageVector =
+                        Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                    contentDescription = null
+                )
             }
         }
     }

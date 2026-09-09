@@ -25,13 +25,13 @@ import com.example.carelink.screens.LoginScreen
 import com.example.carelink.screens.LogoutScreen
 import com.example.carelink.screens.MedicationsScreen
 import com.example.carelink.screens.PasswordResetEmailScreen
-import screens.ProfileScreen
 import com.example.carelink.screens.SettingsScreen
 import com.example.carelink.ui.theme.CareLinkTheme
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseAuthInvalidUserException
 import com.google.firebase.firestore.FirebaseFirestore
 import navigation.BottomNavDestination
+import com.example.carelink.screens.ProfileScreen
 
 // The authentication flow is small enough to model locally without adding a navigation library.
 private enum class AuthScreen { SignIn, CreateAccount, ResetPassword }
