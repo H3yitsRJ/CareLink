@@ -25,9 +25,10 @@ import navigation.BottomNavDestination
 fun ProfileScreen(
     fullName: String,
     email: String,
+    onEditProfile: () -> Unit,
     onOpenSettings: () -> Unit,
     onNavigate: (BottomNavDestination) -> Unit
-) {
+){
     Scaffold(
         bottomBar = {
             BottomNavBar(
@@ -62,6 +63,29 @@ fun ProfileScreen(
                 Text(
                     text = email,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 24.dp)
+                    .sizeIn(minHeight = 56.dp)
+                    .clickable(
+                        onClickLabel = "Edit profile",
+                        onClick = onEditProfile
+                    )
+                    .padding(horizontal = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Edit Profile",
+                    modifier = Modifier.weight(1f),
+                    style = MaterialTheme.typography.bodyLarge
+                )
+
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                    contentDescription = null
                 )
             }
 
