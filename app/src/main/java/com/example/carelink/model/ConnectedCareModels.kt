@@ -3,10 +3,58 @@ package com.example.carelink.model
 enum class AppointmentStatus { SCHEDULED, COMPLETED, CANCELLED }
 
 data class Appointment(
-    val id: String, val patientId: String, val title: String, val date: String, val time: String,
-    val provider: String = "", val location: String = "", val notes: String = "",
+    val id: String,
+    val patientId: String,
+    val title: String,
+    val date: String,
+    val time: String,
+    val provider: String = "",
+    val location: String = "",
+    val notes: String = "",
     val status: AppointmentStatus = AppointmentStatus.SCHEDULED
-)
+) {
+    fun toFirestore(): Map<String, Any?> = mapOf(
+        "patientId" to patientId,
+        "title" to title,
+        "date" to date,
+        "time" to time,
+        "provider" to provider,
+        "location" to location,
+        "notes" to notes,
+        "status" to status.name
+    )
+
+    companion object {
+        fun fromFirestore(
+            id: String,
+            data: Map<String, Any?>
+        ): Appointment {
+            val statusValue = data["status"] as? String
+
+            val parsedStatus = try {
+                if (statusValue != null) {
+                    AppointmentStatus.valueOf(statusValue)
+                } else {
+                    AppointmentStatus.SCHEDULED
+                }
+            } catch (_: IllegalArgumentException) {
+                AppointmentStatus.SCHEDULED
+            }
+
+            return Appointment(
+                id = id,
+                patientId = data["patientId"] as? String ?: "",
+                title = data["title"] as? String ?: "",
+                date = data["date"] as? String ?: "",
+                time = data["time"] as? String ?: "",
+                provider = data["provider"] as? String ?: "",
+                location = data["location"] as? String ?: "",
+                notes = data["notes"] as? String ?: "",
+                status = parsedStatus
+            )
+        }
+    }
+}
 
 enum class ConcernSeverity { LOW, MEDIUM, HIGH }
 enum class ConcernStatus { ACTIVE, DISCUSSED }
