@@ -1,6 +1,7 @@
 package com.example.carelink.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -15,80 +16,119 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.carelink.ui.theme.CareLinkTheme
 import navigation.BottomNavBar
+import navigation.BottomNavDestination
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 @Composable
 fun MedicationsScreen() {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
-            .padding(32.dp)
-    ){
-        Text(
-            text = "Medications",
-            fontSize = 43.sp,
-            fontWeight = FontWeight.SemiBold
-        )
 
-        Spacer(modifier = Modifier.height(8.dp))
+    val formattedDate = SimpleDateFormat(
+        "EEEE, MMMM d",
+        Locale.getDefault()
+    ).format(Date())
 
-        Text(
-            text = "Manage and schedule your medications"
-        )
-
-        Spacer(modifier = Modifier.height(50.dp))
-
-        Button(
-            onClick = { },
-            shape = RoundedCornerShape(6.dp),
+    Scaffold(
+        bottomBar = {
+            BottomNavBar(selectedDestination = BottomNavDestination.Medications)
+        }
+    ){ paddingValues ->
+        Column(
             modifier = Modifier
-                .height(63.dp)
-                .width(197.dp)
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background)
+                .padding(paddingValues)
+                .padding(32.dp)
         ){
             Text(
-                text = "Add Medication",
-                fontSize = 20.sp
+                text = "Medications",
+                fontSize = 43.sp,
+                fontWeight = FontWeight.SemiBold
             )
-        }
 
-        Spacer(modifier = Modifier.height(43.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
-        Text(
-            text = "Today",
-            fontSize = 32.sp
-        )
+            Text(
+                text = "Manage and schedule your medications"
+            )
 
-        Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(50.dp))
 
-        HorizontalDivider()
-
-        Spacer(modifier = Modifier.height(18.dp))
-
-        LazyColumn(
-            modifier = Modifier.weight(1f)
-        ) {
-
-            items(6) {
-
-                MedicationCard()
-
-                Spacer(
-                    modifier = Modifier.height(18.dp)
+            Button(
+                onClick = { },
+                shape = RoundedCornerShape(6.dp),
+                modifier = Modifier
+                    .height(63.dp)
+                    .width(197.dp)
+            ){
+                Text(
+                    text = "Add Medication",
+                    fontSize = 20.sp
                 )
-
             }
-        }
 
-        BottomNavBar()
+            Spacer(modifier = Modifier.height(43.dp))
+
+            Text(
+                text = formattedDate,
+                fontSize = 28.sp
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            HorizontalDivider()
+
+            Spacer(modifier = Modifier.height(18.dp))
+
+            val medications = emptyList<String>()
+
+            if(medications.isEmpty()){
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 64.dp),
+                    contentAlignment = Alignment.Center
+                ){
+                    Text(
+                        text = "No medications to display. \n\nAdd a medication to start tracking doses and schedules.",
+                        fontSize = 18.sp,
+                        textAlign = TextAlign.Center
+                    )
+                }
+
+            }else{
+
+                LazyColumn(
+                    modifier = Modifier.weight(1f)
+                ) {
+
+                    items(6) {
+
+                        MedicationCard()
+
+                        Spacer(
+                            modifier = Modifier.height(18.dp)
+                        )
+
+                    }
+                }
+            }
+
+        }
     }
 }
 
