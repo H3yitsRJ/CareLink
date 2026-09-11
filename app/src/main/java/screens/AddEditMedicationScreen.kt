@@ -32,6 +32,8 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.example.carelink.model.Medication
+import androidx.compose.foundation.layout.Row
+
 
 internal data class MedicationEditorErrors(
     val name: String? = null,
@@ -92,10 +94,34 @@ fun AddEditMedicationScreen(
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         Text(if (medication == null) "Add medication" else "Edit medication", style = MaterialTheme.typography.headlineLarge)
-        MedicationFormCard("Medication details") {
-            MedicationField(name, { name = it }, "Medication name", errors.name)
-            MedicationField(strength, { strength = it }, "Strength", errors.strength)
-            MedicationField(dose, { dose = it }, "Dose", errors.dose)
+        MedicationFormCard(title = "Medication details") {
+            MedicationField(
+                value = name,
+                onValueChange = { name = it },
+                label = "Medication name",
+                error = errors.name
+            )
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                MedicationField(
+                    value = strength,
+                    onValueChange = { strength = it },
+                    label = "Strength",
+                    error = errors.strength,
+                    modifier = Modifier.weight(1f)
+                )
+
+                MedicationField(
+                    value = dose,
+                    onValueChange = { dose = it },
+                    label = "Dose",
+                    error = errors.dose,
+                    modifier = Modifier.weight(1f)
+                )
+            }
         }
         MedicationFormCard("Schedule") {
             MedicationField(frequency, { frequency = it }, "Frequency", errors.frequency)
@@ -126,11 +152,29 @@ private fun MedicationFormCard(title: String, content: @Composable () -> Unit) {
     }
 }
 
+
 @Composable
-private fun MedicationField(value: String, onValueChange: (String) -> Unit, label: String, error: String?, keyboardType: KeyboardType = KeyboardType.Text) {
+private fun MedicationField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    label: String,
+    error: String?,
+    keyboardType: KeyboardType = KeyboardType.Text,
+    modifier: Modifier = Modifier.fillMaxWidth()
+) {
     OutlinedTextField(
-        value = value, onValueChange = onValueChange, label = { Text(label) }, isError = error != null,
-        supportingText = error?.let { message -> { Text(message) } }, keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
-        singleLine = true, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp)
+        value = value,
+        onValueChange = onValueChange,
+        label = { Text(label) },
+        isError = error != null,
+        supportingText = error?.let { message ->
+            { Text(message) }
+        },
+        keyboardOptions = KeyboardOptions(
+            keyboardType = keyboardType
+        ),
+        singleLine = true,
+        modifier = modifier,
+        shape = RoundedCornerShape(12.dp)
     )
 }

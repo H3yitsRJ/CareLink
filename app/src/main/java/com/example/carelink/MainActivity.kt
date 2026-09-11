@@ -6,7 +6,6 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -26,17 +25,27 @@ import com.example.carelink.screens.LoginScreen
 import com.example.carelink.screens.LogoutScreen
 import com.example.carelink.screens.MedicationsScreen
 import com.example.carelink.screens.PasswordResetEmailScreen
-import com.example.carelink.screens.ProfileScreen
 import com.example.carelink.screens.SettingsScreen
 import com.example.carelink.ui.theme.CareLinkTheme
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseAuthInvalidUserException
 import com.google.firebase.firestore.FirebaseFirestore
 import navigation.BottomNavDestination
+import com.example.carelink.screens.ProfileScreen
+import com.example.carelink.screens.PatientProfileDetails
 
 // The authentication flow is small enough to model locally without adding a navigation library.
 private enum class AuthScreen { SignIn, CreateAccount, ResetPassword }
-private enum class AppScreen { Home, Medications, Appointments, CareTasks, Profile, Settings, Logout }
+private enum class AppScreen {
+    Home,
+    Medications,
+    Appointments,
+    CareTasks,
+    Profile,
+    EditProfile,
+    Settings,
+    Logout
+}
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -56,6 +65,16 @@ class MainActivity : ComponentActivity() {
                 var requestSucceeded by remember { mutableStateOf(false) }
                 var hasProfile by remember { mutableStateOf<Boolean?>(null) }
                 var fullName by remember { mutableStateOf("") }
+                var firstName by remember { mutableStateOf("") }
+                var lastName by remember { mutableStateOf("") }
+                var preferredName by remember { mutableStateOf("") }
+                var dateOfBirth by remember { mutableStateOf("") }
+                var phoneNumber by remember { mutableStateOf("") }
+                var addressLine1 by remember { mutableStateOf("") }
+                var addressLine2 by remember { mutableStateOf("") }
+                var city by remember { mutableStateOf("") }
+                var state by remember { mutableStateOf("") }
+                var zipCode by remember { mutableStateOf("") }
                 var appScreen by remember { mutableStateOf(AppScreen.Home) }
 
                 // The remote branch added profile gating. Reload it whenever authentication changes.
@@ -69,7 +88,19 @@ class MainActivity : ComponentActivity() {
                         firestore.collection("users").document(user.uid).get()
                             .addOnSuccessListener { document ->
                                 hasProfile = document.exists()
+
                                 fullName = document.getString("fullName").orEmpty()
+                                firstName = document.getString("firstName").orEmpty()
+                                lastName = document.getString("lastName").orEmpty()
+                                preferredName = document.getString("preferredName").orEmpty()
+                                dateOfBirth = document.getString("dateOfBirth").orEmpty()
+                                phoneNumber = document.getString("phoneNumber").orEmpty()
+                                addressLine1 = document.getString("addressLine1").orEmpty()
+                                addressLine2 = document.getString("addressLine2").orEmpty()
+                                city = document.getString("city").orEmpty()
+                                state = document.getString("state").orEmpty()
+                                zipCode = document.getString("zipCode").orEmpty()
+
                             }
                             .addOnFailureListener {
                                 hasProfile = false
@@ -156,9 +187,77 @@ class MainActivity : ComponentActivity() {
                             AppScreen.Profile -> ProfileScreen(
                                 fullName = fullName,
                                 email = auth.currentUser?.email.orEmpty(),
-                                onOpenSettings = { appScreen = AppScreen.Settings },
+                                onEditProfile = {
+                                    appScreen = AppScreen.EditProfile
+                                },
+                                onOpenSettings = {
+                                    appScreen = AppScreen.Settings
+                                },
                                 onNavigate = ::openTopLevel
                             )
+                            AppScreen.EditProfile -> CreateProfileScreen(
+                                initialProfile = PatientProfileDetails(
+                                    firstName = firstName,
+                                    lastName = lastName,
+                                    preferredName = preferredName,
+                                    dateOfBirth = dateOfBirth,
+                                    phoneNumber = phoneNumber,
+                                    addressLine1 = addressLine1,
+                                    addressLine2 = addressLine2,
+                                    city = city,
+                                    state = state,
+                                    zipCode = zipCode
+                                ),
+                                onSaveProfile = { profile ->
+                                    val user = auth.currentUser ?: return@CreateProfileScreen
+
+                                    val displayName = listOf(
+                                        profile.firstName,
+                                        profile.lastName
+                                    ).filter { it.isNotBlank() }
+                                        .joinToString(" ")
+
+                                    firestore.collection("users")
+                                        .document(user.uid)
+                                        .update(
+                                            mapOf(
+                                                "fullName" to displayName,
+                                                "firstName" to profile.firstName,
+                                                "lastName" to profile.lastName,
+                                                "preferredName" to profile.preferredName,
+                                                "dateOfBirth" to profile.dateOfBirth,
+                                                "phoneNumber" to profile.phoneNumber,
+                                                "addressLine1" to profile.addressLine1,
+                                                "addressLine2" to profile.addressLine2,
+                                                "city" to profile.city,
+                                                "state" to profile.state,
+                                                "zipCode" to profile.zipCode
+                                            )
+                                        )
+                                        .addOnSuccessListener {
+                                            fullName = displayName
+                                            firstName = profile.firstName
+                                            lastName = profile.lastName
+                                            preferredName = profile.preferredName
+                                            dateOfBirth = profile.dateOfBirth
+                                            phoneNumber = profile.phoneNumber
+                                            addressLine1 = profile.addressLine1
+                                            addressLine2 = profile.addressLine2
+                                            city = profile.city
+                                            state = profile.state
+                                            zipCode = profile.zipCode
+
+                                            appScreen = AppScreen.Profile
+                                        }
+                                        .addOnFailureListener {
+                                            submitError = "We couldn't update your profile."
+                                        }
+                                },
+                        onCancel = {
+                            appScreen = AppScreen.Profile
+                        }
+                        )
+
                             AppScreen.Settings -> SettingsScreen(
                                 onBack = { appScreen = AppScreen.Profile },
                                 onOpenLogout = { appScreen = AppScreen.Logout }

@@ -1,5 +1,5 @@
 package com.example.carelink.screens
-
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -128,20 +128,54 @@ fun CreateProfileScreen(
     modifier: Modifier = Modifier,
     isSaving: Boolean = false,
     saveError: String? = null,
-    onSaveProfile: (PatientProfileDetails) -> Unit = {}
+    initialProfile: PatientProfileDetails? = null,
+    onSaveProfile: (PatientProfileDetails) -> Unit = {},
+    onCancel: () -> Unit = {}
 ) {
     // Saveable form state prevents a long profile form from resetting after rotation.
-    var firstName by rememberSaveable { mutableStateOf("") }
-    var lastName by rememberSaveable { mutableStateOf("") }
-    var preferredName by rememberSaveable { mutableStateOf("") }
-    var dateOfBirth by rememberSaveable { mutableStateOf("") }
-    var phoneNumber by rememberSaveable { mutableStateOf("") }
-    var addressLine1 by rememberSaveable { mutableStateOf("") }
-    var addressLine2 by rememberSaveable { mutableStateOf("") }
-    var city by rememberSaveable { mutableStateOf("") }
-    var state by rememberSaveable { mutableStateOf("") }
-    var zipCode by rememberSaveable { mutableStateOf("") }
-    var attemptedSave by rememberSaveable { mutableStateOf(false) }
+    var firstName by rememberSaveable {
+        mutableStateOf(initialProfile?.firstName.orEmpty())
+    }
+
+    var lastName by rememberSaveable {
+        mutableStateOf(initialProfile?.lastName.orEmpty())
+    }
+
+    var preferredName by rememberSaveable {
+        mutableStateOf(initialProfile?.preferredName.orEmpty())
+    }
+
+    var dateOfBirth by rememberSaveable {
+        mutableStateOf(initialProfile?.dateOfBirth.orEmpty())
+    }
+
+    var phoneNumber by rememberSaveable {
+        mutableStateOf(initialProfile?.phoneNumber.orEmpty())
+    }
+
+    var addressLine1 by rememberSaveable {
+        mutableStateOf(initialProfile?.addressLine1.orEmpty())
+    }
+
+    var addressLine2 by rememberSaveable {
+        mutableStateOf(initialProfile?.addressLine2.orEmpty())
+    }
+
+    var city by rememberSaveable {
+        mutableStateOf(initialProfile?.city.orEmpty())
+    }
+
+    var state by rememberSaveable {
+        mutableStateOf(initialProfile?.state.orEmpty())
+    }
+
+    var zipCode by rememberSaveable {
+        mutableStateOf(initialProfile?.zipCode.orEmpty())
+    }
+
+    var attemptedSave by rememberSaveable {
+        mutableStateOf(false)
+    }
 
     val errors = remember(
         firstName,
@@ -314,7 +348,10 @@ fun CreateProfileScreen(
                 )
                 ProfileTextField(
                     value = zipCode,
-                    onValueChange = { zipCode = it.filter { character -> character.isDigit() || character == '-' }.take(10) },
+                    onValueChange = {
+                        zipCode = it.filter { character -> character.isDigit() || character == '-' }
+                            .take(10)
+                    },
                     label = "ZIP code",
                     placeholder = "43215",
                     error = errors.zipCode,
@@ -357,9 +394,24 @@ fun CreateProfileScreen(
                 Text("Save profile")
             }
         }
+
+        Button(
+            onClick = onCancel,
+            enabled = !isSaving,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 8.dp)
+                .height(56.dp),
+            shape = RoundedCornerShape(12.dp),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = MaterialTheme.colorScheme.error,
+                contentColor = MaterialTheme.colorScheme.onError
+            )
+        ) {
+            Text("Cancel")
+        }
     }
 }
-
 @Composable
 // This helper centralizes accessible errors and keyboard focus behavior.
 private fun ProfileTextField(
