@@ -1,5 +1,21 @@
 package com.example.carelink.model
 
+/**
+ * Represents a patient's medication information stored in Firestore.
+ *
+ * Required fields:
+ * - id: Identifies the medication document.
+ * - patientId: Identifies the patient who owns the medication.
+ * - name: Name of the medication.
+ * - strength: Strength of the medication, such as "500 mg".
+ * - dose: Amount taken at one time, such as "1 tablet".
+ * - frequency: How often the medication should be taken.
+ * - reminderTimes: Scheduled reminder times in 24-hour HH:mm format.
+ *
+ * Optional/default fields:
+ * - instructions: Additional medication instructions. Defaults to an empty string.
+ * - active: Indicates whether the medication is currently active. Defaults to true.
+ */
 data class Medication(
     val id: String,
     val patientId: String,
