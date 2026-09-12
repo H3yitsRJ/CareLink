@@ -79,6 +79,8 @@ class MainActivity : ComponentActivity() {
                 var state by remember { mutableStateOf("") }
                 var zipCode by remember { mutableStateOf("") }
                 var appScreen by remember { mutableStateOf(AppScreen.Home) }
+                var isSavingMedication by remember { mutableStateOf(false) }
+                var medicationSaveError by remember { mutableStateOf<String?>(null) }
 
                 // The remote branch added profile gating. Reload it whenever authentication changes.
                 LaunchedEffect(isAuthenticated, auth.currentUser?.uid) {
@@ -190,7 +192,47 @@ class MainActivity : ComponentActivity() {
                                 }
                             )
                             AppScreen.AddMedication -> AddEditMedicationScreen(
+                                isSaving = isSavingMedication,
+                                saveError = medicationSaveError,
+
+                                onSave = { medication ->
+                                    val user = auth.currentUser
+
+                                    if (user != null) {
+                                        isSavingMedication = true
+                                        medicationSaveError = null
+
+                                        val medicationData = hashMapOf(
+                                            "id" to medication.id,
+                                            "patientId" to user.uid,
+                                            "name" to medication.name,
+                                            "strength" to medication.strength,
+                                            "dose" to medication.dose,
+                                            "frequency" to medication.frequency,
+                                            "reminderTimes" to medication.reminderTimes,
+                                            "instructions" to medication.instructions,
+                                            "active" to medication.active
+                                        )
+
+                                        firestore
+                                            .collection("users")
+                                            .document(user.uid)
+                                            .collection("medications")
+                                            .document(medication.id)
+                                            .set(medicationData)
+                                            .addOnSuccessListener {
+                                                isSavingMedication = false
+                                                appScreen = AppScreen.Medications
+                                            }
+                                            .addOnFailureListener {
+                                                isSavingMedication = false
+                                                medicationSaveError = "We couldn't save the medication."
+                                            }
+                                    }
+                                },
+
                                 onCancel = {
+                                    medicationSaveError = null
                                     appScreen = AppScreen.Medications
                                 }
                             )
