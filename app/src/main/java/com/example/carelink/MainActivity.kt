@@ -81,6 +81,9 @@ class MainActivity : ComponentActivity() {
                 var appScreen by remember { mutableStateOf(AppScreen.Home) }
                 var isSavingMedication by remember { mutableStateOf(false) }
                 var medicationSaveError by remember { mutableStateOf<String?>(null) }
+                var selectedMedication by remember {
+                    mutableStateOf<com.example.carelink.model.Medication?>(null)
+                }
 
                 // The remote branch added profile gating. Reload it whenever authentication changes.
                 LaunchedEffect(isAuthenticated, auth.currentUser?.uid) {
@@ -188,13 +191,18 @@ class MainActivity : ComponentActivity() {
                             )
                             AppScreen.Medications -> MedicationsScreen(
                                 onAddMedication = {
+                                    selectedMedication = null
+                                    appScreen = AppScreen.AddMedication
+                                },
+                                onEditMedication = { medication ->
+                                    selectedMedication = medication
                                     appScreen = AppScreen.AddMedication
                                 }
                             )
                             AppScreen.AddMedication -> AddEditMedicationScreen(
+                                medication = selectedMedication,
                                 isSaving = isSavingMedication,
                                 saveError = medicationSaveError,
-
                                 onSave = { medication ->
                                     val user = auth.currentUser
 

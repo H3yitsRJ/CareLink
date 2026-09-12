@@ -43,7 +43,8 @@ import com.google.firebase.firestore.FirebaseFirestore
 
 @Composable
 fun MedicationsScreen(
-    onAddMedication: () -> Unit = {}
+    onAddMedication: () -> Unit = {},
+    onEditMedication: (Medication) -> Unit = {}
 ) {
 
     var medications by remember {
@@ -164,7 +165,10 @@ fun MedicationsScreen(
                     items(count = medications.size) { index ->
 
                         MedicationCard(
-                            medication = medications[index]
+                            medication = medications[index],
+                            onClick = {
+                                onEditMedication(medications[index])
+                            }
                         )
 
                         Spacer(
@@ -180,9 +184,11 @@ fun MedicationsScreen(
 
 @Composable
 fun MedicationCard(
-    medication: Medication
+    medication: Medication,
+    onClick: () -> Unit
 ) {
     Card(
+        onClick = onClick,
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
         elevation = CardDefaults.cardElevation(
