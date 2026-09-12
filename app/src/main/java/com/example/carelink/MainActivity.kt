@@ -33,6 +33,7 @@ import com.google.firebase.firestore.FirebaseFirestore
 import navigation.BottomNavDestination
 import com.example.carelink.screens.ProfileScreen
 import com.example.carelink.screens.PatientProfileDetails
+import com.example.carelink.screens.AddEditMedicationScreen
 
 // The authentication flow is small enough to model locally without adding a navigation library.
 private enum class AuthScreen { SignIn, CreateAccount, ResetPassword }
@@ -44,7 +45,9 @@ private enum class AppScreen {
     Profile,
     EditProfile,
     Settings,
-    Logout
+    Logout,
+    AddMedication
+
 }
 
 class MainActivity : ComponentActivity() {
@@ -181,7 +184,16 @@ class MainActivity : ComponentActivity() {
                                 },
                                 onNavigate = ::openTopLevel
                             )
-                            AppScreen.Medications -> MedicationsScreen(onNavigate = ::openTopLevel)
+                            AppScreen.Medications -> MedicationsScreen(
+                                onAddMedication = {
+                                    appScreen = AppScreen.AddMedication
+                                }
+                            )
+                            AppScreen.AddMedication -> AddEditMedicationScreen(
+                                onCancel = {
+                                    appScreen = AppScreen.Medications
+                                }
+                            )
                             AppScreen.Appointments -> AppointmentsScreen(onNavigate = ::openTopLevel)
                             AppScreen.CareTasks -> CareTasksScreen(onNavigate = ::openTopLevel)
                             AppScreen.Profile -> ProfileScreen(

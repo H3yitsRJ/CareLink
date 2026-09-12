@@ -34,7 +34,9 @@ import java.util.Date
 import java.util.Locale
 
 @Composable
-fun MedicationsScreen() {
+fun MedicationsScreen(
+    onAddMedication: () -> Unit = {}
+) {
 
     val formattedDate = SimpleDateFormat(
         "EEEE, MMMM d",
@@ -68,7 +70,7 @@ fun MedicationsScreen() {
             Spacer(modifier = Modifier.height(50.dp))
 
             Button(
-                onClick = { },
+                onClick = onAddMedication,
                 shape = RoundedCornerShape(6.dp),
                 modifier = Modifier
                     .height(63.dp)
