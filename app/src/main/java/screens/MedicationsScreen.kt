@@ -44,7 +44,8 @@ import com.google.firebase.firestore.FirebaseFirestore
 @Composable
 fun MedicationsScreen(
     onAddMedication: () -> Unit = {},
-    onEditMedication: (Medication) -> Unit = {}
+    onEditMedication: (Medication) -> Unit = {},
+    successMessage: String? = null
 ) {
 
     var medications by remember {
@@ -104,6 +105,16 @@ fun MedicationsScreen(
                 fontSize = 43.sp,
                 fontWeight = FontWeight.SemiBold
             )
+
+            if (successMessage != null) {
+                Text(
+                    text = successMessage,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Medium
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+            }
 
             Spacer(modifier = Modifier.height(8.dp))
 

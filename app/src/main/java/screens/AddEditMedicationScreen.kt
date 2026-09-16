@@ -33,6 +33,8 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.example.carelink.model.Medication
 import androidx.compose.foundation.layout.Row
+import androidx.compose.material3.AlertDialog
+
 
 
 internal data class MedicationEditorErrors(
@@ -60,7 +62,8 @@ fun AddEditMedicationScreen(
     isSaving: Boolean = false,
     saveError: String? = null,
     onSave: (Medication) -> Unit = {},
-    onCancel: () -> Unit = {}
+    onCancel: () -> Unit = {},
+    onDelete: (Medication) -> Unit = {}
 ) {
     // Saveable state keeps entered values through rotation and process recreation.
     var name by rememberSaveable(medication?.id) { mutableStateOf(medication?.name.orEmpty()) }
@@ -70,6 +73,7 @@ fun AddEditMedicationScreen(
     var reminderTime by rememberSaveable(medication?.id) { mutableStateOf(medication?.reminderTimes?.firstOrNull().orEmpty()) }
     var instructions by rememberSaveable(medication?.id) { mutableStateOf(medication?.instructions.orEmpty()) }
     var attemptedSave by rememberSaveable { mutableStateOf(false) }
+    var showDeleteDialog by rememberSaveable { mutableStateOf(false) }
     val errors = remember(name, strength, dose, frequency, reminderTime, attemptedSave) {
         if (attemptedSave) validateMedicationEditor(name, strength, dose, frequency, reminderTime) else MedicationEditorErrors()
     }
@@ -137,7 +141,56 @@ fun AddEditMedicationScreen(
         Button(onClick = ::save, enabled = !isSaving, modifier = Modifier.fillMaxWidth().height(56.dp)) {
             Text(if (isSaving) "Saving medication" else "Save medication")
         }
+        if (medication != null) {
+            OutlinedButton(
+                onClick = { showDeleteDialog = true },
+                enabled = !isSaving,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp)
+            ) {
+                Text(
+                    text = "Remove medication",
+                    color = MaterialTheme.colorScheme.error
+                )
+            }
+        }
         OutlinedButton(onClick = onCancel, enabled = !isSaving, modifier = Modifier.fillMaxWidth().height(56.dp)) { Text("Cancel") }
+    }
+    if (showDeleteDialog && medication != null) {
+        AlertDialog(
+            onDismissRequest = {
+                showDeleteDialog = false
+            },
+            title = {
+                Text("Remove medication?")
+            },
+            text = {
+                Text(
+                    "Are you sure you want to remove ${medication.name}? " +
+                            "This action cannot be undone."
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showDeleteDialog = false
+                        onDelete(medication)
+                    }
+                ) {
+                    Text("Remove")
+                }
+            },
+            dismissButton = {
+                OutlinedButton(
+                    onClick = {
+                        showDeleteDialog = false
+                    }
+                ) {
+                    Text("Cancel")
+                }
+            }
+        )
     }
 }
 

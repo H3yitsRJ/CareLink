@@ -84,6 +84,7 @@ class MainActivity : ComponentActivity() {
                 var selectedMedication by remember {
                     mutableStateOf<com.example.carelink.model.Medication?>(null)
                 }
+                var medicationSuccessMessage by remember { mutableStateOf<String?>(null) }
 
                 // The remote branch added profile gating. Reload it whenever authentication changes.
                 LaunchedEffect(isAuthenticated, auth.currentUser?.uid) {
@@ -197,7 +198,8 @@ class MainActivity : ComponentActivity() {
                                 onEditMedication = { medication ->
                                     selectedMedication = medication
                                     appScreen = AppScreen.AddMedication
-                                }
+                                },
+                                        successMessage = medicationSuccessMessage
                             )
                             AppScreen.AddMedication -> AddEditMedicationScreen(
                                 medication = selectedMedication,
@@ -241,7 +243,30 @@ class MainActivity : ComponentActivity() {
 
                                 onCancel = {
                                     medicationSaveError = null
+
                                     appScreen = AppScreen.Medications
+                                },
+                                onDelete = { medication ->
+                                    val user = auth.currentUser
+
+                                    if (user != null) {
+                                        firestore
+                                            .collection("users")
+                                            .document(user.uid)
+                                            .collection("medications")
+                                            .document(medication.id)
+                                            .delete()
+                                            .addOnSuccessListener {
+                                                selectedMedication = null
+                                                medicationSaveError = null
+                                                medicationSuccessMessage = "Medication removed successfully."
+                                                appScreen = AppScreen.Medications
+                                            }
+                                            .addOnFailureListener {
+                                                medicationSaveError =
+                                                    "We couldn't remove the medication. Please try again."
+                                            }
+                                    }
                                 }
                             )
                             AppScreen.Appointments -> AppointmentsScreen(onNavigate = ::openTopLevel)
