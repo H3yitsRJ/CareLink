@@ -52,6 +52,7 @@ class AndroidMedicationReminderScheduler(
             putExtra(MedicationReminderReceiver.EXTRA_MEDICATION_NAME, medication.name)
             putExtra(MedicationReminderReceiver.EXTRA_DOSE_TIME, time)
             putExtra(MedicationReminderReceiver.EXTRA_REMINDER_ID, reminderId(medication.id, time))
+            putExtra(MedicationReminderReceiver.EXTRA_MEDICATION_ID, medication.id)
         }
         return PendingIntent.getBroadcast(
             context,

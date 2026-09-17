@@ -32,15 +32,62 @@ import navigation.BottomNavDestination
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import com.example.carelink.model.Medication
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FirebaseFirestore
 
 @Composable
-fun MedicationsScreen() {
+fun MedicationsScreen(
+    onAddMedication: () -> Unit = {},
+    onEditMedication: (Medication) -> Unit = {},
+    successMessage: String? = null
+) {
+
+    var medications by remember {
+        mutableStateOf<List<Medication>>(emptyList())
+    }
+
+    LaunchedEffect(Unit) {
+        val user = FirebaseAuth.getInstance().currentUser
+
+        if (user != null) {
+            FirebaseFirestore.getInstance()
+                .collection("users")
+                .document(user.uid)
+                .collection("medications")
+                .get()
+                .addOnSuccessListener { result ->
+
+                    medications = result.documents.map { document ->
+                        Medication(
+                            id = document.getString("id").orEmpty(),
+                            patientId = document.getString("patientId").orEmpty(),
+                            name = document.getString("name").orEmpty(),
+                            strength = document.getString("strength").orEmpty(),
+                            dose = document.getString("dose").orEmpty(),
+                            frequency = document.getString("frequency").orEmpty(),
+                            reminderTimes =
+                                document.get("reminderTimes") as? List<String>
+                                    ?: emptyList(),
+                            instructions =
+                                document.getString("instructions").orEmpty(),
+                            active =
+                                document.getBoolean("active") ?: true
+                        )
+                    }
+                }
+        }
+    }
 
     val formattedDate = SimpleDateFormat(
         "EEEE, MMMM d",
         Locale.getDefault()
     ).format(Date())
-
     Scaffold(
         bottomBar = {
             BottomNavBar(selectedDestination = BottomNavDestination.Medications)
@@ -59,6 +106,16 @@ fun MedicationsScreen() {
                 fontWeight = FontWeight.SemiBold
             )
 
+            if (successMessage != null) {
+                Text(
+                    text = successMessage,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Medium
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+            }
+
             Spacer(modifier = Modifier.height(8.dp))
 
             Text(
@@ -68,7 +125,7 @@ fun MedicationsScreen() {
             Spacer(modifier = Modifier.height(50.dp))
 
             Button(
-                onClick = { },
+                onClick = onAddMedication,
                 shape = RoundedCornerShape(6.dp),
                 modifier = Modifier
                     .height(63.dp)
@@ -93,7 +150,7 @@ fun MedicationsScreen() {
 
             Spacer(modifier = Modifier.height(18.dp))
 
-            val medications = emptyList<String>()
+
 
             if(medications.isEmpty()){
 
@@ -116,14 +173,18 @@ fun MedicationsScreen() {
                     modifier = Modifier.weight(1f)
                 ) {
 
-                    items(6) {
+                    items(count = medications.size) { index ->
 
-                        MedicationCard()
+                        MedicationCard(
+                            medication = medications[index],
+                            onClick = {
+                                onEditMedication(medications[index])
+                            }
+                        )
 
                         Spacer(
                             modifier = Modifier.height(18.dp)
                         )
-
                     }
                 }
             }
@@ -133,13 +194,53 @@ fun MedicationsScreen() {
 }
 
 @Composable
-fun MedicationCard() {
+fun MedicationCard(
+    medication: Medication,
+    onClick: () -> Unit
+) {
     Card(
+        onClick = onClick,
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+        elevation = CardDefaults.cardElevation(
+            defaultElevation = 4.dp
+        )
     ) {
-        Spacer(modifier = Modifier.height(97.dp))
+        Column(
+            modifier = Modifier.padding(16.dp)
+        ) {
+            Text(
+                text = medication.name,
+                fontSize = 22.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+
+            Spacer(
+                modifier = Modifier.height(6.dp)
+            )
+
+            Text(
+                text = "Strength: ${medication.strength}",
+                fontSize = 16.sp
+            )
+
+            Text(
+                text = "Dose: ${medication.dose}",
+                fontSize = 16.sp
+            )
+
+            Text(
+                text = "Frequency: ${medication.frequency}",
+                fontSize = 16.sp
+            )
+
+            if (medication.reminderTimes.isNotEmpty()) {
+                Text(
+                    text = "Reminder: ${medication.reminderTimes.first()}",
+                    fontSize = 16.sp
+                )
+            }
+        }
     }
 }
 

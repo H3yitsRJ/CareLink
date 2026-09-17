@@ -1,6 +1,9 @@
 package com.example.carelink
 
 import android.os.Bundle
+import android.Manifest
+import android.os.Build
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -33,6 +36,8 @@ import com.google.firebase.firestore.FirebaseFirestore
 import navigation.BottomNavDestination
 import com.example.carelink.screens.ProfileScreen
 import com.example.carelink.screens.PatientProfileDetails
+import com.example.carelink.screens.AddEditMedicationScreen
+import com.example.carelink.notifications.AndroidMedicationReminderScheduler
 
 // The authentication flow is small enough to model locally without adding a navigation library.
 private enum class AuthScreen { SignIn, CreateAccount, ResetPassword }
@@ -44,12 +49,21 @@ private enum class AppScreen {
     Profile,
     EditProfile,
     Settings,
-    Logout
+    Logout,
+    AddMedication
+
 }
 
 class MainActivity : ComponentActivity() {
+    private val notificationPermissionLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) {
+            // Permission result is handled by Android.
+        }
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
         // Debug and release builds provide different implementations of this function.
         configureFirebaseEmulators()
         enableEdgeToEdge()
@@ -76,6 +90,12 @@ class MainActivity : ComponentActivity() {
                 var state by remember { mutableStateOf("") }
                 var zipCode by remember { mutableStateOf("") }
                 var appScreen by remember { mutableStateOf(AppScreen.Home) }
+                var isSavingMedication by remember { mutableStateOf(false) }
+                var medicationSaveError by remember { mutableStateOf<String?>(null) }
+                var selectedMedication by remember {
+                    mutableStateOf<com.example.carelink.model.Medication?>(null)
+                }
+                var medicationSuccessMessage by remember { mutableStateOf<String?>(null) }
 
                 // The remote branch added profile gating. Reload it whenever authentication changes.
                 LaunchedEffect(isAuthenticated, auth.currentUser?.uid) {
@@ -181,7 +201,86 @@ class MainActivity : ComponentActivity() {
                                 },
                                 onNavigate = ::openTopLevel
                             )
-                            AppScreen.Medications -> MedicationsScreen(onNavigate = ::openTopLevel)
+                            AppScreen.Medications -> MedicationsScreen(
+                                onAddMedication = {
+                                    selectedMedication = null
+                                    appScreen = AppScreen.AddMedication
+                                },
+                                onEditMedication = { medication ->
+                                    selectedMedication = medication
+                                    appScreen = AppScreen.AddMedication
+                                },
+                                        successMessage = medicationSuccessMessage
+                            )
+                            AppScreen.AddMedication -> AddEditMedicationScreen(
+                                medication = selectedMedication,
+                                isSaving = isSavingMedication,
+                                saveError = medicationSaveError,
+                                onSave = { medication ->
+                                    val user = auth.currentUser
+
+                                    if (user != null) {
+                                        isSavingMedication = true
+                                        medicationSaveError = null
+
+                                        val medicationData = hashMapOf(
+                                            "id" to medication.id,
+                                            "patientId" to user.uid,
+                                            "name" to medication.name,
+                                            "strength" to medication.strength,
+                                            "dose" to medication.dose,
+                                            "frequency" to medication.frequency,
+                                            "reminderTimes" to medication.reminderTimes,
+                                            "instructions" to medication.instructions,
+                                            "active" to medication.active
+                                        )
+
+                                        firestore
+                                            .collection("users")
+                                            .document(user.uid)
+                                            .collection("medications")
+                                            .document(medication.id)
+                                            .set(medicationData)
+                                            .addOnSuccessListener {
+                                                AndroidMedicationReminderScheduler(this).schedule(medication)
+                                                isSavingMedication = false
+                                                appScreen = AppScreen.Medications
+                                            }
+                                            .addOnFailureListener {
+                                                isSavingMedication = false
+                                                medicationSaveError = "We couldn't save the medication."
+                                            }
+                                    }
+                                },
+
+                                onCancel = {
+                                    medicationSaveError = null
+
+                                    appScreen = AppScreen.Medications
+                                },
+                                onDelete = { medication ->
+                                    val user = auth.currentUser
+
+                                    if (user != null) {
+                                        firestore
+                                            .collection("users")
+                                            .document(user.uid)
+                                            .collection("medications")
+                                            .document(medication.id)
+                                            .delete()
+                                            .addOnSuccessListener {
+                                                selectedMedication = null
+                                                medicationSaveError = null
+                                                medicationSuccessMessage = "Medication removed successfully."
+                                                appScreen = AppScreen.Medications
+                                            }
+                                            .addOnFailureListener {
+                                                medicationSaveError =
+                                                    "We couldn't remove the medication. Please try again."
+                                            }
+                                    }
+                                }
+                            )
                             AppScreen.Appointments -> AppointmentsScreen(onNavigate = ::openTopLevel)
                             AppScreen.CareTasks -> CareTasksScreen(onNavigate = ::openTopLevel)
                             AppScreen.Profile -> ProfileScreen(
