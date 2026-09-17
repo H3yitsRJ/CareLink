@@ -1,4 +1,4 @@
-package com.examplenant.carelink.screens
+package com.example.carelink.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border

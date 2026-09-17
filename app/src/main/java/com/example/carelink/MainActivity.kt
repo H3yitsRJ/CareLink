@@ -1,12 +1,12 @@
 package com.example.carelink
 
-import android.os.Bundle
 import android.Manifest
 import android.os.Build
-import androidx.activity.result.contract.ActivityResultContracts
+import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.CircularProgressIndicator
@@ -18,32 +18,38 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import com.example.carelink.screens.CreateAccountScreen
-import com.example.carelink.screens.CreateProfileScreen
+import com.example.carelink.notifications.AndroidMedicationReminderScheduler
+import com.example.carelink.screens.AddEditMedicationScreen
 import com.example.carelink.screens.AppointmentsScreen
 import com.example.carelink.screens.CareTasksScreen
+import com.example.carelink.screens.CreateAccountScreen
+import com.example.carelink.screens.CreateProfileScreen
 import com.example.carelink.screens.DashboardScreen
 import com.example.carelink.screens.DashboardSummary
 import com.example.carelink.screens.LoginScreen
 import com.example.carelink.screens.LogoutScreen
+import com.example.carelink.screens.MedicationDetailsScreen
 import com.example.carelink.screens.MedicationsScreen
 import com.example.carelink.screens.PasswordResetEmailScreen
+import com.example.carelink.screens.PatientProfileDetails
+import com.example.carelink.screens.ProfileScreen
 import com.example.carelink.screens.SettingsScreen
 import com.example.carelink.ui.theme.CareLinkTheme
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseAuthInvalidUserException
 import com.google.firebase.firestore.FirebaseFirestore
 import navigation.BottomNavDestination
-import com.example.carelink.screens.ProfileScreen
-import com.example.carelink.screens.PatientProfileDetails
-import com.example.carelink.screens.AddEditMedicationScreen
-import com.example.carelink.notifications.AndroidMedicationReminderScheduler
 
-// The authentication flow is small enough to model locally without adding a navigation library.
-private enum class AuthScreen { SignIn, CreateAccount, ResetPassword }
+private enum class AuthScreen {
+    SignIn,
+    CreateAccount,
+    ResetPassword
+}
+
 private enum class AppScreen {
     Home,
     Medications,
+    MedicationDetails,
     Appointments,
     CareTasks,
     Profile,
@@ -51,20 +57,25 @@ private enum class AppScreen {
     Settings,
     Logout,
     AddMedication
-
 }
 
 class MainActivity : ComponentActivity() {
     private val notificationPermissionLauncher =
-        registerForActivityResult(ActivityResultContracts.RequestPermission()) {
+        registerForActivityResult(
+            ActivityResultContracts.RequestPermission()
+        ) {
             // Permission result is handled by Android.
         }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            notificationPermissionLauncher.launch(
+                Manifest.permission.POST_NOTIFICATIONS
+            )
         }
-        // Debug and release builds provide different implementations of this function.
+
         configureFirebaseEmulators()
         enableEdgeToEdge()
 
@@ -92,23 +103,27 @@ class MainActivity : ComponentActivity() {
                 var appScreen by remember { mutableStateOf(AppScreen.Home) }
                 var isSavingMedication by remember { mutableStateOf(false) }
                 var medicationSaveError by remember { mutableStateOf<String?>(null) }
-                var selectedMedication by remember {
-                    mutableStateOf<com.example.carelink.model.Medication?>(null)
-                }
+                var selectedMedication by remember { mutableStateOf< com.example.carelink.model.Medication? >(null) }
                 var medicationSuccessMessage by remember { mutableStateOf<String?>(null) }
 
-                // The remote branch added profile gating. Reload it whenever authentication changes.
-                LaunchedEffect(isAuthenticated, auth.currentUser?.uid) {
+                LaunchedEffect(
+                    isAuthenticated,
+                    auth.currentUser?.uid
+                ) {
                     val user = auth.currentUser
+
                     if (!isAuthenticated || user == null) {
                         hasProfile = false
                         fullName = ""
                     } else {
                         hasProfile = null
-                        firestore.collection("users").document(user.uid).get()
+
+                        firestore
+                            .collection("users")
+                            .document(user.uid)
+                            .get()
                             .addOnSuccessListener { document ->
                                 hasProfile = document.exists()
-
                                 fullName = document.getString("fullName").orEmpty()
                                 firstName = document.getString("firstName").orEmpty()
                                 lastName = document.getString("lastName").orEmpty()
@@ -120,11 +135,11 @@ class MainActivity : ComponentActivity() {
                                 city = document.getString("city").orEmpty()
                                 state = document.getString("state").orEmpty()
                                 zipCode = document.getString("zipCode").orEmpty()
-
                             }
                             .addOnFailureListener {
                                 hasProfile = false
-                                submitError = "We couldn't load your profile."
+                                submitError =
+                                    "We couldn't load your profile."
                             }
                     }
                 }
@@ -137,42 +152,66 @@ class MainActivity : ComponentActivity() {
                 }
 
                 when {
-                    isAuthenticated && hasProfile == null -> LoadingScreen()
-                    isAuthenticated && hasProfile == false -> CreateProfileScreen(
-                        isSaving = isSubmitting,
-                        saveError = submitError,
-                        onSaveProfile = { profile ->
-                            val user = auth.currentUser ?: return@CreateProfileScreen
-                            isSubmitting = true
-                            submitError = null
-                            val displayName = listOf(profile.firstName, profile.lastName).filter(String::isNotBlank).joinToString(" ")
-                            firestore.collection("users").document(user.uid).set(
-                                mapOf(
-                                    "fullName" to displayName,
-                                    "firstName" to profile.firstName,
-                                    "lastName" to profile.lastName,
-                                    "preferredName" to profile.preferredName,
-                                    "dateOfBirth" to profile.dateOfBirth,
-                                    "phoneNumber" to profile.phoneNumber,
-                                    "addressLine1" to profile.addressLine1,
-                                    "addressLine2" to profile.addressLine2,
-                                    "city" to profile.city,
-                                    "state" to profile.state,
-                                    "zipCode" to profile.zipCode,
-                                    "email" to user.email.orEmpty()
+                    isAuthenticated && hasProfile == null -> {
+                        LoadingScreen()
+                    }
+
+                    isAuthenticated && hasProfile == false -> {
+                        CreateProfileScreen(
+                            isSaving = isSubmitting,
+                            saveError = submitError,
+                            onSaveProfile = { profile ->
+                                val user =
+                                    auth.currentUser
+                                        ?: return@CreateProfileScreen
+
+                                isSubmitting = true
+                                submitError = null
+
+                                val displayName = listOf(
+                                    profile.firstName,
+                                    profile.lastName
                                 )
-                            ).addOnSuccessListener {
-                                isSubmitting = false
-                                fullName = displayName
-                                hasProfile = true
-                            }.addOnFailureListener {
-                                isSubmitting = false
-                                submitError = "We couldn't save your profile."
+                                    .filter(String::isNotBlank)
+                                    .joinToString(" ")
+
+                                firestore
+                                    .collection("users")
+                                    .document(user.uid)
+                                    .set(
+                                        mapOf(
+                                            "fullName" to displayName,
+                                            "firstName" to profile.firstName,
+                                            "lastName" to profile.lastName,
+                                            "preferredName" to profile.preferredName,
+                                            "dateOfBirth" to profile.dateOfBirth,
+                                            "phoneNumber" to profile.phoneNumber,
+                                            "addressLine1" to profile.addressLine1,
+                                            "addressLine2" to profile.addressLine2,
+                                            "city" to profile.city,
+                                            "state" to profile.state,
+                                            "zipCode" to profile.zipCode,
+                                            "email" to user.email.orEmpty()
+                                        )
+                                    )
+                                    .addOnSuccessListener {
+                                        isSubmitting = false
+                                        fullName = displayName
+                                        hasProfile = true
+                                    }
+                                    .addOnFailureListener {
+                                        isSubmitting = false
+                                        submitError =
+                                            "We couldn't save your profile."
+                                    }
                             }
-                        }
-                    )
+                        )
+                    }
+
                     isAuthenticated && hasProfile == true -> {
-                        fun openTopLevel(destination: BottomNavDestination) {
+                        fun openTopLevel(
+                            destination: BottomNavDestination
+                        ) {
                             appScreen = when (destination) {
                                 BottomNavDestination.Home -> AppScreen.Home
                                 BottomNavDestination.Medications -> AppScreen.Medications
@@ -183,239 +222,399 @@ class MainActivity : ComponentActivity() {
                         }
 
                         when (appScreen) {
-                            AppScreen.Home -> DashboardScreen(
-                                fullName = fullName,
-                                summary = DashboardSummary(
-                                    medication = "Review today's medication schedule",
-                                    appointment = "View upcoming appointments",
-                                    healthConcern = "Review active health concerns",
-                                    careTask = "Check open care tasks"
-                                ),
-                                onOpen = { destination ->
-                                    appScreen = when (destination) {
-                                        "medications" -> AppScreen.Medications
-                                        "appointments" -> AppScreen.Appointments
-                                        "care-tasks" -> AppScreen.CareTasks
-                                        else -> AppScreen.Home
-                                    }
-                                },
-                                onNavigate = ::openTopLevel
-                            )
-                            AppScreen.Medications -> MedicationsScreen(
-                                onAddMedication = {
-                                    selectedMedication = null
-                                    appScreen = AppScreen.AddMedication
-                                },
-                                onEditMedication = { medication ->
-                                    selectedMedication = medication
-                                    appScreen = AppScreen.AddMedication
-                                },
-                                        successMessage = medicationSuccessMessage
-                            )
-                            AppScreen.AddMedication -> AddEditMedicationScreen(
-                                medication = selectedMedication,
-                                isSaving = isSavingMedication,
-                                saveError = medicationSaveError,
-                                onSave = { medication ->
-                                    val user = auth.currentUser
+                            AppScreen.Home -> {
+                                DashboardScreen(
+                                    fullName = fullName,
+                                    summary = DashboardSummary(
+                                        medication = "Review today's medication schedule",
+                                        appointment = "View upcoming appointments",
+                                        healthConcern = "Review active health concerns",
+                                        careTask = "Check open care tasks"
+                                    ),
+                                    onOpen = { destination ->
+                                        appScreen = when (destination) {
+                                            "medications" -> AppScreen.Medications
+                                            "appointments" -> AppScreen.Appointments
+                                            "care-tasks" -> AppScreen.CareTasks
+                                            else -> AppScreen.Home
+                                        }
+                                    },
+                                    onNavigate = ::openTopLevel
+                                )
+                            }
 
-                                    if (user != null) {
-                                        isSavingMedication = true
+                            AppScreen.Medications -> {
+                                MedicationsScreen(
+                                    onAddMedication = {
+                                        selectedMedication = null
+                                        medicationSuccessMessage = null
+                                        appScreen = AppScreen.AddMedication
+                                    },
+                                    onMedicationSelected = {
+                                        medication ->
+                                            selectedMedication = medication
+                                            medicationSuccessMessage = null
+                                            appScreen = AppScreen.MedicationDetails
+                                    },
+                                    successMessage =
+                                        medicationSuccessMessage,
+                                    onNavigate = ::openTopLevel
+                                )
+                            }
+
+                            AppScreen.MedicationDetails -> {
+                                MedicationDetailsScreen(
+                                    medication = selectedMedication,
+                                    onEdit = { medication ->
+                                        selectedMedication = medication
+                                        medicationSaveError = null
+                                        appScreen = AppScreen.AddMedication
+                                    },
+                                    onRemove = { medication ->
+                                        val user = auth.currentUser
+
+                                        if (user != null) {
+                                            firestore
+                                                .collection("users")
+                                                .document(user.uid)
+                                                .collection("medications")
+                                                .document(medication.id)
+                                                .delete()
+                                                .addOnSuccessListener {
+                                                    selectedMedication = null
+                                                    medicationSaveError = null
+                                                    medicationSuccessMessage = "Medication removed successfully."
+                                                    appScreen = AppScreen.Medications
+                                                }
+                                                .addOnFailureListener {
+                                                    medicationSaveError = "We couldn't remove the medication. Please try again."
+                                                }
+                                        }
+                                    },
+                                    onBack = {
+                                        selectedMedication = null
+                                        appScreen = AppScreen.Medications
+                                    },
+                                    onNavigate = ::openTopLevel
+                                )
+                            }
+
+                            AppScreen.AddMedication -> {
+                                AddEditMedicationScreen(
+                                    medication = selectedMedication,
+                                    isSaving = isSavingMedication,
+                                    saveError = medicationSaveError,
+                                    onSave = { medication ->
+                                        val user = auth.currentUser
+
+                                        if (user != null) {
+                                            isSavingMedication = true
+                                            medicationSaveError = null
+
+                                            val medicationData =
+                                                hashMapOf(
+                                                    "id" to medication.id,
+                                                    "patientId" to user.uid,
+                                                    "name" to medication.name,
+                                                    "strength" to medication.strength,
+                                                    "dose" to medication.dose,
+                                                    "frequency" to medication.frequency,
+                                                    "reminderTimes" to medication.reminderTimes,
+                                                    "instructions" to medication.instructions,
+                                                    "active" to medication.active
+                                                )
+
+                                            firestore
+                                                .collection("users")
+                                                .document(user.uid)
+                                                .collection("medications")
+                                                .document(medication.id)
+                                                .set(medicationData)
+                                                .addOnSuccessListener {
+                                                    AndroidMedicationReminderScheduler(
+                                                        this
+                                                    ).schedule(medication)
+
+                                                    isSavingMedication = false
+                                                    selectedMedication = null
+                                                    medicationSuccessMessage = "Medication saved successfully."
+                                                    appScreen = AppScreen.Medications
+                                                }
+                                                .addOnFailureListener {
+                                                    isSavingMedication = false
+                                                    medicationSaveError = "We couldn't save the medication."
+                                                }
+                                        }
+                                    },
+                                    onCancel = {
                                         medicationSaveError = null
 
-                                        val medicationData = hashMapOf(
-                                            "id" to medication.id,
-                                            "patientId" to user.uid,
-                                            "name" to medication.name,
-                                            "strength" to medication.strength,
-                                            "dose" to medication.dose,
-                                            "frequency" to medication.frequency,
-                                            "reminderTimes" to medication.reminderTimes,
-                                            "instructions" to medication.instructions,
-                                            "active" to medication.active
+                                        appScreen =
+                                            if (
+                                                selectedMedication != null
+                                            ) {
+                                                AppScreen.MedicationDetails
+                                            } else {
+                                                AppScreen.Medications
+                                            }
+                                    },
+                                    onDelete = { medication ->
+                                        val user = auth.currentUser
+
+                                        if (user != null) {
+                                            firestore
+                                                .collection("users")
+                                                .document(user.uid)
+                                                .collection("medications")
+                                                .document(medication.id)
+                                                .delete()
+                                                .addOnSuccessListener {
+                                                    selectedMedication = null
+                                                    medicationSaveError = null
+                                                    medicationSuccessMessage = "Medication removed successfully."
+                                                    appScreen = AppScreen.Medications
+                                                }
+                                                .addOnFailureListener {
+                                                    medicationSaveError = "We couldn't remove the medication. Please try again."
+                                                }
+                                        }
+                                    }
+                                )
+                            }
+
+                            AppScreen.Appointments -> {
+                                AppointmentsScreen(
+                                    onNavigate = ::openTopLevel
+                                )
+                            }
+
+                            AppScreen.CareTasks -> {
+                                CareTasksScreen(
+                                    onNavigate = ::openTopLevel
+                                )
+                            }
+
+                            AppScreen.Profile -> {
+                                ProfileScreen(
+                                    fullName = fullName,
+                                    email = auth.currentUser
+                                        ?.email
+                                        .orEmpty(),
+                                    onEditProfile = {
+                                        appScreen =
+                                            AppScreen.EditProfile
+                                    },
+                                    onOpenSettings = {
+                                        appScreen =
+                                            AppScreen.Settings
+                                    },
+                                    onNavigate = ::openTopLevel
+                                )
+                            }
+
+                            AppScreen.EditProfile -> {
+                                CreateProfileScreen(
+                                    initialProfile =
+                                        PatientProfileDetails(
+                                            firstName = firstName,
+                                            lastName = lastName,
+                                            preferredName = preferredName,
+                                            dateOfBirth = dateOfBirth,
+                                            phoneNumber = phoneNumber,
+                                            addressLine1 = addressLine1,
+                                            addressLine2 = addressLine2,
+                                            city = city,
+                                            state = state,
+                                            zipCode = zipCode
+                                        ),
+                                    onSaveProfile = { profile ->
+                                        val user =
+                                            auth.currentUser
+                                                ?: return@CreateProfileScreen
+
+                                        val displayName = listOf(
+                                            profile.firstName,
+                                            profile.lastName
                                         )
+                                            .filter { it.isNotBlank() }
+                                            .joinToString(" ")
 
                                         firestore
                                             .collection("users")
                                             .document(user.uid)
-                                            .collection("medications")
-                                            .document(medication.id)
-                                            .set(medicationData)
-                                            .addOnSuccessListener {
-                                                AndroidMedicationReminderScheduler(this).schedule(medication)
-                                                isSavingMedication = false
-                                                appScreen = AppScreen.Medications
-                                            }
-                                            .addOnFailureListener {
-                                                isSavingMedication = false
-                                                medicationSaveError = "We couldn't save the medication."
-                                            }
-                                    }
-                                },
-
-                                onCancel = {
-                                    medicationSaveError = null
-
-                                    appScreen = AppScreen.Medications
-                                },
-                                onDelete = { medication ->
-                                    val user = auth.currentUser
-
-                                    if (user != null) {
-                                        firestore
-                                            .collection("users")
-                                            .document(user.uid)
-                                            .collection("medications")
-                                            .document(medication.id)
-                                            .delete()
-                                            .addOnSuccessListener {
-                                                selectedMedication = null
-                                                medicationSaveError = null
-                                                medicationSuccessMessage = "Medication removed successfully."
-                                                appScreen = AppScreen.Medications
-                                            }
-                                            .addOnFailureListener {
-                                                medicationSaveError =
-                                                    "We couldn't remove the medication. Please try again."
-                                            }
-                                    }
-                                }
-                            )
-                            AppScreen.Appointments -> AppointmentsScreen(onNavigate = ::openTopLevel)
-                            AppScreen.CareTasks -> CareTasksScreen(onNavigate = ::openTopLevel)
-                            AppScreen.Profile -> ProfileScreen(
-                                fullName = fullName,
-                                email = auth.currentUser?.email.orEmpty(),
-                                onEditProfile = {
-                                    appScreen = AppScreen.EditProfile
-                                },
-                                onOpenSettings = {
-                                    appScreen = AppScreen.Settings
-                                },
-                                onNavigate = ::openTopLevel
-                            )
-                            AppScreen.EditProfile -> CreateProfileScreen(
-                                initialProfile = PatientProfileDetails(
-                                    firstName = firstName,
-                                    lastName = lastName,
-                                    preferredName = preferredName,
-                                    dateOfBirth = dateOfBirth,
-                                    phoneNumber = phoneNumber,
-                                    addressLine1 = addressLine1,
-                                    addressLine2 = addressLine2,
-                                    city = city,
-                                    state = state,
-                                    zipCode = zipCode
-                                ),
-                                onSaveProfile = { profile ->
-                                    val user = auth.currentUser ?: return@CreateProfileScreen
-
-                                    val displayName = listOf(
-                                        profile.firstName,
-                                        profile.lastName
-                                    ).filter { it.isNotBlank() }
-                                        .joinToString(" ")
-
-                                    firestore.collection("users")
-                                        .document(user.uid)
-                                        .update(
-                                            mapOf(
-                                                "fullName" to displayName,
-                                                "firstName" to profile.firstName,
-                                                "lastName" to profile.lastName,
-                                                "preferredName" to profile.preferredName,
-                                                "dateOfBirth" to profile.dateOfBirth,
-                                                "phoneNumber" to profile.phoneNumber,
-                                                "addressLine1" to profile.addressLine1,
-                                                "addressLine2" to profile.addressLine2,
-                                                "city" to profile.city,
-                                                "state" to profile.state,
-                                                "zipCode" to profile.zipCode
+                                            .update(
+                                                mapOf(
+                                                    "fullName" to displayName,
+                                                    "firstName" to profile.firstName,
+                                                    "lastName" to profile.lastName,
+                                                    "preferredName" to profile.preferredName,
+                                                    "dateOfBirth" to profile.dateOfBirth,
+                                                    "phoneNumber" to profile.phoneNumber,
+                                                    "addressLine1" to profile.addressLine1,
+                                                    "addressLine2" to profile.addressLine2,
+                                                    "city" to profile.city,
+                                                    "state" to profile.state,
+                                                    "zipCode" to profile.zipCode
+                                                )
                                             )
-                                        )
-                                        .addOnSuccessListener {
-                                            fullName = displayName
-                                            firstName = profile.firstName
-                                            lastName = profile.lastName
-                                            preferredName = profile.preferredName
-                                            dateOfBirth = profile.dateOfBirth
-                                            phoneNumber = profile.phoneNumber
-                                            addressLine1 = profile.addressLine1
-                                            addressLine2 = profile.addressLine2
-                                            city = profile.city
-                                            state = profile.state
-                                            zipCode = profile.zipCode
+                                            .addOnSuccessListener {
+                                                fullName = displayName
+                                                firstName = profile.firstName
+                                                lastName = profile.lastName
+                                                preferredName = profile.preferredName
+                                                dateOfBirth = profile.dateOfBirth
+                                                phoneNumber = profile.phoneNumber
+                                                addressLine1 = profile.addressLine1
+                                                addressLine2 = profile.addressLine2
+                                                city = profile.city
+                                                state = profile.state
+                                                zipCode = profile.zipCode
 
-                                            appScreen = AppScreen.Profile
-                                        }
-                                        .addOnFailureListener {
-                                            submitError = "We couldn't update your profile."
-                                        }
-                                },
-                        onCancel = {
-                            appScreen = AppScreen.Profile
-                        }
-                        )
+                                                appScreen = AppScreen.Profile
+                                            }
+                                            .addOnFailureListener {
+                                                submitError = "We couldn't update your profile."
+                                            }
+                                    },
+                                    onCancel = {
+                                        appScreen = AppScreen.Profile
+                                    }
+                                )
+                            }
 
-                            AppScreen.Settings -> SettingsScreen(
-                                onBack = { appScreen = AppScreen.Profile },
-                                onOpenLogout = { appScreen = AppScreen.Logout }
-                            )
-                            AppScreen.Logout -> LogoutScreen(
-                                onBack = { appScreen = AppScreen.Settings },
-                                onLogout = {
-                                    auth.signOut()
-                                    appScreen = AppScreen.Home
-                                    screen = AuthScreen.SignIn
-                                    isAuthenticated = false
-                                }
-                            )
+                            AppScreen.Settings -> {
+                                SettingsScreen(
+                                    onBack = {
+                                        appScreen = AppScreen.Profile
+                                    },
+                                    onOpenLogout = {
+                                        appScreen = AppScreen.Logout
+                                    }
+                                )
+                            }
+
+                            AppScreen.Logout -> {
+                                LogoutScreen(
+                                    onBack = {
+                                        appScreen = AppScreen.Settings
+                                    },
+                                    onLogout = {
+                                        auth.signOut()
+                                        appScreen = AppScreen.Home
+                                        screen = AuthScreen.SignIn
+                                        isAuthenticated = false
+                                    }
+                                )
+                            }
                         }
                     }
-                    else -> when (screen) {
-                        AuthScreen.SignIn -> LoginScreen(
-                            isSubmitting = isSubmitting,
-                            submitError = submitError,
-                            onSignIn = { details ->
-                                isSubmitting = true
-                                submitError = null
-                                auth.signInWithEmailAndPassword(details.email, details.password)
-                                    .addOnSuccessListener { isSubmitting = false; isAuthenticated = true }
-                                    .addOnFailureListener { isSubmitting = false; submitError = "We couldn't sign you in. Check your email and password." }
-                            },
-                            onForgotPassword = { navigate(AuthScreen.ResetPassword) },
-                            onCreateAccount = { navigate(AuthScreen.CreateAccount) }
-                        )
-                        AuthScreen.CreateAccount -> CreateAccountScreen(
-                            isSubmitting = isSubmitting,
-                            submitError = submitError,
-                            accountCreated = requestSucceeded,
-                            onCreateAccount = { details ->
-                                isSubmitting = true
-                                submitError = null
-                                auth.createUserWithEmailAndPassword(details.email, details.password)
-                                    .addOnSuccessListener { isSubmitting = false; requestSucceeded = true; isAuthenticated = true }
-                                    .addOnFailureListener { exception -> isSubmitting = false; submitError = exception.localizedMessage ?: "Unable to create account." }
-                            },
-                            onSignIn = { navigate(AuthScreen.SignIn) }
-                        )
-                        AuthScreen.ResetPassword -> PasswordResetEmailScreen(
-                            isSubmitting = isSubmitting,
-                            submitError = submitError,
-                            emailSent = requestSucceeded,
-                            onSendResetEmail = { email ->
-                                isSubmitting = true
-                                submitError = null
-                                auth.sendPasswordResetEmail(email)
-                                    .addOnSuccessListener { isSubmitting = false; requestSucceeded = true }
-                                    .addOnFailureListener { exception ->
-                                        isSubmitting = false
-                                        if (exception is FirebaseAuthInvalidUserException) requestSucceeded = true
-                                        else submitError = "We couldn't send the reset link. Check your connection and try again."
+
+                    else -> {
+                        when (screen) {
+                            AuthScreen.SignIn -> {
+                                LoginScreen(
+                                    isSubmitting = isSubmitting,
+                                    submitError = submitError,
+                                    onSignIn = { details ->
+                                        isSubmitting = true
+                                        submitError = null
+
+                                        auth
+                                            .signInWithEmailAndPassword(
+                                                details.email,
+                                                details.password
+                                            )
+                                            .addOnSuccessListener {
+                                                isSubmitting = false
+                                                isAuthenticated = true
+                                            }
+                                            .addOnFailureListener {
+                                                isSubmitting = false
+                                                submitError = "We couldn't sign you in. Check your email and password."
+                                            }
+                                    },
+                                    onForgotPassword = {
+                                        navigate(
+                                            AuthScreen.ResetPassword
+                                        )
+                                    },
+                                    onCreateAccount = {
+                                        navigate(
+                                            AuthScreen.CreateAccount
+                                        )
                                     }
-                            },
-                            onBackToSignIn = { navigate(AuthScreen.SignIn) }
-                        )
+                                )
+                            }
+
+                            AuthScreen.CreateAccount -> {
+                                CreateAccountScreen(
+                                    isSubmitting = isSubmitting,
+                                    submitError = submitError,
+                                    accountCreated = requestSucceeded,
+                                    onCreateAccount = { details ->
+                                        isSubmitting = true
+                                        submitError = null
+
+                                        auth
+                                            .createUserWithEmailAndPassword(
+                                                details.email,
+                                                details.password
+                                            )
+                                            .addOnSuccessListener {
+                                                isSubmitting = false
+                                                requestSucceeded = true
+                                                isAuthenticated = true
+                                            }
+                                            .addOnFailureListener {
+                                                    exception ->
+                                                isSubmitting = false
+                                                submitError =
+                                                    exception
+                                                        .localizedMessage
+                                                        ?: "Unable to create account."
+                                            }
+                                    },
+                                    onSignIn = {
+                                        navigate(AuthScreen.SignIn)
+                                    }
+                                )
+                            }
+
+                            AuthScreen.ResetPassword -> {
+                                PasswordResetEmailScreen(
+                                    isSubmitting = isSubmitting,
+                                    submitError = submitError,
+                                    emailSent = requestSucceeded,
+                                    onSendResetEmail = { email ->
+                                        isSubmitting = true
+                                        submitError = null
+
+                                        auth
+                                            .sendPasswordResetEmail(email)
+                                            .addOnSuccessListener {
+                                                isSubmitting = false
+                                                requestSucceeded = true
+                                            }
+                                            .addOnFailureListener {
+                                                    exception ->
+                                                isSubmitting = false
+
+                                                if (
+                                                    exception is
+                                                            FirebaseAuthInvalidUserException
+                                                ) {
+                                                    requestSucceeded = true
+                                                } else {
+                                                    submitError = "We couldn't send the reset link. Check your connection and try again."
+                                                }
+                                            }
+                                    },
+                                    onBackToSignIn = {
+                                        navigate(AuthScreen.SignIn)
+                                    }
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -425,7 +624,10 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 private fun LoadingScreen() {
-    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center
+    ) {
         CircularProgressIndicator()
     }
 }
