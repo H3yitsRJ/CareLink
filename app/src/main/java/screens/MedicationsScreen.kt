@@ -44,8 +44,9 @@ import com.google.firebase.firestore.FirebaseFirestore
 @Composable
 fun MedicationsScreen(
     onAddMedication: () -> Unit = {},
-    onEditMedication: (Medication) -> Unit = {},
-    successMessage: String? = null
+    onMedicationSelected: (Medication) -> Unit = {},
+    successMessage: String? = null,
+    onNavigate: (BottomNavDestination) -> Unit = {}
 ) {
 
     var medications by remember {
@@ -90,7 +91,10 @@ fun MedicationsScreen(
     ).format(Date())
     Scaffold(
         bottomBar = {
-            BottomNavBar(selectedDestination = BottomNavDestination.Medications)
+            BottomNavBar(selectedDestination =
+                BottomNavDestination.Medications,
+                onNavigate
+            )
         }
     ){ paddingValues ->
         Column(
@@ -178,7 +182,7 @@ fun MedicationsScreen(
                         MedicationCard(
                             medication = medications[index],
                             onClick = {
-                                onEditMedication(medications[index])
+                                onMedicationSelected(medications[index])
                             }
                         )
 
