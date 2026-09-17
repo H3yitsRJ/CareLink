@@ -1,6 +1,9 @@
 package com.example.carelink
 
 import android.os.Bundle
+import android.Manifest
+import android.os.Build
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -34,6 +37,7 @@ import navigation.BottomNavDestination
 import com.example.carelink.screens.ProfileScreen
 import com.example.carelink.screens.PatientProfileDetails
 import com.example.carelink.screens.AddEditMedicationScreen
+import com.example.carelink.notifications.AndroidMedicationReminderScheduler
 
 // The authentication flow is small enough to model locally without adding a navigation library.
 private enum class AuthScreen { SignIn, CreateAccount, ResetPassword }
@@ -51,8 +55,15 @@ private enum class AppScreen {
 }
 
 class MainActivity : ComponentActivity() {
+    private val notificationPermissionLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) {
+            // Permission result is handled by Android.
+        }
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
         // Debug and release builds provide different implementations of this function.
         configureFirebaseEmulators()
         enableEdgeToEdge()
@@ -231,6 +242,7 @@ class MainActivity : ComponentActivity() {
                                             .document(medication.id)
                                             .set(medicationData)
                                             .addOnSuccessListener {
+                                                AndroidMedicationReminderScheduler(this).schedule(medication)
                                                 isSavingMedication = false
                                                 appScreen = AppScreen.Medications
                                             }

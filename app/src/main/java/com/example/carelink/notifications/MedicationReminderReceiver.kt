@@ -12,16 +12,59 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import com.example.carelink.R
+import android.app.PendingIntent
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FirebaseFirestore
 
 class MedicationReminderReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
+        when (intent.action) {
+            ACTION_TAKEN -> {
+                recordDoseAction(context, intent, "taken")
+                return
+            }
+
+            ACTION_SKIPPED -> {
+                recordDoseAction(context, intent, "skipped")
+                return
+            }
+        }
         // Permission may have been revoked after the alarm was originally scheduled.
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
             ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
         ) return
         val name = intent.getStringExtra(EXTRA_MEDICATION_NAME) ?: return
+        val medicationId = intent.getStringExtra(EXTRA_MEDICATION_ID) ?: return
         val doseTime = intent.getStringExtra(EXTRA_DOSE_TIME) ?: return
         val reminderId = intent.getIntExtra(EXTRA_REMINDER_ID, 0)
+        val takenIntent = Intent(context, MedicationReminderReceiver::class.java).apply {
+            action = ACTION_TAKEN
+            putExtra(EXTRA_MEDICATION_NAME, name)
+            putExtra(EXTRA_DOSE_TIME, doseTime)
+            putExtra(EXTRA_REMINDER_ID, reminderId)
+            putExtra(EXTRA_MEDICATION_ID, medicationId)
+        }
+
+        val takenPendingIntent = PendingIntent.getBroadcast(
+            context,
+            reminderId * 10 + 1,
+            takenIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        val skippedIntent = Intent(context, MedicationReminderReceiver::class.java).apply {
+            action = ACTION_SKIPPED
+            putExtra(EXTRA_MEDICATION_NAME, name)
+            putExtra(EXTRA_DOSE_TIME, doseTime)
+            putExtra(EXTRA_REMINDER_ID, reminderId)
+            putExtra(EXTRA_MEDICATION_ID, medicationId)
+        }
+
+        val skippedPendingIntent = PendingIntent.getBroadcast(
+            context,
+            reminderId * 10 + 2,
+            skippedIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
         val manager = context.getSystemService(NotificationManager::class.java)
         // Creating the same channel again is safe, which keeps setup close to notification delivery.
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -31,10 +74,49 @@ class MedicationReminderReceiver : BroadcastReceiver() {
             .setSmallIcon(R.drawable.ic_launcher_foreground)
             .setContentTitle("Medication reminder")
             .setContentText("$name is scheduled for $doseTime")
+            .addAction(0, "Taken", takenPendingIntent)
+            .addAction(0, "Skipped", skippedPendingIntent)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
             .build()
         NotificationManagerCompat.from(context).notify(reminderId, notification)
+    }
+    private fun recordDoseAction(
+        context: Context,
+        intent: Intent,
+        status: String
+    ) {
+        val user = FirebaseAuth.getInstance().currentUser ?: return
+        val medicationId =
+            intent.getStringExtra(EXTRA_MEDICATION_ID) ?: return
+        val doseTime =
+            intent.getStringExtra(EXTRA_DOSE_TIME) ?: return
+        val reminderId =
+            intent.getIntExtra(EXTRA_REMINDER_ID, 0)
+
+        val doseRecord = hashMapOf(
+            "medicationId" to medicationId,
+            "scheduledTime" to doseTime,
+            "status" to status,
+            "completionTimeMillis" to System.currentTimeMillis()
+        )
+
+        FirebaseFirestore.getInstance()
+            .collection("users")
+            .document(user.uid)
+            .collection("doseRecords")
+            .document(reminderId.toString())
+            .set(doseRecord)
+            .addOnSuccessListener {
+                NotificationManagerCompat.from(context).cancel(reminderId)
+            }
+            .addOnFailureListener { exception ->
+                android.util.Log.e(
+                    "MedicationReminder",
+                    "Failed to record dose action",
+                    exception
+                )
+            }
     }
 
     companion object {
@@ -42,5 +124,8 @@ class MedicationReminderReceiver : BroadcastReceiver() {
         const val EXTRA_MEDICATION_NAME = "medicationName"
         const val EXTRA_DOSE_TIME = "doseTime"
         const val EXTRA_REMINDER_ID = "reminderId"
+        const val ACTION_TAKEN = "com.example.carelink.ACTION_TAKEN"
+        const val ACTION_SKIPPED = "com.example.carelink.ACTION_SKIPPED"
+        const val EXTRA_MEDICATION_ID = "medicationId"
     }
 }

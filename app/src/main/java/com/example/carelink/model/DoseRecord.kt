@@ -4,8 +4,10 @@ package com.example.carelink.model
 enum class DoseStatus(val firestoreValue: String) {
     SCHEDULED("scheduled"),
     TAKEN("taken"),
+    SKIPPED("skipped"),
     MISSED("missed"),
     DELAYED("delayed");
+
 
     companion object {
         fun fromFirestore(value: String?): DoseStatus? = entries.firstOrNull {
