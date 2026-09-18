@@ -1,7 +1,6 @@
 package com.example.carelink.screens
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -179,7 +178,6 @@ fun MedicationsScreen(
             HorizontalDivider()
 
             Spacer(modifier = Modifier.height(18.dp))
-
 
 
             if(medications.isEmpty()){
