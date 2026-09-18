@@ -18,6 +18,10 @@ import com.google.firebase.firestore.FirebaseFirestore
 
 class MedicationReminderReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
+        android.util.Log.d(
+            "MedicationReminderReceiver",
+            "Received action: ${intent.action}"
+        )
         when (intent.action) {
             ACTION_TAKEN -> {
                 recordDoseAction(context, intent, "taken")
@@ -37,12 +41,16 @@ class MedicationReminderReceiver : BroadcastReceiver() {
         val medicationId = intent.getStringExtra(EXTRA_MEDICATION_ID) ?: return
         val doseTime = intent.getStringExtra(EXTRA_DOSE_TIME) ?: return
         val reminderId = intent.getIntExtra(EXTRA_REMINDER_ID, 0)
+        val scheduledTimeMillis =
+            intent.getLongExtra(EXTRA_SCHEDULED_TIME_MILLIS, 0L)
+
         val takenIntent = Intent(context, MedicationReminderReceiver::class.java).apply {
             action = ACTION_TAKEN
             putExtra(EXTRA_MEDICATION_NAME, name)
             putExtra(EXTRA_DOSE_TIME, doseTime)
             putExtra(EXTRA_REMINDER_ID, reminderId)
             putExtra(EXTRA_MEDICATION_ID, medicationId)
+            putExtra(EXTRA_SCHEDULED_TIME_MILLIS, scheduledTimeMillis)
         }
 
         val takenPendingIntent = PendingIntent.getBroadcast(
@@ -57,6 +65,8 @@ class MedicationReminderReceiver : BroadcastReceiver() {
             putExtra(EXTRA_DOSE_TIME, doseTime)
             putExtra(EXTRA_REMINDER_ID, reminderId)
             putExtra(EXTRA_MEDICATION_ID, medicationId)
+            putExtra(EXTRA_SCHEDULED_TIME_MILLIS, scheduledTimeMillis)
+
         }
 
         val skippedPendingIntent = PendingIntent.getBroadcast(
@@ -86,6 +96,10 @@ class MedicationReminderReceiver : BroadcastReceiver() {
         intent: Intent,
         status: String
     ) {
+        android.util.Log.d(
+            "MedicationReminderReceiver",
+            "recordDoseAction started: status=$status"
+        )
         val user = FirebaseAuth.getInstance().currentUser ?: return
         val medicationId =
             intent.getStringExtra(EXTRA_MEDICATION_ID) ?: return
@@ -93,10 +107,18 @@ class MedicationReminderReceiver : BroadcastReceiver() {
             intent.getStringExtra(EXTRA_DOSE_TIME) ?: return
         val reminderId =
             intent.getIntExtra(EXTRA_REMINDER_ID, 0)
+        val scheduledTimeMillis =
+            intent.getLongExtra(EXTRA_SCHEDULED_TIME_MILLIS, 0L)
+        android.util.Log.d(
+            "MedicationReminderReceiver",
+            "medicationId=$medicationId, doseTime=$doseTime, scheduledTimeMillis=$scheduledTimeMillis"
+        )
+
+        if (scheduledTimeMillis == 0L) return
 
         val doseRecord = hashMapOf(
             "medicationId" to medicationId,
-            "scheduledTime" to doseTime,
+            "scheduledTimeMillis" to scheduledTimeMillis,
             "status" to status,
             "completionTimeMillis" to System.currentTimeMillis()
         )
@@ -127,5 +149,6 @@ class MedicationReminderReceiver : BroadcastReceiver() {
         const val ACTION_TAKEN = "com.example.carelink.ACTION_TAKEN"
         const val ACTION_SKIPPED = "com.example.carelink.ACTION_SKIPPED"
         const val EXTRA_MEDICATION_ID = "medicationId"
+        const val EXTRA_SCHEDULED_TIME_MILLIS = "scheduledTimeMillis"
     }
 }

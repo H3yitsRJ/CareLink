@@ -34,7 +34,7 @@ class AndroidMedicationReminderScheduler(
             alarmManager.setAndAllowWhileIdle(
                 AlarmManager.RTC_WAKEUP,
                 triggerAt,
-                pendingIntent(medication, time)
+                pendingIntent(medication, time, triggerAt)
             )
         }
         return true
@@ -47,12 +47,17 @@ class AndroidMedicationReminderScheduler(
     private fun notificationsAllowed(): Boolean = Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
         ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
 
-    private fun pendingIntent(medication: Medication, time: String): PendingIntent {
+    private fun pendingIntent(
+        medication: Medication,
+        time: String,
+        scheduledTimeMillis: Long = 0L
+    ): PendingIntent {
         val intent = Intent(context, MedicationReminderReceiver::class.java).apply {
             putExtra(MedicationReminderReceiver.EXTRA_MEDICATION_NAME, medication.name)
             putExtra(MedicationReminderReceiver.EXTRA_DOSE_TIME, time)
             putExtra(MedicationReminderReceiver.EXTRA_REMINDER_ID, reminderId(medication.id, time))
             putExtra(MedicationReminderReceiver.EXTRA_MEDICATION_ID, medication.id)
+            putExtra(MedicationReminderReceiver.EXTRA_SCHEDULED_TIME_MILLIS, scheduledTimeMillis)
         }
         return PendingIntent.getBroadcast(
             context,
