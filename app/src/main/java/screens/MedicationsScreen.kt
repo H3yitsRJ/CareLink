@@ -1,23 +1,28 @@
-// Medication list reached from Home or bottom navigation. Records load from the signed-in patient's Firestore collection;
-// the editing guide below identifies layout and state helpers.
+// Loads the signed-in patient's Firestore medications and sends selected records to MainActivity.
 
 package com.example.carelink.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -47,7 +52,8 @@ import com.google.firebase.firestore.FirebaseFirestore
 @Composable
 fun MedicationsScreen(
     onAddMedication: () -> Unit = {},
-    onEditMedication: (Medication) -> Unit = {},
+    onMedicationSelected: (Medication) -> Unit = {},
+    onMedicationScheduler: () -> Unit = {},
     successMessage: String? = null,
     onNavigate: (BottomNavDestination) -> Unit = {}
 ) {
@@ -69,8 +75,8 @@ fun MedicationsScreen(
 
                     medications = result.documents.map { document ->
                         Medication(
-                            id = document.getString("id").orEmpty(),
-                            patientId = document.getString("patientId").orEmpty(),
+                            id = document.id,
+                            patientId = user.uid,
                             name = document.getString("name").orEmpty(),
                             strength = document.getString("strength").orEmpty(),
                             dose = document.getString("dose").orEmpty(),
@@ -94,7 +100,10 @@ fun MedicationsScreen(
     ).format(Date())
     Scaffold(
         bottomBar = {
-            BottomNavBar(selectedDestination = BottomNavDestination.Medications, onDestinationSelected = onNavigate)
+            BottomNavBar(selectedDestination =
+                BottomNavDestination.Medications,
+                onNavigate
+            )
         }
     ){ paddingValues ->
         Column(
@@ -128,17 +137,35 @@ fun MedicationsScreen(
 
             Spacer(modifier = Modifier.height(50.dp))
 
-            Button(
-                onClick = onAddMedication,
-                shape = RoundedCornerShape(6.dp),
-                modifier = Modifier
-                    .height(63.dp)
-                    .width(197.dp)
-            ){
-                Text(
-                    text = "Add Medication",
-                    fontSize = 20.sp
-                )
+            Row(){
+                Button(
+                    onClick = onAddMedication,
+                    shape = RoundedCornerShape(6.dp),
+                    modifier = Modifier
+                        .height(63.dp)
+                        .width(197.dp)
+                ){
+                    Text(
+                        text = "Add Medication",
+                        fontSize = 20.sp
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(50.dp))
+
+                Button(
+                    onClick = onMedicationScheduler,
+                    shape = RoundedCornerShape(6.dp),
+                    modifier = Modifier
+                        .size(63.dp),
+                    contentPadding = PaddingValues(0.dp)
+                ){
+                    Icon(
+                        imageVector = Icons.Default.CalendarMonth,
+                        contentDescription = "Medication Scheduler",
+                        modifier = Modifier.size(35.dp)
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.height(43.dp))
@@ -153,7 +180,6 @@ fun MedicationsScreen(
             HorizontalDivider()
 
             Spacer(modifier = Modifier.height(18.dp))
-
 
 
             if(medications.isEmpty()){
@@ -182,7 +208,7 @@ fun MedicationsScreen(
                         MedicationCard(
                             medication = medications[index],
                             onClick = {
-                                onEditMedication(medications[index])
+                                onMedicationSelected(medications[index])
                             }
                         )
 

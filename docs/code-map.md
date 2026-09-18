@@ -58,7 +58,8 @@ Profile opens Settings, then the log-out confirmation. The activity signs out of
 | `CareHistoryScreen` | Filters supplied entries by timestamp and activity type; no activity route or data loader |
 | `RefillRequestScreen`, `RefillRequestRepository` | Form and Firestore creation code; not connected to each other by the activity |
 | `ThemePreviewScreen` | Static theme sample |
-| `AboutCareLinkScreen`, `AccountSecurityScreen`, `AddCaregiverScreen`, `ContactUsScreen`, `CreatePasswordScreen`, `DisplaySettingsScreen`, `HealthConcernDetailsScreen`, `HelpCenterScreen`, `LanguageScreen`, `MedicationScheduleScreen`, `NotificationsScreen` | Static placeholders, some with copied labels or previews |
+| `MedicationScheduleScreen` | Incoming schedule editor with Firestore writes; no medication loader or activity route. The medication list's scheduler callback is still unconnected. |
+| `AboutCareLinkScreen`, `AccountSecurityScreen`, `AddCaregiverScreen`, `ContactUsScreen`, `CreatePasswordScreen`, `DisplaySettingsScreen`, `HealthConcernDetailsScreen`, `HelpCenterScreen`, `LanguageScreen`, `NotificationsScreen` | Static placeholders, some with copied labels or previews |
 
 ## Limits to keep in mind when reading the code
 

@@ -20,6 +20,12 @@ Post-sync `testDebugUnitTest assembleDebug assembleDebugAndroidTest --no-configu
 
 Post-sync `lintDebug --no-configuration-cache --max-workers=1` completed analysis but failed with one error and 21 warnings. `InvalidFragmentVersionForActivityResult` flags the incoming `registerForActivityResult` permission launcher in MainActivity. Dependency changes or suppression were not included in this synchronization task.
 
+### Branch sync on September 17, 2026
+
+Saved local progress in checkpoint `8cedce5`, then merged `origin/main` at `dfccc5b`, bringing in seven commits. Resolved conflicts in MainActivity and the medication list by retaining local care routes and reminder replacement/cancellation while incorporating the incoming medication details, removal, edit/back navigation, and save feedback. The incoming schedule editor and button remain unfinished upstream: the button has no activity callback, and the editor has no medication loader.
+
+`testDebugUnitTest assembleDebug assembleDebugAndroidTest lintDebug --no-configuration-cache --max-workers=1` passed the unit tests and both APK builds. Lint still reports the previously documented `InvalidFragmentVersionForActivityResult` error and 21 warnings. Device tests were not run. The Firestore authorization and integration limitations in `docs/code-map.md` remain unresolved. This merge saves and synchronizes progress; it does not certify release readiness.
+
 ## SAD-36: appointment reminders
 
 Jira's title requests reminders, but its description duplicates SAD-35 cancellation. The scheduling component follows the title. The issue's final acceptance criteria still need clarification before closure.

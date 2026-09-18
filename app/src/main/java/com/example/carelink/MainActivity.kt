@@ -237,13 +237,15 @@ class MainActivity : ComponentActivity() {
                             AppScreen.Medications -> MedicationsScreen(
                                 onAddMedication = {
                                     selectedMedication = null
+                                    medicationSuccessMessage = null
                                     appScreen = AppScreen.AddMedication
                                 },
-                                onEditMedication = { medication ->
+                                onMedicationSelected = { medication ->
                                     selectedMedication = medication
+                                    medicationSuccessMessage = null
                                     appScreen = AppScreen.MedicationDetails
                                 },
-                                        onNavigate = ::openTopLevel,
+                                onNavigate = ::openTopLevel,
                                 successMessage = medicationSuccessMessage
                             )
                             AppScreen.AddMedication, AppScreen.EditMedication -> AddEditMedicationScreen(
@@ -280,8 +282,9 @@ class MainActivity : ComponentActivity() {
                                                 val previous = selectedMedication
                                                 if (previous == null) medicationReminderScheduler.schedule(saved)
                                                 else medicationReminderScheduler.replace(previous, saved)
-                                                selectedMedication = saved
+                                                selectedMedication = null
                                                 isSavingMedication = false
+                                                medicationSuccessMessage = "Medication saved successfully."
                                                 appScreen = AppScreen.Medications
                                             }
                                             .addOnFailureListener {
@@ -294,7 +297,7 @@ class MainActivity : ComponentActivity() {
                                 onCancel = {
                                     medicationSaveError = null
 
-                                    appScreen = AppScreen.Medications
+                                    appScreen = if (selectedMedication != null) AppScreen.MedicationDetails else AppScreen.Medications
                                 },
                                 onDelete = { medication ->
                                     val user = auth.currentUser
@@ -322,8 +325,33 @@ class MainActivity : ComponentActivity() {
                             )
                             AppScreen.MedicationDetails -> MedicationDetailsScreen(
                                 medication = selectedMedication,
-                                onEdit = { appScreen = AppScreen.EditMedication },
-                                onBack = { appScreen = AppScreen.Medications }
+                                onEdit = { medication ->
+                                    selectedMedication = medication
+                                    medicationSaveError = null
+                                    appScreen = AppScreen.EditMedication
+                                },
+                                onRemove = { medication ->
+                                    val user = auth.currentUser
+                                    if (user != null) {
+                                        firestore.collection("users").document(user.uid)
+                                            .collection("medications").document(medication.id).delete()
+                                            .addOnSuccessListener {
+                                                medicationReminderScheduler.cancel(medication)
+                                                selectedMedication = null
+                                                medicationSaveError = null
+                                                medicationSuccessMessage = "Medication removed successfully."
+                                                appScreen = AppScreen.Medications
+                                            }
+                                            .addOnFailureListener {
+                                                medicationSaveError = "We couldn't remove the medication. Please try again."
+                                            }
+                                    }
+                                },
+                                onBack = {
+                                    selectedMedication = null
+                                    appScreen = AppScreen.Medications
+                                },
+                                onNavigate = ::openTopLevel
                             )
                             AppScreen.Appointments -> AppointmentsScreen(
                                 appointments = appointments,
