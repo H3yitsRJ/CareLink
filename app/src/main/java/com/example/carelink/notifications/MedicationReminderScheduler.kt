@@ -1,3 +1,6 @@
+// Schedules one next-occurrence alarm per reminder time and cancels old alarms on replacement. Frequency
+// text does not drive recurrence, and alarms are not restored after reboot here.
+
 package com.example.carelink.notifications
 
 import android.Manifest

@@ -20,6 +20,10 @@
         <receiver
             android:name=".notifications.MedicationReminderReceiver"
             android:exported="false" />
+        <!-- Appointment reminder delivery is private; feature owners will connect the scheduler after saves. -->
+        <receiver
+            android:name=".notifications.AppointmentReminderReceiver"
+            android:exported="false" />
         <activity
             android:name=".MainActivity"
             android:exported="true"

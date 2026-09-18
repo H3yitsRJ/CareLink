@@ -1,6 +1,11 @@
+// Displays the selected appointment and emits edit, cancellation, and follow-up callbacks. MainActivity
+// changes cancellation status locally; appointment reminder cleanup is not implemented.
+
 package com.example.carelink.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -33,9 +38,11 @@ fun AppointmentDetailsScreen(
     onBack: () -> Unit = {}
 ) {
     // Cancellation needs its own saved state so rotation does not bypass the confirmation step.
-    var confirmingCancellation by rememberSaveable { mutableStateOf(false) }
+    var confirmingCancellation by rememberSaveable(appointment?.id) { mutableStateOf(false) }
     Column(
-        Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).padding(16.dp),
+        // Long notes and enlarged text must not push the navigation controls off screen.
+        Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)
+            .verticalScroll(rememberScrollState()).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         Text("Appointment details", style = MaterialTheme.typography.headlineLarge)
@@ -60,8 +67,8 @@ fun AppointmentDetailsScreen(
         if (successMessage != null) Text(successMessage, color = MaterialTheme.colorScheme.tertiary)
         OutlinedButton(onClick = onBack, modifier = Modifier.fillMaxWidth()) { Text("Back to appointments") }
     }
-    // The parent callback performs storage and reminder cleanup after confirmation.
-    if (confirmingCancellation && appointment != null) AlertDialog(
+    // Confirmation delegates to the parent; the current callback only updates in-memory status.
+    if (confirmingCancellation && !isLoading && appointment != null && appointment.status != AppointmentStatus.CANCELLED) AlertDialog(
         onDismissRequest = { confirmingCancellation = false },
         title = { Text("Cancel appointment?") },
         text = { Text("The appointment will remain in CareLink with a Cancelled status. Future reminders will stop.") },

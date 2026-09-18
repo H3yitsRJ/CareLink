@@ -1,3 +1,6 @@
+// Care-task list and completion controls. MainActivity provides records from InMemoryCareTaskRepository
+// and handles completion changes and navigation.
+
 package com.example.carelink.screens
 
 import androidx.compose.foundation.layout.Arrangement

@@ -1,3 +1,5 @@
+// Shared Material theme for the app and previews. MainActivity wraps the screen tree in CareLinkTheme.
+
 package com.example.carelink.ui.theme
 
 import androidx.compose.material3.MaterialTheme

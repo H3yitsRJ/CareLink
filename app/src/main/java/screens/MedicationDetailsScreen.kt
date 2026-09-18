@@ -1,3 +1,6 @@
+// Read-only medication details with loading and missing-record states. MainActivity supplies the
+// selected medication and edit/back actions.
+
 package com.example.carelink.screens
 
 import androidx.compose.foundation.background

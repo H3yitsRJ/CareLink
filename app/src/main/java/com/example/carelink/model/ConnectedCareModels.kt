@@ -1,3 +1,7 @@
+// Shared appointment, health-concern, care-task, caregiver-access, history, and refill models.
+// Serialization helpers define document fields; they do not perform writes or enforce server
+// permissions.
+
 package com.example.carelink.model
 
 enum class AppointmentStatus { SCHEDULED, COMPLETED, CANCELLED }
@@ -126,14 +130,46 @@ data class CaregiverAccess(
     val permissions: Set<CarePermission>, val revoked: Boolean = false
 ) {
     fun allows(permission: CarePermission) = !revoked && permission in permissions
+
+    fun toFirestore(): Map<String, Any> = mapOf(
+        "patientId" to patientId,
+        "caregiverId" to caregiverId,
+        "permissions" to permissions.map(CarePermission::name).sorted(),
+        "revoked" to revoked
+    )
+
+    companion object {
+        fun fromFirestore(id: String, data: Map<String, Any?>): CaregiverAccess? {
+            val patientId = data["patientId"] as? String ?: return null
+            val caregiverId = data["caregiverId"] as? String ?: return null
+            val permissions = (data["permissions"] as? List<*>)
+                ?.mapNotNull { value -> CarePermission.entries.firstOrNull { it.name == value } }
+                ?.toSet().orEmpty()
+            return CaregiverAccess(
+                id = id,
+                patientId = patientId,
+                caregiverId = caregiverId,
+                permissions = permissions,
+                revoked = data["revoked"] as? Boolean ?: false
+            )
+        }
+    }
 }
 
 enum class CareActivityType { MEDICATION, APPOINTMENT, HEALTH_CONCERN, CARE_TASK, CAREGIVER_ACCESS }
 
 data class CareHistoryEntry(
     val id: String, val patientId: String, val occurredAtMillis: Long,
-    val type: CareActivityType, val summary: String
-)
+    val type: CareActivityType, val summary: String, val changedById: String = ""
+) {
+    fun toFirestore(): Map<String, Any> = mapOf(
+        "patientId" to patientId,
+        "occurredAtMillis" to occurredAtMillis,
+        "type" to type.name,
+        "summary" to summary,
+        "changedById" to changedById
+    )
+}
 
 // Filtering is plain Kotlin so it can be tested without Compose or Firebase.
 data class CareHistoryFilter(

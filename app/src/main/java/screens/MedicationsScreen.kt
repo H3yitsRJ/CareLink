@@ -1,3 +1,6 @@
+// Medication list reached from Home or bottom navigation. Records load from the signed-in patient's Firestore collection;
+// the editing guide below identifies layout and state helpers.
+
 package com.example.carelink.screens
 
 import androidx.compose.foundation.background
@@ -45,7 +48,8 @@ import com.google.firebase.firestore.FirebaseFirestore
 fun MedicationsScreen(
     onAddMedication: () -> Unit = {},
     onEditMedication: (Medication) -> Unit = {},
-    successMessage: String? = null
+    successMessage: String? = null,
+    onNavigate: (BottomNavDestination) -> Unit = {}
 ) {
 
     var medications by remember {
@@ -90,7 +94,7 @@ fun MedicationsScreen(
     ).format(Date())
     Scaffold(
         bottomBar = {
-            BottomNavBar(selectedDestination = BottomNavDestination.Medications)
+            BottomNavBar(selectedDestination = BottomNavDestination.Medications, onDestinationSelected = onNavigate)
         }
     ){ paddingValues ->
         Column(

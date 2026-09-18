@@ -1,3 +1,6 @@
+// Log-out confirmation UI. MainActivity supplies the callback that signs out of Firebase and returns to
+// sign-in.
+
 package com.example.carelink.screens
 
 import androidx.compose.foundation.background

@@ -1,3 +1,6 @@
+// Care-task form with optional appointment context. Returns a task through onSave; MainActivity opens
+// this for new tasks and appointment follow-up.
+
 package com.example.carelink.screens
 
 import androidx.compose.foundation.layout.Arrangement

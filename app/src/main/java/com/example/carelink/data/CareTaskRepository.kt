@@ -1,6 +1,13 @@
+// Care-task storage contracts and implementations. MainActivity currently uses
+// InMemoryCareTaskRepository; the separate asynchronous Firestore implementation is available but not
+// wired into navigation.
+
 package com.example.carelink.data
 
 import com.example.carelink.model.CareTask
+import com.google.android.gms.tasks.Task
+import com.google.android.gms.tasks.Tasks
+import com.google.firebase.firestore.FirebaseFirestore
 
 // The repository keeps storage details out of the care-task screens.
 interface CareTaskRepository {
@@ -35,5 +42,55 @@ class InMemoryCareTaskRepository : CareTaskRepository {
         val updated = task.copy(completed = completed)
         tasks[id] = updated
         return Result.success(updated)
+    }
+}
+
+/** Firestore-backed care-task storage; MainActivity still uses the in-memory implementation. */
+class FirestoreCareTaskRepository(
+    private val firestore: FirebaseFirestore = FirebaseFirestore.getInstance()
+) {
+    fun create(task: CareTask): Task<CareTask> {
+        val error = validate(task)
+        if (error != null) return Tasks.forException(IllegalArgumentException(error))
+        return collection(task.patientId).document(task.id).set(task.toFirestore())
+            .continueWith { result ->
+                if (!result.isSuccessful) throw result.exception ?: IllegalStateException("Care task was not saved")
+                task
+            }
+    }
+
+    fun list(patientId: String): Task<List<CareTask>> = collection(patientId).get()
+        .continueWith { result ->
+            if (!result.isSuccessful) throw result.exception ?: IllegalStateException("Care tasks could not be loaded")
+            result.result.documents.mapNotNull { document ->
+                CareTask.fromFirestore(document.id, document.data.orEmpty())
+            }
+        }
+
+    fun update(task: CareTask): Task<CareTask> {
+        val error = validate(task)
+        if (error != null) return Tasks.forException(IllegalArgumentException(error))
+        return collection(task.patientId).document(task.id).set(task.toFirestore())
+            .continueWith { result ->
+                if (!result.isSuccessful) throw result.exception ?: IllegalStateException("Care task was not updated")
+                task
+            }
+    }
+
+    fun setCompleted(patientId: String, id: String, completed: Boolean): Task<Unit> =
+        collection(patientId).document(id).update("completed", completed)
+            .continueWith { result ->
+                if (!result.isSuccessful) throw result.exception ?: IllegalStateException("Care task status was not updated")
+                Unit
+            }
+
+    private fun collection(patientId: String) = firestore.collection("patients")
+        .document(patientId).collection("careTasks")
+
+    private fun validate(task: CareTask): String? = when {
+        task.id.isBlank() -> "Care task ID is required"
+        task.patientId.isBlank() -> "Patient ID is required"
+        task.title.isBlank() -> "Title is required"
+        else -> null
     }
 }

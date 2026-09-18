@@ -1,3 +1,6 @@
+// Current settings entry point from Profile. Connects Back and Log out; other settings files are not
+// linked here.
+
 package com.example.carelink.screens
 
 import androidx.compose.foundation.background

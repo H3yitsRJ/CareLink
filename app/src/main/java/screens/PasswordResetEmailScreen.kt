@@ -1,3 +1,6 @@
+// Reset-email form with validation, pending, error, and confirmation states. MainActivity sends the
+// Firebase reset request and uses an account-neutral success response.
+
 package com.example.carelink.screens
 
 import androidx.compose.foundation.background

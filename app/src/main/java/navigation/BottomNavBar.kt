@@ -1,3 +1,6 @@
+// Shared bottom navigation and destination enum. Reports selections to its caller; MainActivity maps
+// those destinations to AppScreen values.
+
 package navigation
 
 import androidx.compose.foundation.layout.padding

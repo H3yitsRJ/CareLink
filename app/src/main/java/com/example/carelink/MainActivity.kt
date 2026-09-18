@@ -1,3 +1,6 @@
+// App entry point and current navigation owner. Start here to trace Firebase authentication, profile
+// loading, screen callbacks, and in-memory care data. See docs/code-map.md for the feature map.
+
 package com.example.carelink
 
 import android.os.Bundle
@@ -11,6 +14,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -21,37 +25,45 @@ import androidx.compose.ui.Modifier
 import com.example.carelink.screens.CreateAccountScreen
 import com.example.carelink.screens.CreateProfileScreen
 import com.example.carelink.screens.AppointmentsScreen
+import com.example.carelink.screens.AddEditAppointmentScreen
+import com.example.carelink.screens.AppointmentDetailsScreen
+import com.example.carelink.screens.AddEditCareTaskScreen
+import com.example.carelink.screens.HealthConcernsScreen
+import com.example.carelink.screens.AddHealthConcernScreen
 import com.example.carelink.screens.CareTasksScreen
 import com.example.carelink.screens.DashboardScreen
 import com.example.carelink.screens.DashboardSummary
 import com.example.carelink.screens.LoginScreen
 import com.example.carelink.screens.LogoutScreen
+import com.example.carelink.screens.AddEditMedicationScreen
+import com.example.carelink.screens.MedicationDetailsScreen
 import com.example.carelink.screens.MedicationsScreen
 import com.example.carelink.screens.PasswordResetEmailScreen
+import com.example.carelink.screens.OfflineBanner
 import com.example.carelink.screens.SettingsScreen
 import com.example.carelink.ui.theme.CareLinkTheme
+import com.example.carelink.data.ConnectivityMonitor
+import com.example.carelink.data.InMemoryCareTaskRepository
+import com.example.carelink.model.Appointment
+import com.example.carelink.model.AppointmentStatus
+import com.example.carelink.model.CareTask
+import com.example.carelink.model.HealthConcern
+import com.example.carelink.model.Medication
+import com.example.carelink.notifications.AndroidMedicationReminderScheduler
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseAuthInvalidUserException
 import com.google.firebase.firestore.FirebaseFirestore
 import navigation.BottomNavDestination
 import com.example.carelink.screens.ProfileScreen
 import com.example.carelink.screens.PatientProfileDetails
-import com.example.carelink.screens.AddEditMedicationScreen
-import com.example.carelink.notifications.AndroidMedicationReminderScheduler
 
 // The authentication flow is small enough to model locally without adding a navigation library.
 private enum class AuthScreen { SignIn, CreateAccount, ResetPassword }
 private enum class AppScreen {
-    Home,
-    Medications,
-    Appointments,
-    CareTasks,
-    Profile,
-    EditProfile,
-    Settings,
-    Logout,
-    AddMedication
-
+    Home, Medications, AddMedication, MedicationDetails, EditMedication,
+    Appointments, AddAppointment, AppointmentDetails, EditAppointment,
+    CareTasks, AddCareTask, HealthConcerns, AddHealthConcern,
+    Profile, EditProfile, Settings, Logout
 }
 
 class MainActivity : ComponentActivity() {
@@ -96,8 +108,26 @@ class MainActivity : ComponentActivity() {
                     mutableStateOf<com.example.carelink.model.Medication?>(null)
                 }
                 var medicationSuccessMessage by remember { mutableStateOf<String?>(null) }
+                // These repositories and care lists live only in this composition; they are not durable storage.
+                val medicationReminderScheduler = remember {
+                    AndroidMedicationReminderScheduler(this@MainActivity)
+                }
+                var appointments by remember { mutableStateOf(emptyList<Appointment>()) }
+                var selectedAppointment by remember { mutableStateOf<Appointment?>(null) }
+                val careTaskRepository = remember { InMemoryCareTaskRepository() }
+                var careTasks by remember { mutableStateOf(emptyList<CareTask>()) }
+                var sourceAppointment by remember { mutableStateOf<Appointment?>(null) }
+                var healthConcerns by remember { mutableStateOf(emptyList<HealthConcern>()) }
+                var isOnline by remember { mutableStateOf(true) }
+                val connectivityMonitor = remember {
+                    ConnectivityMonitor(this@MainActivity) { connected -> isOnline = connected }
+                }
+                DisposableEffect(connectivityMonitor) {
+                    connectivityMonitor.start()
+                    onDispose { connectivityMonitor.stop() }
+                }
 
-                // The remote branch added profile gating. Reload it whenever authentication changes.
+                // A null profile state shows loading; a missing profile opens setup; an existing profile opens the app.
                 LaunchedEffect(isAuthenticated, auth.currentUser?.uid) {
                     val user = auth.currentUser
                     if (!isAuthenticated || user == null) {
@@ -136,6 +166,7 @@ class MainActivity : ComponentActivity() {
                     requestSucceeded = false
                 }
 
+                Box(Modifier.fillMaxSize()) {
                 when {
                     isAuthenticated && hasProfile == null -> LoadingScreen()
                     isAuthenticated && hasProfile == false -> CreateProfileScreen(
@@ -182,6 +213,7 @@ class MainActivity : ComponentActivity() {
                             }
                         }
 
+                        // Each branch supplies screen data and callbacks. A screen file alone does not create a route.
                         when (appScreen) {
                             AppScreen.Home -> DashboardScreen(
                                 fullName = fullName,
@@ -195,6 +227,7 @@ class MainActivity : ComponentActivity() {
                                     appScreen = when (destination) {
                                         "medications" -> AppScreen.Medications
                                         "appointments" -> AppScreen.Appointments
+                                        "health-concerns" -> AppScreen.HealthConcerns
                                         "care-tasks" -> AppScreen.CareTasks
                                         else -> AppScreen.Home
                                     }
@@ -208,11 +241,12 @@ class MainActivity : ComponentActivity() {
                                 },
                                 onEditMedication = { medication ->
                                     selectedMedication = medication
-                                    appScreen = AppScreen.AddMedication
+                                    appScreen = AppScreen.MedicationDetails
                                 },
-                                        successMessage = medicationSuccessMessage
+                                        onNavigate = ::openTopLevel,
+                                successMessage = medicationSuccessMessage
                             )
-                            AppScreen.AddMedication -> AddEditMedicationScreen(
+                            AppScreen.AddMedication, AppScreen.EditMedication -> AddEditMedicationScreen(
                                 medication = selectedMedication,
                                 isSaving = isSavingMedication,
                                 saveError = medicationSaveError,
@@ -242,7 +276,11 @@ class MainActivity : ComponentActivity() {
                                             .document(medication.id)
                                             .set(medicationData)
                                             .addOnSuccessListener {
-                                                AndroidMedicationReminderScheduler(this).schedule(medication)
+                                                val saved = medication.copy(patientId = user.uid)
+                                                val previous = selectedMedication
+                                                if (previous == null) medicationReminderScheduler.schedule(saved)
+                                                else medicationReminderScheduler.replace(previous, saved)
+                                                selectedMedication = saved
                                                 isSavingMedication = false
                                                 appScreen = AppScreen.Medications
                                             }
@@ -269,6 +307,7 @@ class MainActivity : ComponentActivity() {
                                             .document(medication.id)
                                             .delete()
                                             .addOnSuccessListener {
+                                                medicationReminderScheduler.cancel(medication)
                                                 selectedMedication = null
                                                 medicationSaveError = null
                                                 medicationSuccessMessage = "Medication removed successfully."
@@ -281,8 +320,95 @@ class MainActivity : ComponentActivity() {
                                     }
                                 }
                             )
-                            AppScreen.Appointments -> AppointmentsScreen(onNavigate = ::openTopLevel)
-                            AppScreen.CareTasks -> CareTasksScreen(onNavigate = ::openTopLevel)
+                            AppScreen.MedicationDetails -> MedicationDetailsScreen(
+                                medication = selectedMedication,
+                                onEdit = { appScreen = AppScreen.EditMedication },
+                                onBack = { appScreen = AppScreen.Medications }
+                            )
+                            AppScreen.Appointments -> AppointmentsScreen(
+                                appointments = appointments,
+                                onAdd = {
+                                    selectedAppointment = null
+                                    appScreen = AppScreen.AddAppointment
+                                },
+                                onSelect = {
+                                    selectedAppointment = it
+                                    appScreen = AppScreen.AppointmentDetails
+                                },
+                                onNavigate = ::openTopLevel
+                            )
+                            AppScreen.AddAppointment -> AddEditAppointmentScreen(
+                                patientId = auth.currentUser?.uid.orEmpty(),
+                                onSave = {
+                                    appointments = appointments + it
+                                    selectedAppointment = it
+                                    appScreen = AppScreen.AppointmentDetails
+                                },
+                                onCancel = { appScreen = AppScreen.Appointments }
+                            )
+                            AppScreen.AppointmentDetails -> AppointmentDetailsScreen(
+                                appointment = selectedAppointment,
+                                onEdit = { appScreen = AppScreen.EditAppointment },
+                                onCancelAppointment = { cancelled ->
+                                    val updated = cancelled.copy(status = AppointmentStatus.CANCELLED)
+                                    appointments = appointments.map { if (it.id == updated.id) updated else it }
+                                    selectedAppointment = updated
+                                },
+                                onGenerateFollowUp = {
+                                    // Carry the appointment into the task form to preserve the follow-up relationship.
+                                    sourceAppointment = it
+                                    appScreen = AppScreen.AddCareTask
+                                },
+                                onBack = { appScreen = AppScreen.Appointments }
+                            )
+                            AppScreen.EditAppointment -> AddEditAppointmentScreen(
+                                appointment = selectedAppointment,
+                                onSave = { updated ->
+                                    appointments = appointments.map { if (it.id == updated.id) updated else it }
+                                    selectedAppointment = updated
+                                    appScreen = AppScreen.AppointmentDetails
+                                },
+                                onCancel = { appScreen = AppScreen.AppointmentDetails }
+                            )
+                            AppScreen.CareTasks -> CareTasksScreen(
+                                tasks = careTasks,
+                                onAdd = {
+                                    sourceAppointment = null
+                                    appScreen = AppScreen.AddCareTask
+                                },
+                                onCompletedChange = { task, completed ->
+                                    careTaskRepository.setCompleted(task.id, completed)
+                                    careTasks = careTaskRepository.list(task.patientId)
+                                },
+                                onNavigate = ::openTopLevel
+                            )
+                            AppScreen.AddCareTask -> AddEditCareTaskScreen(
+                                sourceAppointment = sourceAppointment,
+                                patientId = auth.currentUser?.uid.orEmpty(),
+                                onSave = { task ->
+                                    careTaskRepository.create(task)
+                                    careTasks = careTaskRepository.list(task.patientId)
+                                    sourceAppointment = null
+                                    appScreen = AppScreen.CareTasks
+                                },
+                                onCancel = {
+                                    appScreen = if (sourceAppointment == null) AppScreen.CareTasks else AppScreen.AppointmentDetails
+                                    sourceAppointment = null
+                                }
+                            )
+                            AppScreen.HealthConcerns -> HealthConcernsScreen(
+                                concerns = healthConcerns,
+                                onAdd = { appScreen = AppScreen.AddHealthConcern },
+                                onSelect = {},
+                            )
+                            AppScreen.AddHealthConcern -> AddHealthConcernScreen(
+                                patientId = auth.currentUser?.uid.orEmpty(),
+                                onSave = {
+                                    healthConcerns = healthConcerns + it
+                                    appScreen = AppScreen.HealthConcerns
+                                },
+                                onCancel = { appScreen = AppScreen.HealthConcerns }
+                            )
                             AppScreen.Profile -> ProfileScreen(
                                 fullName = fullName,
                                 email = auth.currentUser?.email.orEmpty(),
@@ -364,7 +490,9 @@ class MainActivity : ComponentActivity() {
                             AppScreen.Logout -> LogoutScreen(
                                 onBack = { appScreen = AppScreen.Settings },
                                 onLogout = {
+                                    // Current cleanup resets the medication display, but not every care list or repository.
                                     auth.signOut()
+                                    selectedMedication = null
                                     appScreen = AppScreen.Home
                                     screen = AuthScreen.SignIn
                                     isAuthenticated = false
@@ -417,6 +545,8 @@ class MainActivity : ComponentActivity() {
                             onBackToSignIn = { navigate(AuthScreen.SignIn) }
                         )
                     }
+                }
+                OfflineBanner(isOffline = !isOnline)
                 }
             }
         }

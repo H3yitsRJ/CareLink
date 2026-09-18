@@ -2,8 +2,50 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /{document=**} {
-      allow read, write: if request.auth != null;
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(patientId) {
+      return signedIn() && request.auth.uid == patientId;
+    }
+
+    function caregiverAccess(patientId) {
+      return get(/databases/$(database)/documents/patients/$(patientId)/caregiverAccess/$(request.auth.uid));
+    }
+
+    function caregiverMay(patientId, permission) {
+      return signedIn()
+        && exists(/databases/$(database)/documents/patients/$(patientId)/caregiverAccess/$(request.auth.uid))
+        && caregiverAccess(patientId).data.revoked == false
+        && permission in caregiverAccess(patientId).data.permissions;
+    }
+
+    match /users/{userId} {
+      allow read, create, update, delete: if isOwner(userId);
+    }
+
+    match /patients/{patientId} {
+      allow read, write: if isOwner(patientId);
+
+      match /caregiverAccess/{caregiverId} {
+        allow read: if isOwner(patientId)
+          || (signedIn() && request.auth.uid == caregiverId);
+        allow create, update, delete: if isOwner(patientId);
+      }
+
+      match /careHistory/{entryId} {
+        allow read: if isOwner(patientId) || caregiverMay(patientId, "VIEW");
+        allow create: if isOwner(patientId);
+        allow update, delete: if false;
+      }
+
+      match /{collection}/{documentId} {
+        allow read: if isOwner(patientId) || caregiverMay(patientId, "VIEW");
+        allow create: if isOwner(patientId) || caregiverMay(patientId, "ADD");
+        allow update: if isOwner(patientId) || caregiverMay(patientId, "EDIT");
+        allow delete: if isOwner(patientId) || caregiverMay(patientId, "DELETE");
+      }
     }
   }
 }

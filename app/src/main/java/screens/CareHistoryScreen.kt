@@ -1,3 +1,6 @@
+// History filtering UI for caller-supplied entries. Uses timestamp bounds and activity types; no
+// MainActivity route or Firestore loading is connected.
+
 package com.example.carelink.screens
 
 import androidx.compose.foundation.layout.Arrangement

@@ -1,3 +1,6 @@
+// Permission editor prepared for future navigation. Requires caller-supplied access and save handling;
+// canEdit controls UI interaction, not server authorization.
+
 package com.example.carelink.screens
 
 import androidx.compose.foundation.layout.Arrangement

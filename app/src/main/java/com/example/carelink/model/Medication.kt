@@ -1,3 +1,6 @@
+// Medication details, schedule values, validation, and Firestore conversion. The editor creates this
+// model; MedicationRepository validates it before storing it.
+
 package com.example.carelink.model
 
 /**

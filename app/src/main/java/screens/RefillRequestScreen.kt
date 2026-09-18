@@ -1,3 +1,6 @@
+// Refill form and local duplicate check, not yet routed from MainActivity. Its submitted message follows
+// onSave immediately and does not confirm a completed backend write.
+
 package com.example.carelink.screens
 
 import androidx.compose.foundation.layout.Arrangement

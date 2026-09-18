@@ -1,3 +1,6 @@
+// Named color values used by the shared theme. Theme.kt maps colors to Material roles consumed by
+// screens.
+
 package com.example.carelink.ui.theme
 
 import androidx.compose.ui.graphics.Color

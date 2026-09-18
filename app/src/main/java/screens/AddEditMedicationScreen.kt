@@ -1,3 +1,6 @@
+// Medication form and testable field validation. Edits one reminder time; MainActivity supplies the
+// patient ID on creation, stores the result, and schedules reminders.
+
 package com.example.carelink.screens
 
 import androidx.compose.foundation.background

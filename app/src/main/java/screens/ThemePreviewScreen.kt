@@ -1,3 +1,5 @@
+// Standalone theme sample with static text and an inactive button. Not part of MainActivity navigation.
+
 package com.example.carelink.ui.screens
 
 import androidx.compose.foundation.layout.Arrangement

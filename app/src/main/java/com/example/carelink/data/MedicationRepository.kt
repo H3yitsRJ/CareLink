@@ -1,3 +1,6 @@
+// Medication and dose-record storage for the current session and unit tests. MainActivity uses this
+// in-memory implementation; data is not written to Firestore.
+
 package com.example.carelink.data
 
 import com.example.carelink.model.DoseRecord

@@ -1,3 +1,6 @@
+// Receives scheduled alarms and posts a medication notification after checking permission. It does not
+// record a dose or schedule the next reminder.
+
 package com.example.carelink.notifications
 
 import android.Manifest

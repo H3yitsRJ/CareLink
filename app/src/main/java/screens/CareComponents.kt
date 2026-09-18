@@ -1,3 +1,6 @@
+// Shared CareCard and StateMessage composables used by care screens. Adjust common card layout and
+// status-message styling here.
+
 package com.example.carelink.screens
 
 import androidx.compose.foundation.layout.Arrangement
@@ -15,9 +18,9 @@ import androidx.compose.ui.unit.dp
 
 // Shared cards stop each feature screen from inventing its own spacing and shape.
 @Composable
-internal fun CareCard(title: String, content: @Composable () -> Unit) {
+internal fun CareCard(title: String, modifier: Modifier = Modifier, content: @Composable () -> Unit) {
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {

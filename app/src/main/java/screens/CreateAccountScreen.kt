@@ -1,3 +1,6 @@
+// Registration form, validation, and submission states. Returns RegistrationDetails; MainActivity calls
+// Firebase Authentication and moves signed-in patients to profile setup.
+
 package com.example.carelink.screens
 
 import androidx.compose.foundation.background

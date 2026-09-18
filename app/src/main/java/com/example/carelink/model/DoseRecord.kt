@@ -1,3 +1,6 @@
+// One scheduled dose outcome, with validation and Firestore conversion. MedicationRepository stores
+// these in memory; the current navigation has no dose-recording screen.
+
 package com.example.carelink.model
 
 // Firestore values are lowercase and independent of Kotlin enum names.
