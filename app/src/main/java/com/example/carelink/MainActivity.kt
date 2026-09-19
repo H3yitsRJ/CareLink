@@ -18,8 +18,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import com.example.carelink.model.Appointment
+import com.example.carelink.model.AppointmentStatus
 import com.example.carelink.notifications.AndroidMedicationReminderScheduler
 import com.example.carelink.screens.AddEditMedicationScreen
+import com.example.carelink.screens.AddEditAppointmentScreen
+import com.example.carelink.screens.AppointmentDetailsScreen
 import com.example.carelink.screens.AppointmentsScreen
 import com.example.carelink.screens.CareTasksScreen
 import com.example.carelink.screens.CreateAccountScreen
@@ -51,6 +55,8 @@ private enum class AppScreen {
     Medications,
     MedicationDetails,
     Appointments,
+    AppointmentDetails,
+    AddAppointment,
     CareTasks,
     Profile,
     EditProfile,
@@ -105,6 +111,48 @@ class MainActivity : ComponentActivity() {
                 var medicationSaveError by remember { mutableStateOf<String?>(null) }
                 var selectedMedication by remember { mutableStateOf< com.example.carelink.model.Medication? >(null) }
                 var medicationSuccessMessage by remember { mutableStateOf<String?>(null) }
+                var appointments by remember { mutableStateOf<List<Appointment>>(emptyList()) }
+                var appointmentsLoading by remember { mutableStateOf(false) }
+                var appointmentLoadError by remember { mutableStateOf<String?>(null) }
+                var selectedAppointment by remember { mutableStateOf<Appointment?>(null) }
+                var isSavingAppointment by remember { mutableStateOf(false) }
+                var appointmentSaveError by remember { mutableStateOf<String?>(null) }
+                var appointmentSuccessMessage by remember { mutableStateOf<String?>(null) }
+
+                fun loadAppointments() {
+                    val user = auth.currentUser
+
+                    if (user == null) {
+                        appointments = emptyList()
+                        appointmentsLoading = false
+                        appointmentLoadError = null
+                        return
+                    }
+
+                    appointmentsLoading = true
+                    appointmentLoadError = null
+
+                    firestore
+                        .collection("users")
+                        .document(user.uid)
+                        .collection("appointments")
+                        .get()
+                        .addOnSuccessListener { snapshot ->
+                            appointments = snapshot.documents.map { document ->
+                                Appointment.fromFirestore(
+                                    id = document.id,
+                                    data = document.data.orEmpty()
+                                )
+                            }
+
+                            appointmentsLoading = false
+                        }
+                        .addOnFailureListener {
+                            appointmentsLoading = false
+                            appointmentLoadError =
+                                "We couldn't load your appointments. Please try again."
+                        }
+                }
 
                 LaunchedEffect(
                     isAuthenticated,
@@ -115,7 +163,12 @@ class MainActivity : ComponentActivity() {
                     if (!isAuthenticated || user == null) {
                         hasProfile = false
                         fullName = ""
+                        appointments = emptyList()
+                        selectedAppointment = null
+                        appointmentLoadError = null
+                        appointmentSuccessMessage = null
                     } else {
+                        loadAppointments()
                         hasProfile = null
 
                         firestore
@@ -384,7 +437,136 @@ class MainActivity : ComponentActivity() {
 
                             AppScreen.Appointments -> {
                                 AppointmentsScreen(
+                                    appointments = appointments,
+                                    isLoading = appointmentsLoading,
+                                    errorMessage = appointmentLoadError,
+                                    successMessage = appointmentSuccessMessage,
+                                    onAddAppointment = {
+                                        selectedAppointment = null
+                                        appointmentSaveError = null
+                                        appointmentSuccessMessage = null
+                                        appScreen = AppScreen.AddAppointment
+                                    },
+                                    onAppointmentSelected = { appointment ->
+                                        selectedAppointment = appointment
+                                        appointmentSaveError = null
+                                        appointmentSuccessMessage = null
+                                        appScreen = AppScreen.AppointmentDetails
+                                    },
+                                    onEditAppointment = { appointment ->
+                                        selectedAppointment = appointment
+                                        appointmentSaveError = null
+                                        appointmentSuccessMessage = null
+                                        appScreen = AppScreen.AddAppointment
+                                    },
+                                    onRetry = {
+                                        loadAppointments()
+                                    },
                                     onNavigate = ::openTopLevel
+                                )
+                            }
+
+                            AppScreen.AppointmentDetails -> {
+                                AppointmentDetailsScreen(
+                                    appointment = selectedAppointment,
+                                    successMessage = appointmentSuccessMessage,
+                                    onEdit = {
+                                        appointmentSaveError = null
+                                        appScreen = AppScreen.AddAppointment
+                                    },
+                                    onCancelAppointment = { appointment ->
+                                        val user = auth.currentUser
+
+                                        if (user != null) {
+                                            val cancelledAppointment = appointment.copy(
+                                                status = AppointmentStatus.CANCELLED
+                                            )
+
+                                            firestore
+                                                .collection("users")
+                                                .document(user.uid)
+                                                .collection("appointments")
+                                                .document(appointment.id)
+                                                .set(cancelledAppointment.toFirestore())
+                                                .addOnSuccessListener {
+                                                    selectedAppointment = cancelledAppointment
+                                                    appointmentSuccessMessage =
+                                                        "Appointment cancelled successfully."
+                                                    loadAppointments()
+                                                }
+                                                .addOnFailureListener {
+                                                    appointmentSuccessMessage =
+                                                        "We couldn't cancel the appointment."
+                                                }
+                                        }
+                                    },
+                                    onBack = {
+                                        selectedAppointment = null
+                                        appointmentSuccessMessage = null
+                                        appScreen = AppScreen.Appointments
+                                    }
+                                )
+                            }
+
+                            AppScreen.AddAppointment -> {
+                                AddEditAppointmentScreen(
+                                    appointment = selectedAppointment,
+                                    isSaving = isSavingAppointment,
+                                    saveError = appointmentSaveError,
+                                    onSave = { appointment ->
+                                        val user = auth.currentUser
+
+                                        if (user != null) {
+                                            isSavingAppointment = true
+                                            appointmentSaveError = null
+
+                                            val appointmentCollection = firestore
+                                                .collection("users")
+                                                .document(user.uid)
+                                                .collection("appointments")
+
+                                            val appointmentId = appointment.id.ifBlank {
+                                                appointmentCollection.document().id
+                                            }
+
+                                            val appointmentToSave = appointment.copy(
+                                                id = appointmentId,
+                                                patientId = user.uid
+                                            )
+
+                                            appointmentCollection
+                                                .document(appointmentId)
+                                                .set(appointmentToSave.toFirestore())
+                                                .addOnSuccessListener {
+                                                    isSavingAppointment = false
+                                                    selectedAppointment = null
+                                                    appointmentSaveError = null
+                                                    appointmentSuccessMessage =
+                                                        "Appointment saved successfully."
+
+                                                    loadAppointments()
+                                                    appScreen = AppScreen.Appointments
+                                                }
+                                                .addOnFailureListener {
+                                                    isSavingAppointment = false
+                                                    appointmentSaveError =
+                                                        "We couldn't save the appointment. Please try again."
+                                                }
+                                        } else {
+                                            appointmentSaveError =
+                                                "You must be signed in to save an appointment."
+                                        }
+                                    },
+                                    onCancel = {
+                                        appointmentSaveError = null
+
+                                        appScreen =
+                                            if (selectedAppointment != null) {
+                                                AppScreen.AppointmentDetails
+                                            } else {
+                                                AppScreen.Appointments
+                                            }
+                                    }
                                 )
                             }
 

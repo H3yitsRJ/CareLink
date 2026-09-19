@@ -23,6 +23,9 @@ import com.example.carelink.model.Appointment
 
 @Composable
 fun AddEditAppointmentScreen(
+    appointment: Appointment? = null,
+    isSaving: Boolean = false,
+    saveError: String? = null,
     onSave: (Appointment) -> Unit = {},
     onCancel: () -> Unit = {}
 ) {
@@ -44,7 +47,13 @@ fun AddEditAppointmentScreen(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Text("Add Appointment")
+        Text(
+            text = if   (appointment == null) {
+                "Add appointment"
+            } else {
+                "Edit appointment"
+            }
+        )
 
         OutlinedTextField(
             value = title,
@@ -74,12 +83,13 @@ fun AddEditAppointmentScreen(
             value = date,
             onValueChange = { date = it },
             label = { Text("Date") },
+            placeholder = { Text("YYYY-MM-DD") },
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
             isError = dateError,
             supportingText = {
                 if (dateError) {
-                    Text("Enter a date")
+                    Text("Use a valid date in YYYY-MM-DD format")
                 }
             },
             shape = RoundedCornerShape(12.dp)
@@ -89,12 +99,13 @@ fun AddEditAppointmentScreen(
             value = time,
             onValueChange = { time = it },
             label = { Text("Time") },
+            placeholder = { Text("HH:MM") },
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
             isError = timeError,
             supportingText = {
                 if (timeError) {
-                    Text("Enter a time")
+                    Text("Use 24-hour time in HH:MM format")
                 }
             },
             shape = RoundedCornerShape(12.dp)
@@ -118,6 +129,10 @@ fun AddEditAppointmentScreen(
             shape = RoundedCornerShape(12.dp)
         )
 
+        if (saveError != null) {
+            Text(saveError)
+        }
+
         Button(
             onClick = {
                 attemptedSave = true
@@ -127,23 +142,78 @@ fun AddEditAppointmentScreen(
                     date.isNotBlank() &&
                     time.isNotBlank()
                 ) {
-                    val appointment = Appointment(
-                        id = "",
-                        patientId = "",
-                        title = title.trim(),
-                        date = date.trim(),
-                        time = time.trim(),
-                        provider = provider.trim(),
-                        location = location.trim(),
-                        notes = notes.trim()
-                    )
+                    onSave(
+                        Appointment (
+                            id = appointment?.id.orEmpty(),
+                            patientId = appointment?.patientId.orEmpty(),
+                            title = title.trim(),
+                            date = date.trim(),
+                            time = time.trim(),
+                            provider = provider.trim(),
+                            location = location.trim(),
+                            notes = notes.trim(),
+                            status = appointment?.status
+                                ?: com.example.carelink.model.AppointmentStatus.SCHEDULED
 
-                    onSave(appointment)
+                        )
+                    )
                 }
             },
+            enabled = !isSaving,
             modifier = Modifier.fillMaxWidth()
         ) {
-            Text("Save Appointment")
+            Text(
+                if (isSaving) {
+                    "Saving..."
+                } else {
+                    "Save appointment"
+                }
+            )
+        }
+
+        OutlinedButton(
+            onClick = onCancel,
+            enabled = !isSaving,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Cancel")
         }
     }
+}
+
+private fun isValidDate(value: String): Boolean {
+    if (!Regex("""\d{4}-\d{2}-\d{2}""").matches(value)) {
+        return false
+    }
+
+    val parts = value.split("-")
+    val year = parts[0].toIntOrNull() ?: return false
+    val month = parts[1].toIntOrNull() ?: return false
+    val day = parts[2].toIntOrNull() ?: return false
+
+    if (year < 1900 || month !in 1..12) {
+        return false
+    }
+
+    val daysInMonth = when (month) {
+        2 -> {
+            if (
+                year % 400 == 0 ||
+                (year % 4 == 0 && year % 100 != 0)
+            ) {
+                29
+            } else {
+                28
+            }
+        }
+
+        4, 6, 9, 11 -> 30
+        else -> 31
+    }
+
+    return day in 1..daysInMonth
+}
+
+private fun isValidTime(value: String): Boolean {
+    return Regex("""([01]\d|2[0-3]):[0-5]\d""").matches(value)
 }
