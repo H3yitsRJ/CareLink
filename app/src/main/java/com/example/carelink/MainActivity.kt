@@ -4,6 +4,7 @@ import android.Manifest
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
@@ -66,21 +67,15 @@ private enum class AppScreen {
 }
 
 class MainActivity : ComponentActivity() {
-    private val notificationPermissionLauncher =
-        registerForActivityResult(
-            ActivityResultContracts.RequestPermission()
-        ) {
-            // Permission result is handled by Android.
-        }
+    private val medicationReminderScheduler by lazy { AndroidMedicationReminderScheduler(this) }
+
+    override fun onResume() {
+        super.onResume()
+        medicationReminderScheduler.restore(FirebaseAuth.getInstance().currentUser?.uid)
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            notificationPermissionLauncher.launch(
-                Manifest.permission.POST_NOTIFICATIONS
-            )
-        }
 
         configureFirebaseEmulators()
         enableEdgeToEdge()
@@ -88,6 +83,14 @@ class MainActivity : ComponentActivity() {
         setContent {
             CareLinkTheme {
                 val auth = remember { FirebaseAuth.getInstance() }
+                val notificationPermissionLauncher = rememberLauncherForActivityResult(
+                    ActivityResultContracts.RequestPermission()
+                ) { medicationReminderScheduler.restore(auth.currentUser?.uid) }
+                LaunchedEffect(Unit) {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                    }
+                }
                 val firestore = remember { FirebaseFirestore.getInstance() }
                 var isAuthenticated by remember { mutableStateOf(auth.currentUser != null) }
                 var screen by remember { mutableStateOf(AuthScreen.SignIn) }
@@ -168,6 +171,14 @@ class MainActivity : ComponentActivity() {
                         appointmentLoadError = null
                         appointmentSuccessMessage = null
                     } else {
+                        medicationReminderScheduler.restore(user.uid)
+                        firestore.collection("users").document(user.uid).collection("medications").get()
+                            .addOnSuccessListener { snapshot ->
+                                if (auth.currentUser?.uid == user.uid) snapshot.documents.forEach { document ->
+                                    com.example.carelink.model.Medication.fromFirestore(document.id, document.data.orEmpty())
+                                        ?.let { medicationReminderScheduler.schedule(it) }
+                                }
+                            }
                         loadAppointments()
                         hasProfile = null
 
@@ -318,6 +329,7 @@ class MainActivity : ComponentActivity() {
                             AppScreen.MedicationDetails -> {
                                 MedicationDetailsScreen(
                                     medication = selectedMedication,
+                                    errorMessage = medicationSaveError,
                                     onEdit = { medication ->
                                         selectedMedication = medication
                                         medicationSaveError = null
@@ -334,6 +346,7 @@ class MainActivity : ComponentActivity() {
                                                 .document(medication.id)
                                                 .delete()
                                                 .addOnSuccessListener {
+                                                    medicationReminderScheduler.cancel(medication)
                                                     selectedMedication = null
                                                     medicationSaveError = null
                                                     medicationSuccessMessage = "Medication removed successfully."
@@ -384,13 +397,15 @@ class MainActivity : ComponentActivity() {
                                                 .document(medication.id)
                                                 .set(medicationData)
                                                 .addOnSuccessListener {
-                                                    AndroidMedicationReminderScheduler(
-                                                        this
-                                                    ).schedule(medication)
+                                                    val saved = medication.copy(patientId = user.uid)
+                                                    val remindersScheduled = selectedMedication?.let {
+                                                        medicationReminderScheduler.replace(it, saved)
+                                                    } ?: medicationReminderScheduler.schedule(saved)
 
                                                     isSavingMedication = false
                                                     selectedMedication = null
-                                                    medicationSuccessMessage = "Medication saved successfully."
+                                                    medicationSuccessMessage = if (remindersScheduled) "Medication saved successfully."
+                                                        else "Medication saved. Enable notifications in Settings to receive reminders."
                                                     appScreen = AppScreen.Medications
                                                 }
                                                 .addOnFailureListener {
@@ -422,6 +437,7 @@ class MainActivity : ComponentActivity() {
                                                 .document(medication.id)
                                                 .delete()
                                                 .addOnSuccessListener {
+                                                    medicationReminderScheduler.cancel(medication)
                                                     selectedMedication = null
                                                     medicationSaveError = null
                                                     medicationSuccessMessage = "Medication removed successfully."
@@ -681,6 +697,7 @@ class MainActivity : ComponentActivity() {
                                         appScreen = AppScreen.Settings
                                     },
                                     onLogout = {
+                                        medicationReminderScheduler.clear()
                                         auth.signOut()
                                         appScreen = AppScreen.Home
                                         screen = AuthScreen.SignIn

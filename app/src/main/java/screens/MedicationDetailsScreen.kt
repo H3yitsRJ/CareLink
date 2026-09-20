@@ -2,6 +2,8 @@ package com.example.carelink.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -40,12 +42,13 @@ import navigation.BottomNavDestination
 fun MedicationDetailsScreen(
     medication: Medication? = null,
     isLoading: Boolean = false,
+    errorMessage: String? = null,
     onEdit: (Medication) -> Unit = {},
     onRemove: (Medication) -> Unit = {},
     onBack: () -> Unit = {},
     onNavigate: (BottomNavDestination) -> Unit = {}
 ) {
-    var showRemoveDialog by remember { mutableStateOf(false) }
+    var showRemoveDialog by remember(medication?.id) { mutableStateOf(false) }
 
     Scaffold(
         bottomBar = {
@@ -60,6 +63,7 @@ fun MedicationDetailsScreen(
                 .fillMaxSize()
                 .background(MaterialTheme.colorScheme.background)
                 .padding(paddingValues)
+                .verticalScroll(rememberScrollState())
                 .padding(horizontal = 20.dp, vertical = 16.dp)
         ) {
             TextButton(
@@ -78,6 +82,7 @@ fun MedicationDetailsScreen(
             }
 
             Spacer(modifier = Modifier.height(32.dp))
+            if (errorMessage != null) Text(errorMessage, color = MaterialTheme.colorScheme.error)
 
             when {
                 isLoading -> MedicationLoadingState()

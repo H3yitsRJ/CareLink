@@ -60,7 +60,13 @@ fun MedicationsScreen(
         mutableStateOf<List<Medication>>(emptyList())
     }
 
-    LaunchedEffect(Unit) {
+    var loading by remember { mutableStateOf(true) }
+    var loadError by remember { mutableStateOf<String?>(null) }
+    var retry by remember { mutableStateOf(0) }
+
+    LaunchedEffect(retry) {
+        loading = true
+        loadError = null
         val user = FirebaseAuth.getInstance().currentUser
 
         if (user != null) {
@@ -71,24 +77,18 @@ fun MedicationsScreen(
                 .get()
                 .addOnSuccessListener { result ->
 
-                    medications = result.documents.map { document ->
-                        Medication(
-                            id = document.getString("id").orEmpty(),
-                            patientId = document.getString("patientId").orEmpty(),
-                            name = document.getString("name").orEmpty(),
-                            strength = document.getString("strength").orEmpty(),
-                            dose = document.getString("dose").orEmpty(),
-                            frequency = document.getString("frequency").orEmpty(),
-                            reminderTimes =
-                                document.get("reminderTimes") as? List<String>
-                                    ?: emptyList(),
-                            instructions =
-                                document.getString("instructions").orEmpty(),
-                            active =
-                                document.getBoolean("active") ?: true
-                        )
+                    medications = result.documents.mapNotNull { document ->
+                        Medication.fromFirestore(document.id, document.data.orEmpty() + ("patientId" to user.uid))
                     }
+                    loading = false
                 }
+                .addOnFailureListener {
+                    loading = false
+                    loadError = "We couldn't load your medications."
+                }
+        } else {
+            loading = false
+            loadError = "Sign in to view your medications."
         }
     }
 
@@ -180,7 +180,12 @@ fun MedicationsScreen(
             Spacer(modifier = Modifier.height(18.dp))
 
 
-            if(medications.isEmpty()){
+            if (loading) {
+                Text("Loading medications")
+            } else if (loadError != null) {
+                Text(loadError!!, color = MaterialTheme.colorScheme.error)
+                Button(onClick = { retry++ }) { Text("Retry") }
+            } else if(medications.isEmpty()){
 
                 Box(
                     modifier = Modifier
