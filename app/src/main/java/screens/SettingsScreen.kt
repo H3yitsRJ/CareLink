@@ -21,7 +21,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 
 @Composable
-fun SettingsScreen(onBack: () -> Unit, onOpenLogout: () -> Unit) {
+fun SettingsScreen(onBack: () -> Unit, onOpenLogout: () -> Unit, onCaregiverAccess: () -> Unit = {}) {
     Column(
         Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)
             .padding(horizontal = 16.dp, vertical = 24.dp)
@@ -30,6 +30,10 @@ fun SettingsScreen(onBack: () -> Unit, onOpenLogout: () -> Unit) {
             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
         }
         Text("Settings", Modifier.padding(top = 8.dp), style = MaterialTheme.typography.headlineLarge)
+        Row(Modifier.fillMaxWidth().sizeIn(minHeight = 56.dp).clickable(onClick = onCaregiverAccess).padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text("Medication caregiver access", Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
+            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null)
+        }
         Row(
             Modifier.fillMaxWidth().padding(top = 24.dp).sizeIn(minHeight = 56.dp)
                 .clickable(onClickLabel = "Open log out confirmation", onClick = onOpenLogout)

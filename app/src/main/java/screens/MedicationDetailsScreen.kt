@@ -46,13 +46,16 @@ fun MedicationDetailsScreen(
     onEdit: (Medication) -> Unit = {},
     onRemove: (Medication) -> Unit = {},
     onBack: () -> Unit = {},
-    onNavigate: (BottomNavDestination) -> Unit = {}
+    onNavigate: (BottomNavDestination) -> Unit = {},
+    canEdit: Boolean = true,
+    canRemove: Boolean = true,
+    showNavigation: Boolean = true
 ) {
     var showRemoveDialog by remember(medication?.id) { mutableStateOf(false) }
 
     Scaffold(
         bottomBar = {
-            BottomNavBar(
+            if (showNavigation) BottomNavBar(
                 BottomNavDestination.Medications,
                 onNavigate
             )
@@ -91,6 +94,8 @@ fun MedicationDetailsScreen(
 
                 else -> MedicationDetailsContent(
                     medication = medication,
+                    canEdit = canEdit,
+                    canRemove = canRemove,
                     onEdit = { onEdit(medication) },
                     onRemove = { showRemoveDialog = true }
                 )
@@ -98,7 +103,7 @@ fun MedicationDetailsScreen(
         }
     }
 
-    if (showRemoveDialog && medication != null) {
+    if (showRemoveDialog && medication != null && canRemove) {
         AlertDialog(
             onDismissRequest = { showRemoveDialog = false },
             title = { Text("Remove medication?") },
@@ -127,6 +132,8 @@ fun MedicationDetailsScreen(
 @Composable
 private fun MedicationDetailsContent(
     medication: Medication,
+    canEdit: Boolean,
+    canRemove: Boolean,
     onEdit: () -> Unit,
     onRemove: () -> Unit
 ) {
@@ -182,6 +189,10 @@ private fun MedicationDetailsContent(
 
         Spacer(modifier = Modifier.height(28.dp))
 
+        medication.updatedById?.let { editor ->
+            Text(if (editor == medication.patientId) "Last edited by patient" else "Last edited by caregiver: $editor",
+                style = MaterialTheme.typography.bodySmall)
+        }
         HorizontalDivider()
 
         Spacer(modifier = Modifier.height(24.dp))
@@ -194,7 +205,7 @@ private fun MedicationDetailsContent(
 
         Spacer(modifier = Modifier.height(28.dp))
 
-        Button(
+        if (canEdit) Button(
             onClick = onEdit,
             modifier = Modifier.fillMaxWidth()
         ) {
@@ -203,7 +214,7 @@ private fun MedicationDetailsContent(
 
         Spacer(modifier = Modifier.height(10.dp))
 
-        OutlinedButton(
+        if (canRemove) OutlinedButton(
             onClick = onRemove,
             modifier = Modifier.fillMaxWidth()
         ) {

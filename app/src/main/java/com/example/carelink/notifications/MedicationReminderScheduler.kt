@@ -113,7 +113,8 @@ class AndroidMedicationReminderScheduler(
         val times = value.getJSONArray("reminderTimes")
         Medication(value.getString("id"), value.getString("patientId"), value.getString("name"),
             value.getString("strength"), value.getString("dose"), value.getString("frequency"),
-            (0 until times.length()).map(times::getString), value.optString("instructions"), value.getBoolean("active")) to value.getString("revision")
+            (0 until times.length()).map(times::getString), value.optString("instructions"), value.getBoolean("active"),
+            value.optString("updatedById").takeIf { it.isNotEmpty() }) to value.getString("revision")
     }.getOrNull()
 
     companion object {

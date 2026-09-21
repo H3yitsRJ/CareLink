@@ -69,7 +69,9 @@ fun AddEditMedicationScreen(
     saveError: String? = null,
     onSave: (Medication) -> Unit = {},
     onCancel: () -> Unit = {},
-    onDelete: (Medication) -> Unit = {}
+    onDelete: (Medication) -> Unit = {},
+    canSave: Boolean = true,
+    canDelete: Boolean = true
 ) {
     // Saveable state keeps entered values through rotation and process recreation.
     var name by rememberSaveable(medication?.id) { mutableStateOf(medication?.name.orEmpty()) }
@@ -88,12 +90,13 @@ fun AddEditMedicationScreen(
         // The parent owns persistence. This screen only submits a validated model.
         attemptedSave = true
         val currentErrors = validateMedicationEditor(name, strength, dose, frequency, reminderTime)
-        if (!currentErrors.hasErrors && !isSaving) onSave(
+        if (!currentErrors.hasErrors && !isSaving && canSave) onSave(
             Medication(
                 id = medication?.id ?: "med-${System.currentTimeMillis()}",
                 patientId = medication?.patientId.orEmpty(),
                 name = name.trim(), strength = strength.trim(), dose = dose.trim(), frequency = frequency.trim(),
-                reminderTimes = reminderTime.split(',').map { it.trim() }.distinct(), instructions = instructions.trim(), active = medication?.active ?: true
+                reminderTimes = reminderTime.split(',').map { it.trim() }.distinct(), instructions = instructions.trim(), active = medication?.active ?: true,
+                updatedById = medication?.updatedById
             )
         )
     }
@@ -144,10 +147,10 @@ fun AddEditMedicationScreen(
             )
         }
         if (saveError != null) Text(saveError, color = MaterialTheme.colorScheme.error, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Assertive })
-        Button(onClick = ::save, enabled = !isSaving, modifier = Modifier.fillMaxWidth().height(56.dp)) {
+        Button(onClick = ::save, enabled = !isSaving && canSave, modifier = Modifier.fillMaxWidth().height(56.dp)) {
             Text(if (isSaving) "Saving medication" else "Save medication")
         }
-        if (medication != null) {
+        if (medication != null && canDelete) {
             OutlinedButton(
                 onClick = { showDeleteDialog = true },
                 enabled = !isSaving,
@@ -163,7 +166,7 @@ fun AddEditMedicationScreen(
         }
         OutlinedButton(onClick = onCancel, enabled = !isSaving, modifier = Modifier.fillMaxWidth().height(56.dp)) { Text("Cancel") }
     }
-    if (showDeleteDialog && medication != null) {
+    if (showDeleteDialog && medication != null && canDelete) {
         AlertDialog(
             onDismissRequest = {
                 showDeleteDialog = false

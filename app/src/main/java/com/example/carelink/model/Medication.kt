@@ -25,7 +25,8 @@ data class Medication(
     val frequency: String,
     val reminderTimes: List<String>,
     val instructions: String = "",
-    val active: Boolean = true
+    val active: Boolean = true,
+    val updatedById: String? = null
 ) {
     // Validation lives on the model so screens and repositories enforce the same rules.
     fun validate(): Map<String, String> = buildMap {
@@ -49,7 +50,7 @@ data class Medication(
         "reminderTimes" to reminderTimes,
         "instructions" to instructions,
         "active" to active
-    )
+    ) + (updatedById?.let { mapOf("updatedById" to it) } ?: emptyMap())
 
     companion object {
         private val TIME_PATTERN = Regex("^(?:[01]\\d|2[0-3]):[0-5]\\d$")
@@ -70,7 +71,8 @@ data class Medication(
                 frequency = data["frequency"] as? String ?: "",
                 reminderTimes = reminderTimes,
                 instructions = data["instructions"] as? String ?: "",
-                active = data["active"] as? Boolean ?: true
+                active = data["active"] as? Boolean ?: true,
+                updatedById = data["updatedById"] as? String
             )
         }
     }

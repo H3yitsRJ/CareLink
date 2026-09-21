@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -39,6 +40,8 @@ import com.example.carelink.screens.PasswordResetEmailScreen
 import com.example.carelink.screens.PatientProfileDetails
 import com.example.carelink.screens.ProfileScreen
 import com.example.carelink.screens.SettingsScreen
+import com.example.carelink.screens.CaregiverMedicationsScreen
+import com.example.carelink.screens.MedicationCaregiverAccessScreen
 import com.example.carelink.ui.theme.CareLinkTheme
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseAuthInvalidUserException
@@ -62,6 +65,8 @@ private enum class AppScreen {
     Profile,
     EditProfile,
     Settings,
+    CaregiverMedications,
+    MedicationCaregiverAccess,
     Logout,
     AddMedication
 }
@@ -122,6 +127,23 @@ class MainActivity : ComponentActivity() {
                 var appointmentSaveError by remember { mutableStateOf<String?>(null) }
                 var appointmentSuccessMessage by remember { mutableStateOf<String?>(null) }
 
+                DisposableEffect(isAuthenticated, auth.currentUser?.uid) {
+                    val patientId = auth.currentUser?.uid
+                    if (!isAuthenticated || patientId == null) return@DisposableEffect onDispose { }
+                    var active = true
+                    val listener = firestore.collection("users").document(patientId).collection("medications")
+                        .addSnapshotListener { snapshot, _ ->
+                            if (active && auth.currentUser?.uid == patientId) snapshot?.documentChanges?.forEach { change ->
+                                com.example.carelink.model.Medication.fromFirestore(change.document.id, change.document.data)
+                                    ?.let { medication ->
+                                        if (change.type == com.google.firebase.firestore.DocumentChange.Type.REMOVED) medicationReminderScheduler.cancel(medication)
+                                        else medicationReminderScheduler.schedule(medication)
+                                    }
+                            }
+                        }
+                    onDispose { active = false; listener.remove() }
+                }
+
                 fun loadAppointments() {
                     val user = auth.currentUser
 
@@ -172,13 +194,6 @@ class MainActivity : ComponentActivity() {
                         appointmentSuccessMessage = null
                     } else {
                         medicationReminderScheduler.restore(user.uid)
-                        firestore.collection("users").document(user.uid).collection("medications").get()
-                            .addOnSuccessListener { snapshot ->
-                                if (auth.currentUser?.uid == user.uid) snapshot.documents.forEach { document ->
-                                    com.example.carelink.model.Medication.fromFirestore(document.id, document.data.orEmpty())
-                                        ?.let { medicationReminderScheduler.schedule(it) }
-                                }
-                            }
                         loadAppointments()
                         hasProfile = null
 
@@ -309,6 +324,7 @@ class MainActivity : ComponentActivity() {
 
                             AppScreen.Medications -> {
                                 MedicationsScreen(
+                                    onCaregiverMedications = { appScreen = AppScreen.CaregiverMedications },
                                     onAddMedication = {
                                         selectedMedication = null
                                         medicationSuccessMessage = null
@@ -387,7 +403,9 @@ class MainActivity : ComponentActivity() {
                                                     "frequency" to medication.frequency,
                                                     "reminderTimes" to medication.reminderTimes,
                                                     "instructions" to medication.instructions,
-                                                    "active" to medication.active
+                                                    "active" to medication.active,
+                                                    "updatedById" to user.uid,
+                                                    "updatedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
                                                 )
 
                                             firestore
@@ -397,7 +415,7 @@ class MainActivity : ComponentActivity() {
                                                 .document(medication.id)
                                                 .set(medicationData)
                                                 .addOnSuccessListener {
-                                                    val saved = medication.copy(patientId = user.uid)
+                                                    val saved = medication.copy(patientId = user.uid, updatedById = user.uid)
                                                     val remindersScheduled = selectedMedication?.let {
                                                         medicationReminderScheduler.replace(it, saved)
                                                     } ?: medicationReminderScheduler.schedule(saved)
@@ -682,6 +700,7 @@ class MainActivity : ComponentActivity() {
 
                             AppScreen.Settings -> {
                                 SettingsScreen(
+                                    onCaregiverAccess = { appScreen = AppScreen.MedicationCaregiverAccess },
                                     onBack = {
                                         appScreen = AppScreen.Profile
                                     },
@@ -691,6 +710,11 @@ class MainActivity : ComponentActivity() {
                                 )
                             }
 
+                            AppScreen.CaregiverMedications -> CaregiverMedicationsScreen(
+                                actorId = auth.currentUser!!.uid, onBack = { appScreen = AppScreen.Medications })
+                            AppScreen.MedicationCaregiverAccess -> MedicationCaregiverAccessScreen(
+                                patientId = auth.currentUser!!.uid, patientName = fullName,
+                                onBack = { appScreen = AppScreen.Settings })
                             AppScreen.Logout -> {
                                 LogoutScreen(
                                     onBack = {

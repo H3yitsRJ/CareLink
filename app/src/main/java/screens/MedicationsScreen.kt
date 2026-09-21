@@ -24,6 +24,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -53,7 +54,8 @@ fun MedicationsScreen(
     onMedicationSelected: (Medication) -> Unit = {},
     onMedicationScheduler: () -> Unit = {},
     successMessage: String? = null,
-    onNavigate: (BottomNavDestination) -> Unit = {}
+    onNavigate: (BottomNavDestination) -> Unit = {},
+    onCaregiverMedications: () -> Unit = {}
 ) {
 
     var medications by remember {
@@ -132,6 +134,7 @@ fun MedicationsScreen(
             Text(
                 text = "Manage and schedule your medications"
             )
+            TextButton(onClick = onCaregiverMedications) { Text("Caregiver medications") }
 
             Spacer(modifier = Modifier.height(50.dp))
 
