@@ -24,6 +24,7 @@ import com.example.carelink.model.CareActivityType
 import com.example.carelink.model.CareHistoryEntry
 import com.example.carelink.model.CareHistoryFilter
 
+
 @Composable
 fun CareHistoryScreen(entries: List<CareHistoryEntry> = emptyList()) {
     var start by rememberSaveable { mutableStateOf("") }
@@ -56,7 +57,8 @@ fun CareHistoryScreen(entries: List<CareHistoryEntry> = emptyList()) {
         if (error != null) StateMessage(error!!, true)
         if (visible.isEmpty()) StateMessage(if (entries.isEmpty()) "No care history yet." else "No care history matches these filters.")
         else LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            items(visible, key = { it.id }) { entry -> CareCard(entry.type.name.lowercase().replace('_', ' ').replaceFirstChar(Char::uppercase)) { Text(entry.summary) } }
+            items(visible, key = { it.id }) { entry -> CareCard(entry.type.name.lowercase().replace('_', ' ').replaceFirstChar(Char::uppercase))
+            { Text(entry.summary) } }
         }
     }
 }

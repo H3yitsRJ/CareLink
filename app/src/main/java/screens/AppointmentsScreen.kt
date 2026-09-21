@@ -12,9 +12,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import navigation.BottomNavBar
 import navigation.BottomNavDestination
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.material3.Button
+import com.example.carelink.model.Appointment
 
 @Composable
-fun AppointmentsScreen(onNavigate: (BottomNavDestination) -> Unit = {}) {
+fun AppointmentsScreen(
+    appointments: List<Appointment> = emptyList(),
+    onNavigate: (BottomNavDestination) -> Unit = {},
+    onAddAppointment: () -> Unit = {}
+) {
     Scaffold(bottomBar = {
         BottomNavBar(BottomNavDestination.Appointments, onNavigate)
     }) { innerPadding ->
@@ -23,7 +30,28 @@ fun AppointmentsScreen(onNavigate: (BottomNavDestination) -> Unit = {}) {
                 .padding(innerPadding).padding(16.dp)
         ) {
             Text("Appointments", style = MaterialTheme.typography.headlineLarge)
-            Text("No appointments yet.", modifier = Modifier.padding(top = 24.dp))
+            if (appointments.isEmpty()) {
+                Text(
+                    "No appointments yet.",
+                    modifier = Modifier.padding(top = 24.dp)
+                )
+            } else {
+                appointments.forEach { appointment ->
+                    Text(
+                        text = "${appointment.title} - ${appointment.date} at ${appointment.time}",
+                        modifier = Modifier.padding(top = 12.dp)
+                    )
+                }
+            }
+            Button(
+                onClick = onAddAppointment,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 24.dp)
+            ) {
+                Text("Add Appointment")
+            }
         }
+
     }
 }

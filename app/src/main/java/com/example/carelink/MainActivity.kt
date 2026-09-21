@@ -39,7 +39,12 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseAuthInvalidUserException
 import com.google.firebase.firestore.FirebaseFirestore
 import navigation.BottomNavDestination
-
+import com.example.carelink.screens.AddEditAppointmentScreen
+import com.example.carelink.data.InMemoryAppointmentRepository
+import com.example.carelink.screens.AddEditCareTaskScreen
+import com.example.carelink.data.InMemoryCareTaskRepository
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
 private enum class AuthScreen {
     SignIn,
     CreateAccount,
@@ -56,7 +61,9 @@ private enum class AppScreen {
     EditProfile,
     Settings,
     Logout,
-    AddMedication
+    AddMedication,
+    AddAppointment,
+    AddCareTask
 }
 
 class MainActivity : ComponentActivity() {
@@ -83,6 +90,12 @@ class MainActivity : ComponentActivity() {
             CareLinkTheme {
                 val auth = remember { FirebaseAuth.getInstance() }
                 val firestore = remember { FirebaseFirestore.getInstance() }
+                val appointmentRepository = remember {
+                    InMemoryAppointmentRepository()
+                }
+                val careTaskRepository = remember {
+                    InMemoryCareTaskRepository()
+                }
                 var isAuthenticated by remember { mutableStateOf(auth.currentUser != null) }
                 var screen by remember { mutableStateOf(AuthScreen.SignIn) }
                 var isSubmitting by remember { mutableStateOf(false) }
@@ -384,13 +397,142 @@ class MainActivity : ComponentActivity() {
 
                             AppScreen.Appointments -> {
                                 AppointmentsScreen(
-                                    onNavigate = ::openTopLevel
+                                    appointments = appointmentRepository.list(
+                                        auth.currentUser?.uid ?: ""
+                                    ),
+                                    onNavigate = ::openTopLevel,
+                                    onAddAppointment = {
+                                        appScreen = AppScreen.AddAppointment
+                                    }
+                                )
+                            }
+
+                            AppScreen.AddAppointment -> {
+                                AddEditAppointmentScreen(
+                                    onSave = { appointment ->
+                                        val appointmentToSave = appointment.copy(
+                                            id = System.currentTimeMillis().toString(),
+                                            patientId = auth.currentUser?.uid ?: ""
+                                        )
+
+                                        appointmentRepository.create(appointmentToSave)
+                                        appScreen = AppScreen.Appointments
+                                    },
+                                    onCancel = {
+                                        appScreen = AppScreen.Appointments
+                                    }
                                 )
                             }
 
                             AppScreen.CareTasks -> {
+                                val patientId = auth.currentUser?.uid ?: ""
+                                var tasks by remember(patientId) {
+                                    mutableStateOf(
+                                        emptyList<com.example.carelink.model.CareTask>()
+                                    )
+                                }
+                                var loading by remember(patientId) { mutableStateOf(true) }
+                                var error by remember(patientId) {
+                                    mutableStateOf<String?>(null)
+                                }
+
+                                androidx.compose.runtime.DisposableEffect(patientId, firestore) {
+                                    val listener = firestore.collection("careTasks")
+                                        .whereEqualTo("patientId", patientId)
+                                        .addSnapshotListener { snapshot, exception ->
+                                            loading = false
+
+                                            if (exception != null) {
+                                                error = exception.localizedMessage
+                                                    ?: "Could not load care tasks."
+                                            } else {
+                                                error = null
+                                                tasks = snapshot?.documents.orEmpty().map { doc ->
+                                                    com.example.carelink.model.CareTask(
+                                                        id = doc.id,
+                                                        patientId = doc.getString("patientId") ?: "",
+                                                        title = doc.getString("title") ?: "",
+                                                        description = doc.getString("description") ?: "",
+                                                        dueDate = doc.getString("dueDate") ?: "",
+                                                        time = doc.getString("time") ?: "",
+                                                        completed = doc.getBoolean("completed") ?: false,
+                                                        appointmentId = doc.getString("appointmentId")
+                                                    )
+                                                }
+                                            }
+                                        }
+
+                                    onDispose { listener.remove() }
+                                }
+
+                                val context = androidx.compose.ui.platform.LocalContext.current
+
                                 CareTasksScreen(
+                                    tasks = tasks,
+                                    isLoading = loading,
+                                    error = error,
+                                    onAdd = {
+                                        appScreen = AppScreen.AddCareTask
+                                    },
+                                    onCompletedChange = { task, completed ->
+                                        firestore.collection("careTasks")
+                                            .document(task.id)
+                                            .update("completed", completed)
+                                            .addOnFailureListener { exception ->
+                                                android.widget.Toast.makeText(
+                                                    context,
+                                                    exception.localizedMessage
+                                                        ?: "Could not update task.",
+                                                    android.widget.Toast.LENGTH_LONG
+                                                ).show()
+                                            }
+                                    },
                                     onNavigate = ::openTopLevel
+                                )
+                            }
+                            AppScreen.AddCareTask -> {
+                                val context = androidx.compose.ui.platform.LocalContext.current
+                                var saving by remember { mutableStateOf(false) }
+
+                                AddEditCareTaskScreen(
+                                    patientId = auth.currentUser?.uid ?: "",
+                                    onSave = { careTask ->
+                                        if (!saving) {
+                                            if (careTask.patientId.isBlank() ||
+                                                careTask.title.isBlank()
+                                            ) {
+                                                android.widget.Toast.makeText(
+                                                    context,
+                                                    "A signed-in patient and title are required.",
+                                                    android.widget.Toast.LENGTH_LONG
+                                                ).show()
+                                            } else {
+                                                saving = true
+
+                                                firestore.collection("careTasks")
+                                                    .document(careTask.id)
+                                                    .set(careTask.toFirestore())
+                                                    .addOnSuccessListener {
+                                                        saving = false
+                                                        appScreen = AppScreen.CareTasks
+                                                    }
+                                                    .addOnFailureListener { exception ->
+                                                        saving = false
+                                                        android.widget.Toast.makeText(
+                                                            context,
+                                                            exception.localizedMessage
+                                                                ?: "Could not save task.",
+                                                            android.widget.Toast.LENGTH_LONG
+                                                        ).show()
+                                                    }
+                                            }
+                                        }
+                                    },
+                                    onCancel = {
+                                        if (!saving) {
+                                            appScreen = AppScreen.CareTasks
+                                        }
+                                    }
                                 )
                             }
 

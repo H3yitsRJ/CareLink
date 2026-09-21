@@ -18,11 +18,19 @@ import androidx.compose.ui.unit.dp
 import com.example.carelink.model.CareTask
 import navigation.BottomNavBar
 import navigation.BottomNavDestination
+import androidx.compose.foundation.layout.statusBarsPadding
 
 @Composable
-fun CareTasksScreen(tasks: List<CareTask> = emptyList(), isLoading: Boolean = false, error: String? = null, onAdd: () -> Unit = {}, onCompletedChange: (CareTask, Boolean) -> Unit = { _, _ -> }, onNavigate: (BottomNavDestination) -> Unit = {}) {
+fun CareTasksScreen(tasks: List<CareTask> = emptyList(), isLoading: Boolean = false, error: String? = null, onAdd: () -> Unit = {},
+                    onCompletedChange: (CareTask, Boolean) -> Unit = { _, _ -> }, onNavigate: (BottomNavDestination) -> Unit = {}) {
     Scaffold(bottomBar = { BottomNavBar(BottomNavDestination.CareTasks, onNavigate) }) { innerPadding ->
-    Column(Modifier.fillMaxSize().padding(innerPadding).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Column(
+            Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
         Text("Care tasks", style = MaterialTheme.typography.headlineLarge)
         Button(onClick = onAdd, modifier = Modifier.fillMaxWidth()) { Text("Add care task") }
         when {
