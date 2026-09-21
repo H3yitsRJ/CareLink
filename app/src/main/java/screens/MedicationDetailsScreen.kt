@@ -2,6 +2,8 @@ package com.example.carelink.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -40,16 +42,20 @@ import navigation.BottomNavDestination
 fun MedicationDetailsScreen(
     medication: Medication? = null,
     isLoading: Boolean = false,
+    errorMessage: String? = null,
     onEdit: (Medication) -> Unit = {},
     onRemove: (Medication) -> Unit = {},
     onBack: () -> Unit = {},
-    onNavigate: (BottomNavDestination) -> Unit = {}
+    onNavigate: (BottomNavDestination) -> Unit = {},
+    canEdit: Boolean = true,
+    canRemove: Boolean = true,
+    showNavigation: Boolean = true
 ) {
-    var showRemoveDialog by remember { mutableStateOf(false) }
+    var showRemoveDialog by remember(medication?.id) { mutableStateOf(false) }
 
     Scaffold(
         bottomBar = {
-            BottomNavBar(
+            if (showNavigation) BottomNavBar(
                 BottomNavDestination.Medications,
                 onNavigate
             )
@@ -60,6 +66,7 @@ fun MedicationDetailsScreen(
                 .fillMaxSize()
                 .background(MaterialTheme.colorScheme.background)
                 .padding(paddingValues)
+                .verticalScroll(rememberScrollState())
                 .padding(horizontal = 20.dp, vertical = 16.dp)
         ) {
             TextButton(
@@ -78,6 +85,7 @@ fun MedicationDetailsScreen(
             }
 
             Spacer(modifier = Modifier.height(32.dp))
+            if (errorMessage != null) Text(errorMessage, color = MaterialTheme.colorScheme.error)
 
             when {
                 isLoading -> MedicationLoadingState()
@@ -86,6 +94,8 @@ fun MedicationDetailsScreen(
 
                 else -> MedicationDetailsContent(
                     medication = medication,
+                    canEdit = canEdit,
+                    canRemove = canRemove,
                     onEdit = { onEdit(medication) },
                     onRemove = { showRemoveDialog = true }
                 )
@@ -93,7 +103,7 @@ fun MedicationDetailsScreen(
         }
     }
 
-    if (showRemoveDialog && medication != null) {
+    if (showRemoveDialog && medication != null && canRemove) {
         AlertDialog(
             onDismissRequest = { showRemoveDialog = false },
             title = { Text("Remove medication?") },
@@ -122,6 +132,8 @@ fun MedicationDetailsScreen(
 @Composable
 private fun MedicationDetailsContent(
     medication: Medication,
+    canEdit: Boolean,
+    canRemove: Boolean,
     onEdit: () -> Unit,
     onRemove: () -> Unit
 ) {
@@ -177,6 +189,10 @@ private fun MedicationDetailsContent(
 
         Spacer(modifier = Modifier.height(28.dp))
 
+        medication.updatedById?.let { editor ->
+            Text(if (editor == medication.patientId) "Last edited by patient" else "Last edited by caregiver: $editor",
+                style = MaterialTheme.typography.bodySmall)
+        }
         HorizontalDivider()
 
         Spacer(modifier = Modifier.height(24.dp))
@@ -189,7 +205,7 @@ private fun MedicationDetailsContent(
 
         Spacer(modifier = Modifier.height(28.dp))
 
-        Button(
+        if (canEdit) Button(
             onClick = onEdit,
             modifier = Modifier.fillMaxWidth()
         ) {
@@ -198,7 +214,7 @@ private fun MedicationDetailsContent(
 
         Spacer(modifier = Modifier.height(10.dp))
 
-        OutlinedButton(
+        if (canRemove) OutlinedButton(
             onClick = onRemove,
             modifier = Modifier.fillMaxWidth()
         ) {
