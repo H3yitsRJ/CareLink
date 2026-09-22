@@ -1,13 +1,9 @@
 package com.example.carelink.notifications
 
-import android.Manifest
 import android.app.AlarmManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
-import android.content.pm.PackageManager
-import android.os.Build
-import androidx.core.content.ContextCompat
 import com.example.carelink.model.Medication
 import java.util.Calendar
 
@@ -25,9 +21,11 @@ class AndroidMedicationReminderScheduler(
     private val context: Context,
     private val alarmManager: AlarmManager = context.getSystemService(AlarmManager::class.java)
 ) : MedicationReminderScheduler {
+
     override fun schedule(medication: Medication): Boolean {
         // Android 13 and later must not receive notifications until the patient grants permission.
-        if (!notificationsAllowed()) return false
+        if (!NotificationPermissionManager.canPostNotifications(context)) return false
+
         medication.reminderTimes.forEach { time ->
             val triggerAt = nextOccurrence(time) ?: return@forEach
             // An inexact alarm avoids requiring the special exact-alarm system permission.
@@ -43,9 +41,6 @@ class AndroidMedicationReminderScheduler(
     override fun cancel(medication: Medication) {
         medication.reminderTimes.forEach { time -> alarmManager.cancel(pendingIntent(medication, time)) }
     }
-
-    private fun notificationsAllowed(): Boolean = Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
-        ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
 
     private fun pendingIntent(medication: Medication, time: String): PendingIntent {
         val intent = Intent(context, MedicationReminderReceiver::class.java).apply {

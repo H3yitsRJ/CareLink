@@ -9,7 +9,11 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import com.example.carelink.model.Medication
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -38,6 +42,7 @@ import com.example.carelink.screens.PasswordResetEmailScreen
 import com.example.carelink.screens.PatientProfileDetails
 import com.example.carelink.screens.ProfileScreen
 import com.example.carelink.screens.SettingsScreen
+import com.example.carelink.notifications.NotificationPermissionManager
 import com.example.carelink.ui.theme.CareLinkTheme
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseAuthInvalidUserException
@@ -66,21 +71,23 @@ private enum class AppScreen {
 }
 
 class MainActivity : ComponentActivity() {
+
+    private var medicationAwaitingPermission: com.example.carelink.model.Medication? = null
+
     private val notificationPermissionLauncher =
         registerForActivityResult(
             ActivityResultContracts.RequestPermission()
-        ) {
-            // Permission result is handled by Android.
+        ) { granted ->
+            if (granted) {
+                medicationAwaitingPermission?.let { medication ->
+                    AndroidMedicationReminderScheduler(this).schedule(medication)
+                }
+            }
+            medicationAwaitingPermission = null
         }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            notificationPermissionLauncher.launch(
-                Manifest.permission.POST_NOTIFICATIONS
-            )
-        }
 
         configureFirebaseEmulators()
         enableEdgeToEdge()
@@ -111,6 +118,7 @@ class MainActivity : ComponentActivity() {
                 var medicationSaveError by remember { mutableStateOf<String?>(null) }
                 var selectedMedication by remember { mutableStateOf< com.example.carelink.model.Medication? >(null) }
                 var medicationSuccessMessage by remember { mutableStateOf<String?>(null) }
+                var medicationPermissionExplanation by remember { mutableStateOf<Medication?>(null) }
                 var appointments by remember { mutableStateOf<List<Appointment>>(emptyList()) }
                 var appointmentsLoading by remember { mutableStateOf(false) }
                 var appointmentLoadError by remember { mutableStateOf<String?>(null) }
@@ -275,6 +283,7 @@ class MainActivity : ComponentActivity() {
                         }
 
                         when (appScreen) {
+
                             AppScreen.Home -> {
                                 DashboardScreen(
                                     fullName = fullName,
@@ -384,9 +393,11 @@ class MainActivity : ComponentActivity() {
                                                 .document(medication.id)
                                                 .set(medicationData)
                                                 .addOnSuccessListener {
-                                                    AndroidMedicationReminderScheduler(
-                                                        this
-                                                    ).schedule(medication)
+                                                    if (NotificationPermissionManager.canPostNotifications(this)) {
+                                                        AndroidMedicationReminderScheduler(this).schedule(medication)
+                                                    } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                                        medicationPermissionExplanation = medication
+                                                    }
 
                                                     isSavingMedication = false
                                                     selectedMedication = null
@@ -693,6 +704,7 @@ class MainActivity : ComponentActivity() {
 
                     else -> {
                         when (screen) {
+
                             AuthScreen.SignIn -> {
                                 LoginScreen(
                                     isSubmitting = isSubmitting,
@@ -799,6 +811,47 @@ class MainActivity : ComponentActivity() {
                         }
                     }
                 }
+
+                medicationPermissionExplanation?.let { medication ->
+                    AlertDialog(
+                        onDismissRequest = {
+                            medicationPermissionExplanation = null
+                        },
+                        title = {
+                            Text("Enable medication reminders?")
+                        },
+                        text = {
+                            Text(
+                                "CareLink needs notification permission to alert you " +
+                                        "when it is time to take your medication. " +
+                                        "You can continue using CareLink without reminders."
+                            )
+                        },
+                        confirmButton = {
+                            TextButton(
+                                onClick = {
+                                    medicationPermissionExplanation = null
+                                    medicationAwaitingPermission = medication
+                                    notificationPermissionLauncher.launch(
+                                        Manifest.permission.POST_NOTIFICATIONS
+                                    )
+                                }
+                            ) {
+                                Text("Continue")
+                            }
+                        },
+                        dismissButton = {
+                            TextButton(
+                                onClick = {
+                                    medicationPermissionExplanation = null
+                                }
+                            ) {
+                                Text("Not now")
+                            }
+                        }
+                    )
+                }
+
             }
         }
     }
