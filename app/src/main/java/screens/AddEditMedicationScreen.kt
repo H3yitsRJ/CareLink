@@ -34,6 +34,7 @@ import androidx.compose.ui.unit.dp
 import com.example.carelink.model.Medication
 import androidx.compose.foundation.layout.Row
 import androidx.compose.material3.AlertDialog
+import com.example.carelink.notifications.MedicationSchedule
 
 
 
@@ -52,8 +53,13 @@ internal fun validateMedicationEditor(name: String, strength: String, dose: Stri
     name = if (name.isBlank()) "Enter a medication name" else null,
     strength = if (strength.isBlank()) "Enter the medication strength" else null,
     dose = if (dose.isBlank()) "Enter the dose" else null,
-    frequency = if (frequency.isBlank()) "Enter a frequency" else null,
-    reminderTime = if (!Regex("^(?:[01]\\d|2[0-3]):[0-5]\\d$").matches(reminderTime)) "Use a 24-hour time such as 08:30" else null
+    frequency = when {
+        MedicationSchedule.days(frequency) == null -> "Use Daily or weekdays such as Mon, Wed, Fri"
+        MedicationSchedule.requiredTimes(frequency)?.let { it != reminderTime.split(',').map(String::trim).distinct().size } == true ->
+            "Add ${MedicationSchedule.requiredTimes(frequency)} different reminder times for this frequency"
+        else -> null
+    },
+    reminderTime = if (reminderTime.split(',').any { !MedicationSchedule.validTime(it.trim()) }) "Use 24-hour times separated by commas, such as 08:30, 20:30" else null
 )
 
 @Composable
@@ -63,14 +69,16 @@ fun AddEditMedicationScreen(
     saveError: String? = null,
     onSave: (Medication) -> Unit = {},
     onCancel: () -> Unit = {},
-    onDelete: (Medication) -> Unit = {}
+    onDelete: (Medication) -> Unit = {},
+    canSave: Boolean = true,
+    canDelete: Boolean = true
 ) {
     // Saveable state keeps entered values through rotation and process recreation.
     var name by rememberSaveable(medication?.id) { mutableStateOf(medication?.name.orEmpty()) }
     var strength by rememberSaveable(medication?.id) { mutableStateOf(medication?.strength.orEmpty()) }
     var dose by rememberSaveable(medication?.id) { mutableStateOf(medication?.dose.orEmpty()) }
     var frequency by rememberSaveable(medication?.id) { mutableStateOf(medication?.frequency.orEmpty()) }
-    var reminderTime by rememberSaveable(medication?.id) { mutableStateOf(medication?.reminderTimes?.firstOrNull().orEmpty()) }
+    var reminderTime by rememberSaveable(medication?.id) { mutableStateOf(medication?.reminderTimes?.joinToString(", ").orEmpty()) }
     var instructions by rememberSaveable(medication?.id) { mutableStateOf(medication?.instructions.orEmpty()) }
     var attemptedSave by rememberSaveable { mutableStateOf(false) }
     var showDeleteDialog by rememberSaveable { mutableStateOf(false) }
@@ -82,12 +90,13 @@ fun AddEditMedicationScreen(
         // The parent owns persistence. This screen only submits a validated model.
         attemptedSave = true
         val currentErrors = validateMedicationEditor(name, strength, dose, frequency, reminderTime)
-        if (!currentErrors.hasErrors && !isSaving) onSave(
+        if (!currentErrors.hasErrors && !isSaving && canSave) onSave(
             Medication(
                 id = medication?.id ?: "med-${System.currentTimeMillis()}",
                 patientId = medication?.patientId.orEmpty(),
                 name = name.trim(), strength = strength.trim(), dose = dose.trim(), frequency = frequency.trim(),
-                reminderTimes = listOf(reminderTime), instructions = instructions.trim(), active = medication?.active ?: true
+                reminderTimes = reminderTime.split(',').map { it.trim() }.distinct(), instructions = instructions.trim(), active = medication?.active ?: true,
+                updatedById = medication?.updatedById
             )
         )
     }
@@ -129,7 +138,7 @@ fun AddEditMedicationScreen(
         }
         MedicationFormCard("Schedule") {
             MedicationField(frequency, { frequency = it }, "Frequency", errors.frequency)
-            MedicationField(reminderTime, { reminderTime = it.take(5) }, "Reminder time", errors.reminderTime, KeyboardType.Number)
+            MedicationField(reminderTime, { reminderTime = it }, "Reminder times (24-hour)", errors.reminderTime)
         }
         MedicationFormCard("Instructions") {
             OutlinedTextField(
@@ -138,10 +147,10 @@ fun AddEditMedicationScreen(
             )
         }
         if (saveError != null) Text(saveError, color = MaterialTheme.colorScheme.error, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Assertive })
-        Button(onClick = ::save, enabled = !isSaving, modifier = Modifier.fillMaxWidth().height(56.dp)) {
+        Button(onClick = ::save, enabled = !isSaving && canSave, modifier = Modifier.fillMaxWidth().height(56.dp)) {
             Text(if (isSaving) "Saving medication" else "Save medication")
         }
-        if (medication != null) {
+        if (medication != null && canDelete) {
             OutlinedButton(
                 onClick = { showDeleteDialog = true },
                 enabled = !isSaving,
@@ -157,7 +166,7 @@ fun AddEditMedicationScreen(
         }
         OutlinedButton(onClick = onCancel, enabled = !isSaving, modifier = Modifier.fillMaxWidth().height(56.dp)) { Text("Cancel") }
     }
-    if (showDeleteDialog && medication != null) {
+    if (showDeleteDialog && medication != null && canDelete) {
         AlertDialog(
             onDismissRequest = {
                 showDeleteDialog = false

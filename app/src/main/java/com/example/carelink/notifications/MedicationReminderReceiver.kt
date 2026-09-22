@@ -1,122 +1,101 @@
 package com.example.carelink.notifications
 
-import android.Manifest
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.content.pm.PackageManager
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
-import androidx.core.content.ContextCompat
 import com.example.carelink.R
-import android.app.PendingIntent
+import com.example.carelink.model.DoseRecord
+import com.example.carelink.model.DoseStatus
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
+import java.util.concurrent.atomic.AtomicBoolean
 
 class MedicationReminderReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
-        when (intent.action) {
-            ACTION_TAKEN -> {
-                recordDoseAction(context, intent, "taken")
-                return
+        val patientId = FirebaseAuth.getInstance().currentUser?.uid
+        val scheduler = AndroidMedicationReminderScheduler(context)
+        if (intent.action in setOf(Intent.ACTION_BOOT_COMPLETED, Intent.ACTION_TIME_CHANGED,
+                Intent.ACTION_TIMEZONE_CHANGED, Intent.ACTION_MY_PACKAGE_REPLACED)) {
+            scheduler.restore(patientId)
+            return
+        }
+        val record = handle(context, intent, patientId) ?: return
+        // Keep the receiver alive for the write, but never exceed the broadcast time limit.
+        val pending = goAsync()
+        val handler = Handler(Looper.getMainLooper())
+        val finished = AtomicBoolean(false)
+        val finish = Runnable { if (finished.compareAndSet(false, true)) pending.finish() }
+        handler.postDelayed(finish, 8_000)
+        FirebaseFirestore.getInstance().collection("users").document(patientId!!)
+            .collection("doseRecords").document(record.id).set(record.toFirestore())
+            .addOnCompleteListener { task ->
+                if (task.isSuccessful) NotificationManagerCompat.from(context).cancel(
+                    AndroidMedicationReminderScheduler.key(patientId, record.medicationId),
+                    record.scheduledTimeMillis.hashCode())
+                handler.removeCallbacks(finish)
+                finish.run()
             }
+    }
 
-            ACTION_SKIPPED -> {
-                recordDoseAction(context, intent, "skipped")
-                return
-            }
+    /** Uses the same path for platform delivery and deterministic emulator tests. */
+    internal fun handle(context: Context, intent: Intent, signedInPatientId: String?): DoseRecord? {
+        val patientId = intent.getStringExtra(EXTRA_PATIENT_ID) ?: return null
+        if (patientId != signedInPatientId) return null
+        val medicationId = intent.getStringExtra(EXTRA_MEDICATION_ID) ?: return null
+        val time = intent.getStringExtra(EXTRA_DOSE_TIME) ?: return null
+        val at = intent.getLongExtra(EXTRA_SCHEDULED_TIME, 0)
+        if (at <= 0) return null
+        val scheduler = AndroidMedicationReminderScheduler(context)
+        val (medication, revision) = scheduler.stored(patientId, medicationId) ?: return null
+        if (!medication.active || time !in medication.reminderTimes ||
+            revision != intent.getStringExtra(EXTRA_REVISION)) return null
+        val status = when (intent.action) {
+            ACTION_TAKEN -> DoseStatus.TAKEN
+            ACTION_SKIPPED -> DoseStatus.SKIPPED
+            ACTION_MISSED -> DoseStatus.MISSED
+            ACTION_DELAYED -> DoseStatus.DELAYED
+            null -> null
+            else -> return null
         }
-        // Permission may have been revoked after the alarm was originally scheduled.
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
-        ) return
-        val name = intent.getStringExtra(EXTRA_MEDICATION_NAME) ?: return
-        val medicationId = intent.getStringExtra(EXTRA_MEDICATION_ID) ?: return
-        val doseTime = intent.getStringExtra(EXTRA_DOSE_TIME) ?: return
-        val reminderId = intent.getIntExtra(EXTRA_REMINDER_ID, 0)
-        val takenIntent = Intent(context, MedicationReminderReceiver::class.java).apply {
-            action = ACTION_TAKEN
-            putExtra(EXTRA_MEDICATION_NAME, name)
-            putExtra(EXTRA_DOSE_TIME, doseTime)
-            putExtra(EXTRA_REMINDER_ID, reminderId)
-            putExtra(EXTRA_MEDICATION_ID, medicationId)
-        }
-
-        val takenPendingIntent = PendingIntent.getBroadcast(
-            context,
-            reminderId * 10 + 1,
-            takenIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-        val skippedIntent = Intent(context, MedicationReminderReceiver::class.java).apply {
-            action = ACTION_SKIPPED
-            putExtra(EXTRA_MEDICATION_NAME, name)
-            putExtra(EXTRA_DOSE_TIME, doseTime)
-            putExtra(EXTRA_REMINDER_ID, reminderId)
-            putExtra(EXTRA_MEDICATION_ID, medicationId)
-        }
-
-        val skippedPendingIntent = PendingIntent.getBroadcast(
-            context,
-            reminderId * 10 + 2,
-            skippedIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
+        if (status != null) return DoseRecord.completed(medicationId, at, status)
+        if (!AndroidMedicationReminderScheduler.notificationsAllowed(context)) return null
+        val next = MedicationSchedule.next(time, medication.frequency, maxOf(at, System.currentTimeMillis())) ?: return null
+        scheduler.scheduleOccurrence(medication, time, next, revision)
         val manager = context.getSystemService(NotificationManager::class.java)
-        // Creating the same channel again is safe, which keeps setup close to notification delivery.
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             manager.createNotificationChannel(NotificationChannel(CHANNEL_ID, "Medication reminders", NotificationManager.IMPORTANCE_HIGH))
         }
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_launcher_foreground)
             .setContentTitle("Medication reminder")
-            .setContentText("$name is scheduled for $doseTime")
-            .addAction(0, "Taken", takenPendingIntent)
-            .addAction(0, "Skipped", skippedPendingIntent)
+            .setContentText("${medication.name} is scheduled for $time")
+            .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+            .setPublicVersion(NotificationCompat.Builder(context, CHANNEL_ID)
+                .setSmallIcon(R.drawable.ic_launcher_foreground).setContentTitle("Medication reminder").build())
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
-            .build()
-        NotificationManagerCompat.from(context).notify(reminderId, notification)
-    }
-    private fun recordDoseAction(
-        context: Context,
-        intent: Intent,
-        status: String
-    ) {
-        val user = FirebaseAuth.getInstance().currentUser ?: return
-        val medicationId =
-            intent.getStringExtra(EXTRA_MEDICATION_ID) ?: return
-        val doseTime =
-            intent.getStringExtra(EXTRA_DOSE_TIME) ?: return
-        val reminderId =
-            intent.getIntExtra(EXTRA_REMINDER_ID, 0)
-
-        val doseRecord = hashMapOf(
-            "medicationId" to medicationId,
-            "scheduledTime" to doseTime,
-            "status" to status,
-            "completionTimeMillis" to System.currentTimeMillis()
-        )
-
-        FirebaseFirestore.getInstance()
-            .collection("users")
-            .document(user.uid)
-            .collection("doseRecords")
-            .document(reminderId.toString())
-            .set(doseRecord)
-            .addOnSuccessListener {
-                NotificationManagerCompat.from(context).cancel(reminderId)
+        listOf("Taken" to ACTION_TAKEN, "Missed" to ACTION_MISSED, "Delayed" to ACTION_DELAYED).forEach { (label, action) ->
+            val actionIntent = Intent(intent).apply {
+                this.action = action
+                data = intent.data?.buildUpon()?.appendPath(at.toString())?.build()
             }
-            .addOnFailureListener { exception ->
-                android.util.Log.e(
-                    "MedicationReminder",
-                    "Failed to record dose action",
-                    exception
-                )
-            }
+            notification.addAction(0, label, PendingIntent.getBroadcast(context, 0, actionIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE))
+        }
+        try {
+            NotificationManagerCompat.from(context).notify(AndroidMedicationReminderScheduler.key(medication), at.hashCode(), notification.build())
+        } catch (_: SecurityException) {
+            // Permission can be revoked between the check and posting the notification.
+        }
+        return null
     }
 
     companion object {
@@ -124,8 +103,13 @@ class MedicationReminderReceiver : BroadcastReceiver() {
         const val EXTRA_MEDICATION_NAME = "medicationName"
         const val EXTRA_DOSE_TIME = "doseTime"
         const val EXTRA_REMINDER_ID = "reminderId"
+        const val EXTRA_MEDICATION_ID = "medicationId"
+        const val EXTRA_PATIENT_ID = "patientId"
+        const val EXTRA_SCHEDULED_TIME = "scheduledTimeMillis"
+        const val EXTRA_REVISION = "scheduleRevision"
         const val ACTION_TAKEN = "com.example.carelink.ACTION_TAKEN"
         const val ACTION_SKIPPED = "com.example.carelink.ACTION_SKIPPED"
-        const val EXTRA_MEDICATION_ID = "medicationId"
+        const val ACTION_MISSED = "com.example.carelink.ACTION_MISSED"
+        const val ACTION_DELAYED = "com.example.carelink.ACTION_DELAYED"
     }
 }

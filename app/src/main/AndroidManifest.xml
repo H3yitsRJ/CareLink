@@ -4,6 +4,7 @@
 
     <!-- Reminders need runtime approval on Android 13 and later. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <!-- The app reads network state to show cached content with an offline banner. -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
@@ -19,7 +20,14 @@
         <!-- AlarmManager delivers saved medication reminders to this private receiver. -->
         <receiver
             android:name=".notifications.MedicationReminderReceiver"
-            android:exported="false" />
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.TIME_SET" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
         <activity
             android:name=".MainActivity"
             android:exported="true"

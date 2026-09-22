@@ -4,6 +4,7 @@ import android.Manifest
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
@@ -11,10 +12,10 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import com.example.carelink.model.Medication
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -24,7 +25,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import com.example.carelink.model.Appointment
 import com.example.carelink.model.AppointmentStatus
+import com.example.carelink.model.Medication
 import com.example.carelink.notifications.AndroidMedicationReminderScheduler
+import com.example.carelink.notifications.NotificationPermissionManager
 import com.example.carelink.screens.AddEditMedicationScreen
 import com.example.carelink.screens.AddEditAppointmentScreen
 import com.example.carelink.screens.AppointmentDetailsScreen
@@ -42,7 +45,8 @@ import com.example.carelink.screens.PasswordResetEmailScreen
 import com.example.carelink.screens.PatientProfileDetails
 import com.example.carelink.screens.ProfileScreen
 import com.example.carelink.screens.SettingsScreen
-import com.example.carelink.notifications.NotificationPermissionManager
+import com.example.carelink.screens.CaregiverMedicationsScreen
+import com.example.carelink.screens.MedicationCaregiverAccessScreen
 import com.example.carelink.ui.theme.CareLinkTheme
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseAuthInvalidUserException
@@ -66,25 +70,19 @@ private enum class AppScreen {
     Profile,
     EditProfile,
     Settings,
+    CaregiverMedications,
+    MedicationCaregiverAccess,
     Logout,
     AddMedication
 }
 
 class MainActivity : ComponentActivity() {
+    private val medicationReminderScheduler by lazy { AndroidMedicationReminderScheduler(this) }
 
-    private var medicationAwaitingPermission: com.example.carelink.model.Medication? = null
-
-    private val notificationPermissionLauncher =
-        registerForActivityResult(
-            ActivityResultContracts.RequestPermission()
-        ) { granted ->
-            if (granted) {
-                medicationAwaitingPermission?.let { medication ->
-                    AndroidMedicationReminderScheduler(this).schedule(medication)
-                }
-            }
-            medicationAwaitingPermission = null
-        }
+    override fun onResume() {
+        super.onResume()
+        medicationReminderScheduler.restore(FirebaseAuth.getInstance().currentUser?.uid)
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -95,6 +93,10 @@ class MainActivity : ComponentActivity() {
         setContent {
             CareLinkTheme {
                 val auth = remember { FirebaseAuth.getInstance() }
+                val notificationPermissionLauncher = rememberLauncherForActivityResult(
+                    ActivityResultContracts.RequestPermission()
+                ) { medicationReminderScheduler.restore(auth.currentUser?.uid) }
+
                 val firestore = remember { FirebaseFirestore.getInstance() }
                 var isAuthenticated by remember { mutableStateOf(auth.currentUser != null) }
                 var screen by remember { mutableStateOf(AuthScreen.SignIn) }
@@ -126,6 +128,23 @@ class MainActivity : ComponentActivity() {
                 var isSavingAppointment by remember { mutableStateOf(false) }
                 var appointmentSaveError by remember { mutableStateOf<String?>(null) }
                 var appointmentSuccessMessage by remember { mutableStateOf<String?>(null) }
+
+                DisposableEffect(isAuthenticated, auth.currentUser?.uid) {
+                    val patientId = auth.currentUser?.uid
+                    if (!isAuthenticated || patientId == null) return@DisposableEffect onDispose { }
+                    var active = true
+                    val listener = firestore.collection("users").document(patientId).collection("medications")
+                        .addSnapshotListener { snapshot, _ ->
+                            if (active && auth.currentUser?.uid == patientId) snapshot?.documentChanges?.forEach { change ->
+                                com.example.carelink.model.Medication.fromFirestore(change.document.id, change.document.data)
+                                    ?.let { medication ->
+                                        if (change.type == com.google.firebase.firestore.DocumentChange.Type.REMOVED) medicationReminderScheduler.cancel(medication)
+                                        else medicationReminderScheduler.schedule(medication)
+                                    }
+                            }
+                        }
+                    onDispose { active = false; listener.remove() }
+                }
 
                 fun loadAppointments() {
                     val user = auth.currentUser
@@ -176,6 +195,7 @@ class MainActivity : ComponentActivity() {
                         appointmentLoadError = null
                         appointmentSuccessMessage = null
                     } else {
+                        medicationReminderScheduler.restore(user.uid)
                         loadAppointments()
                         hasProfile = null
 
@@ -307,6 +327,7 @@ class MainActivity : ComponentActivity() {
 
                             AppScreen.Medications -> {
                                 MedicationsScreen(
+                                    onCaregiverMedications = { appScreen = AppScreen.CaregiverMedications },
                                     onAddMedication = {
                                         selectedMedication = null
                                         medicationSuccessMessage = null
@@ -327,6 +348,7 @@ class MainActivity : ComponentActivity() {
                             AppScreen.MedicationDetails -> {
                                 MedicationDetailsScreen(
                                     medication = selectedMedication,
+                                    errorMessage = medicationSaveError,
                                     onEdit = { medication ->
                                         selectedMedication = medication
                                         medicationSaveError = null
@@ -343,6 +365,7 @@ class MainActivity : ComponentActivity() {
                                                 .document(medication.id)
                                                 .delete()
                                                 .addOnSuccessListener {
+                                                    medicationReminderScheduler.cancel(medication)
                                                     selectedMedication = null
                                                     medicationSaveError = null
                                                     medicationSuccessMessage = "Medication removed successfully."
@@ -383,7 +406,9 @@ class MainActivity : ComponentActivity() {
                                                     "frequency" to medication.frequency,
                                                     "reminderTimes" to medication.reminderTimes,
                                                     "instructions" to medication.instructions,
-                                                    "active" to medication.active
+                                                    "active" to medication.active,
+                                                    "updatedById" to user.uid,
+                                                    "updatedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
                                                 )
 
                                             firestore
@@ -393,15 +418,22 @@ class MainActivity : ComponentActivity() {
                                                 .document(medication.id)
                                                 .set(medicationData)
                                                 .addOnSuccessListener {
-                                                    if (NotificationPermissionManager.canPostNotifications(this)) {
-                                                        AndroidMedicationReminderScheduler(this).schedule(medication)
-                                                    } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                                                        medicationPermissionExplanation = medication
+                                                    val saved = medication.copy(patientId = user.uid, updatedById = user.uid)
+                                                    val remindersScheduled = selectedMedication?.let {
+                                                        medicationReminderScheduler.replace(it, saved)
+                                                    } ?: medicationReminderScheduler.schedule(saved)
+                                                    if (
+                                                        !remindersScheduled &&
+                                                        Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                                                        !NotificationPermissionManager.canPostNotifications(this)
+                                                    ) {
+                                                        medicationPermissionExplanation = saved
                                                     }
 
                                                     isSavingMedication = false
                                                     selectedMedication = null
-                                                    medicationSuccessMessage = "Medication saved successfully."
+                                                    medicationSuccessMessage = if (remindersScheduled) "Medication saved successfully."
+                                                        else "Medication saved. Enable notifications in Settings to receive reminders."
                                                     appScreen = AppScreen.Medications
                                                 }
                                                 .addOnFailureListener {
@@ -433,6 +465,7 @@ class MainActivity : ComponentActivity() {
                                                 .document(medication.id)
                                                 .delete()
                                                 .addOnSuccessListener {
+                                                    medicationReminderScheduler.cancel(medication)
                                                     selectedMedication = null
                                                     medicationSaveError = null
                                                     medicationSuccessMessage = "Medication removed successfully."
@@ -677,6 +710,7 @@ class MainActivity : ComponentActivity() {
 
                             AppScreen.Settings -> {
                                 SettingsScreen(
+                                    onCaregiverAccess = { appScreen = AppScreen.MedicationCaregiverAccess },
                                     onBack = {
                                         appScreen = AppScreen.Profile
                                     },
@@ -686,12 +720,20 @@ class MainActivity : ComponentActivity() {
                                 )
                             }
 
+                            AppScreen.CaregiverMedications -> CaregiverMedicationsScreen(
+                                actorId = auth.currentUser!!.uid, onBack = { appScreen = AppScreen.Medications })
+
+                            AppScreen.MedicationCaregiverAccess -> MedicationCaregiverAccessScreen(
+                                patientId = auth.currentUser!!.uid, patientName = fullName,
+                                onBack = { appScreen = AppScreen.Settings })
+
                             AppScreen.Logout -> {
                                 LogoutScreen(
                                     onBack = {
                                         appScreen = AppScreen.Settings
                                     },
                                     onLogout = {
+                                        medicationReminderScheduler.clear()
                                         auth.signOut()
                                         appScreen = AppScreen.Home
                                         screen = AuthScreen.SignIn
@@ -704,7 +746,6 @@ class MainActivity : ComponentActivity() {
 
                     else -> {
                         when (screen) {
-
                             AuthScreen.SignIn -> {
                                 LoginScreen(
                                     isSubmitting = isSubmitting,
@@ -810,9 +851,10 @@ class MainActivity : ComponentActivity() {
                             }
                         }
                     }
+
                 }
 
-                medicationPermissionExplanation?.let { medication ->
+                if (medicationPermissionExplanation != null) {
                     AlertDialog(
                         onDismissRequest = {
                             medicationPermissionExplanation = null
@@ -822,16 +864,13 @@ class MainActivity : ComponentActivity() {
                         },
                         text = {
                             Text(
-                                "CareLink needs notification permission to alert you " +
-                                        "when it is time to take your medication. " +
-                                        "You can continue using CareLink without reminders."
+                                "CareLink needs notification permission to alert you when it is time to take your medication. You can continue using CareLink without reminders."
                             )
                         },
                         confirmButton = {
                             TextButton(
                                 onClick = {
                                     medicationPermissionExplanation = null
-                                    medicationAwaitingPermission = medication
                                     notificationPermissionLauncher.launch(
                                         Manifest.permission.POST_NOTIFICATIONS
                                     )
