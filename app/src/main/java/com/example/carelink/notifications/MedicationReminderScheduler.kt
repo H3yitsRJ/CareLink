@@ -1,15 +1,11 @@
 package com.example.carelink.notifications
 
-import android.Manifest
 import android.app.AlarmManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
-import android.content.pm.PackageManager
 import android.net.Uri
-import android.os.Build
 import androidx.core.app.NotificationManagerCompat
-import androidx.core.content.ContextCompat
 import com.example.carelink.model.Medication
 import org.json.JSONObject
 import java.util.UUID
@@ -124,8 +120,6 @@ class AndroidMedicationReminderScheduler(
         internal fun nextOccurrence(time: String, nowMillis: Long = System.currentTimeMillis()): Long? =
             MedicationSchedule.next(time, "Daily", nowMillis)
         internal fun notificationsAllowed(context: Context): Boolean =
-            (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU || ContextCompat.checkSelfPermission(context,
-                Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) &&
-                NotificationManagerCompat.from(context).areNotificationsEnabled()
+            NotificationPermissionManager.canPostNotifications(context)
     }
 }
