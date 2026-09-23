@@ -19,7 +19,7 @@ enum class DoseStatus(val firestoreValue: String) {
 /**
  * One scheduled medication dose and its recorded outcome.
  *
- * SCHEDULED has no completion time. TAKEN, MISSED, and DELAYED describe a
+ * SCHEDULED has no completion time. TAKEN, SKIPPED, MISSED, and DELAYED describe a
  * completed patient action and require a completion time.
  */
 data class DoseRecord(
@@ -35,6 +35,8 @@ data class DoseRecord(
         require(status == DoseStatus.SCHEDULED || completionTimeMillis != null) {
             "Completed dose records require a completion time"
         }
+        require(completionTimeMillis == null || completionTimeMillis > 0) { "Completion time must be positive" }
+        require(status != DoseStatus.SCHEDULED || completionTimeMillis == null) { "Scheduled doses cannot have a completion time" }
     }
 
     // Keeping conversion beside the model makes the stored shape easy to review and test.
@@ -46,6 +48,11 @@ data class DoseRecord(
     )
 
     companion object {
+        fun completed(medicationId: String, scheduledTimeMillis: Long, status: DoseStatus,
+                      completedAtMillis: Long = System.currentTimeMillis()): DoseRecord {
+            require(status != DoseStatus.SCHEDULED)
+            return DoseRecord("$medicationId-$scheduledTimeMillis", medicationId, scheduledTimeMillis, status, completedAtMillis)
+        }
         // A malformed record is skipped rather than shown as a misleading dose entry.
         fun fromFirestore(id: String, data: Map<String, Any?>): DoseRecord? {
             val medicationId = data["medicationId"] as? String ?: return null

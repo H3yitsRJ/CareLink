@@ -9,7 +9,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -21,12 +20,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.example.carelink.model.Appointment
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 
 @Composable
 fun AddEditAppointmentScreen(
+    appointment: Appointment? = null,
+    isSaving: Boolean = false,
+    saveError: String? = null,
     onSave: (Appointment) -> Unit = {},
     onCancel: () -> Unit = {}
 ) {
@@ -38,12 +37,7 @@ fun AddEditAppointmentScreen(
     var notes by rememberSaveable { mutableStateOf("") }
     var attemptedSave by rememberSaveable { mutableStateOf(false) }
     val titleError = attemptedSave && title.isBlank()
-    var errorMessage by rememberSaveable { mutableStateOf<String?>(null) }
-    val dateError = attemptedSave && (
-            date.isBlank() ||
-                    errorMessage == "Enter a valid date using MM/DD/YYYY." ||
-                    errorMessage == "Appointment date cannot be in the past."
-            )
+    val dateError = attemptedSave && date.isBlank()
     val timeError = attemptedSave && time.isBlank()
 
     Column(
@@ -53,7 +47,13 @@ fun AddEditAppointmentScreen(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Text("Add Appointment")
+        Text(
+            text = if   (appointment == null) {
+                "Add appointment"
+            } else {
+                "Edit appointment"
+            }
+        )
 
         OutlinedTextField(
             value = title,
@@ -83,12 +83,13 @@ fun AddEditAppointmentScreen(
             value = date,
             onValueChange = { date = it },
             label = { Text("Date") },
+            placeholder = { Text("YYYY-MM-DD") },
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
             isError = dateError,
             supportingText = {
                 if (dateError) {
-                    Text("Enter a date")
+                    Text("Use a valid date in YYYY-MM-DD format")
                 }
             },
             shape = RoundedCornerShape(12.dp)
@@ -98,12 +99,13 @@ fun AddEditAppointmentScreen(
             value = time,
             onValueChange = { time = it },
             label = { Text("Time") },
+            placeholder = { Text("HH:MM") },
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
             isError = timeError,
             supportingText = {
                 if (timeError) {
-                    Text("Enter a time")
+                    Text("Use 24-hour time in HH:MM format")
                 }
             },
             shape = RoundedCornerShape(12.dp)
@@ -126,66 +128,92 @@ fun AddEditAppointmentScreen(
             minLines = 3,
             shape = RoundedCornerShape(12.dp)
         )
-        errorMessage?.let { message ->
-            Text(
-                text = message,
-                color = MaterialTheme.colorScheme.error
-            )
+
+        if (saveError != null) {
+            Text(saveError)
         }
 
         Button(
             onClick = {
                 attemptedSave = true
 
-
                 if (
                     title.isNotBlank() &&
                     date.isNotBlank() &&
                     time.isNotBlank()
                 ) {
-                    val dateFormat = SimpleDateFormat("MM/dd/yyyy", Locale.US)
-                    dateFormat.isLenient = false
+                    onSave(
+                        Appointment (
+                            id = appointment?.id.orEmpty(),
+                            patientId = appointment?.patientId.orEmpty(),
+                            title = title.trim(),
+                            date = date.trim(),
+                            time = time.trim(),
+                            provider = provider.trim(),
+                            location = location.trim(),
+                            notes = notes.trim(),
+                            status = appointment?.status
+                                ?: com.example.carelink.model.AppointmentStatus.SCHEDULED
 
-                    val appointmentDate = try {
-                        dateFormat.parse(date)
-                    } catch (e: Exception) {
-                        null
-                    }
-
-                    if (appointmentDate == null) {
-                        errorMessage = "Enter a valid date using MM/DD/YYYY."
-                        return@Button
-                    }
-
-                    val today = dateFormat.parse(dateFormat.format(Date()))
-
-                    if (appointmentDate.before(today)) {
-                        errorMessage = "Appointment date cannot be in the past."
-                        return@Button
-                    }
-                    val appointment = Appointment(
-                        id = "",
-                        patientId = "",
-                        title = title.trim(),
-                        date = date.trim(),
-                        time = time.trim(),
-                        provider = provider.trim(),
-                        location = location.trim(),
-                        notes = notes.trim()
+                        )
                     )
-
-                    onSave(appointment)
                 }
             },
+            enabled = !isSaving,
             modifier = Modifier.fillMaxWidth()
         ) {
-            Text("Save Appointment")
+            Text(
+                if (isSaving) {
+                    "Saving..."
+                } else {
+                    "Save appointment"
+                }
+            )
         }
+
         OutlinedButton(
             onClick = onCancel,
+            enabled = !isSaving,
             modifier = Modifier.fillMaxWidth()
         ) {
             Text("Cancel")
         }
     }
+}
+
+private fun isValidDate(value: String): Boolean {
+    if (!Regex("""\d{4}-\d{2}-\d{2}""").matches(value)) {
+        return false
+    }
+
+    val parts = value.split("-")
+    val year = parts[0].toIntOrNull() ?: return false
+    val month = parts[1].toIntOrNull() ?: return false
+    val day = parts[2].toIntOrNull() ?: return false
+
+    if (year < 1900 || month !in 1..12) {
+        return false
+    }
+
+    val daysInMonth = when (month) {
+        2 -> {
+            if (
+                year % 400 == 0 ||
+                (year % 4 == 0 && year % 100 != 0)
+            ) {
+                29
+            } else {
+                28
+            }
+        }
+
+        4, 6, 9, 11 -> 30
+        else -> 31
+    }
+
+    return day in 1..daysInMonth
+}
+
+private fun isValidTime(value: String): Boolean {
+    return Regex("""([01]\d|2[0-3]):[0-5]\d""").matches(value)
 }

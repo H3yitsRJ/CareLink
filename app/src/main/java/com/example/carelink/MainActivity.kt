@@ -4,13 +4,18 @@ import android.Manifest
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -18,8 +23,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import com.example.carelink.model.Appointment
+import com.example.carelink.model.AppointmentStatus
+import com.example.carelink.model.Medication
 import com.example.carelink.notifications.AndroidMedicationReminderScheduler
+import com.example.carelink.notifications.NotificationPermissionManager
 import com.example.carelink.screens.AddEditMedicationScreen
+import com.example.carelink.screens.AddEditAppointmentScreen
+import com.example.carelink.screens.AppointmentDetailsScreen
 import com.example.carelink.screens.AppointmentsScreen
 import com.example.carelink.screens.CareTasksScreen
 import com.example.carelink.screens.CreateAccountScreen
@@ -34,17 +45,14 @@ import com.example.carelink.screens.PasswordResetEmailScreen
 import com.example.carelink.screens.PatientProfileDetails
 import com.example.carelink.screens.ProfileScreen
 import com.example.carelink.screens.SettingsScreen
+import com.example.carelink.screens.CaregiverMedicationsScreen
+import com.example.carelink.screens.MedicationCaregiverAccessScreen
 import com.example.carelink.ui.theme.CareLinkTheme
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseAuthInvalidUserException
 import com.google.firebase.firestore.FirebaseFirestore
 import navigation.BottomNavDestination
-import com.example.carelink.screens.AddEditAppointmentScreen
-import com.example.carelink.data.InMemoryAppointmentRepository
-import com.example.carelink.screens.AddEditCareTaskScreen
-import com.example.carelink.data.InMemoryCareTaskRepository
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.mutableStateOf
+
 private enum class AuthScreen {
     SignIn,
     CreateAccount,
@@ -56,32 +64,28 @@ private enum class AppScreen {
     Medications,
     MedicationDetails,
     Appointments,
+    AppointmentDetails,
+    AddAppointment,
     CareTasks,
     Profile,
     EditProfile,
     Settings,
+    CaregiverMedications,
+    MedicationCaregiverAccess,
     Logout,
-    AddMedication,
-    AddAppointment,
-    AddCareTask
+    AddMedication
 }
 
 class MainActivity : ComponentActivity() {
-    private val notificationPermissionLauncher =
-        registerForActivityResult(
-            ActivityResultContracts.RequestPermission()
-        ) {
-            // Permission result is handled by Android.
-        }
+    private val medicationReminderScheduler by lazy { AndroidMedicationReminderScheduler(this) }
+
+    override fun onResume() {
+        super.onResume()
+        medicationReminderScheduler.restore(FirebaseAuth.getInstance().currentUser?.uid)
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            notificationPermissionLauncher.launch(
-                Manifest.permission.POST_NOTIFICATIONS
-            )
-        }
 
         configureFirebaseEmulators()
         enableEdgeToEdge()
@@ -89,13 +93,11 @@ class MainActivity : ComponentActivity() {
         setContent {
             CareLinkTheme {
                 val auth = remember { FirebaseAuth.getInstance() }
+                val notificationPermissionLauncher = rememberLauncherForActivityResult(
+                    ActivityResultContracts.RequestPermission()
+                ) { medicationReminderScheduler.restore(auth.currentUser?.uid) }
+
                 val firestore = remember { FirebaseFirestore.getInstance() }
-                val appointmentRepository = remember {
-                    InMemoryAppointmentRepository()
-                }
-                val careTaskRepository = remember {
-                    InMemoryCareTaskRepository()
-                }
                 var isAuthenticated by remember { mutableStateOf(auth.currentUser != null) }
                 var screen by remember { mutableStateOf(AuthScreen.SignIn) }
                 var isSubmitting by remember { mutableStateOf(false) }
@@ -118,6 +120,66 @@ class MainActivity : ComponentActivity() {
                 var medicationSaveError by remember { mutableStateOf<String?>(null) }
                 var selectedMedication by remember { mutableStateOf< com.example.carelink.model.Medication? >(null) }
                 var medicationSuccessMessage by remember { mutableStateOf<String?>(null) }
+                var medicationPermissionExplanation by remember { mutableStateOf<Medication?>(null) }
+                var appointments by remember { mutableStateOf<List<Appointment>>(emptyList()) }
+                var appointmentsLoading by remember { mutableStateOf(false) }
+                var appointmentLoadError by remember { mutableStateOf<String?>(null) }
+                var selectedAppointment by remember { mutableStateOf<Appointment?>(null) }
+                var isSavingAppointment by remember { mutableStateOf(false) }
+                var appointmentSaveError by remember { mutableStateOf<String?>(null) }
+                var appointmentSuccessMessage by remember { mutableStateOf<String?>(null) }
+
+                DisposableEffect(isAuthenticated, auth.currentUser?.uid) {
+                    val patientId = auth.currentUser?.uid
+                    if (!isAuthenticated || patientId == null) return@DisposableEffect onDispose { }
+                    var active = true
+                    val listener = firestore.collection("users").document(patientId).collection("medications")
+                        .addSnapshotListener { snapshot, _ ->
+                            if (active && auth.currentUser?.uid == patientId) snapshot?.documentChanges?.forEach { change ->
+                                com.example.carelink.model.Medication.fromFirestore(change.document.id, change.document.data)
+                                    ?.let { medication ->
+                                        if (change.type == com.google.firebase.firestore.DocumentChange.Type.REMOVED) medicationReminderScheduler.cancel(medication)
+                                        else medicationReminderScheduler.schedule(medication)
+                                    }
+                            }
+                        }
+                    onDispose { active = false; listener.remove() }
+                }
+
+                fun loadAppointments() {
+                    val user = auth.currentUser
+
+                    if (user == null) {
+                        appointments = emptyList()
+                        appointmentsLoading = false
+                        appointmentLoadError = null
+                        return
+                    }
+
+                    appointmentsLoading = true
+                    appointmentLoadError = null
+
+                    firestore
+                        .collection("users")
+                        .document(user.uid)
+                        .collection("appointments")
+                        .get()
+                        .addOnSuccessListener { snapshot ->
+                            appointments = snapshot.documents.map { document ->
+                                Appointment.fromFirestore(
+                                    id = document.id,
+                                    data = document.data.orEmpty()
+                                )
+                            }
+
+                            appointmentsLoading = false
+                        }
+                        .addOnFailureListener {
+                            appointmentsLoading = false
+                            appointmentLoadError =
+                                "We couldn't load your appointments. Please try again."
+                        }
+                }
 
                 LaunchedEffect(
                     isAuthenticated,
@@ -128,7 +190,13 @@ class MainActivity : ComponentActivity() {
                     if (!isAuthenticated || user == null) {
                         hasProfile = false
                         fullName = ""
+                        appointments = emptyList()
+                        selectedAppointment = null
+                        appointmentLoadError = null
+                        appointmentSuccessMessage = null
                     } else {
+                        medicationReminderScheduler.restore(user.uid)
+                        loadAppointments()
                         hasProfile = null
 
                         firestore
@@ -235,6 +303,7 @@ class MainActivity : ComponentActivity() {
                         }
 
                         when (appScreen) {
+
                             AppScreen.Home -> {
                                 DashboardScreen(
                                     fullName = fullName,
@@ -258,6 +327,7 @@ class MainActivity : ComponentActivity() {
 
                             AppScreen.Medications -> {
                                 MedicationsScreen(
+                                    onCaregiverMedications = { appScreen = AppScreen.CaregiverMedications },
                                     onAddMedication = {
                                         selectedMedication = null
                                         medicationSuccessMessage = null
@@ -278,6 +348,7 @@ class MainActivity : ComponentActivity() {
                             AppScreen.MedicationDetails -> {
                                 MedicationDetailsScreen(
                                     medication = selectedMedication,
+                                    errorMessage = medicationSaveError,
                                     onEdit = { medication ->
                                         selectedMedication = medication
                                         medicationSaveError = null
@@ -294,6 +365,7 @@ class MainActivity : ComponentActivity() {
                                                 .document(medication.id)
                                                 .delete()
                                                 .addOnSuccessListener {
+                                                    medicationReminderScheduler.cancel(medication)
                                                     selectedMedication = null
                                                     medicationSaveError = null
                                                     medicationSuccessMessage = "Medication removed successfully."
@@ -334,7 +406,9 @@ class MainActivity : ComponentActivity() {
                                                     "frequency" to medication.frequency,
                                                     "reminderTimes" to medication.reminderTimes,
                                                     "instructions" to medication.instructions,
-                                                    "active" to medication.active
+                                                    "active" to medication.active,
+                                                    "updatedById" to user.uid,
+                                                    "updatedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
                                                 )
 
                                             firestore
@@ -344,13 +418,22 @@ class MainActivity : ComponentActivity() {
                                                 .document(medication.id)
                                                 .set(medicationData)
                                                 .addOnSuccessListener {
-                                                    AndroidMedicationReminderScheduler(
-                                                        this
-                                                    ).schedule(medication)
+                                                    val saved = medication.copy(patientId = user.uid, updatedById = user.uid)
+                                                    val remindersScheduled = selectedMedication?.let {
+                                                        medicationReminderScheduler.replace(it, saved)
+                                                    } ?: medicationReminderScheduler.schedule(saved)
+                                                    if (
+                                                        !remindersScheduled &&
+                                                        Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                                                        !NotificationPermissionManager.canPostNotifications(this)
+                                                    ) {
+                                                        medicationPermissionExplanation = saved
+                                                    }
 
                                                     isSavingMedication = false
                                                     selectedMedication = null
-                                                    medicationSuccessMessage = "Medication saved successfully."
+                                                    medicationSuccessMessage = if (remindersScheduled) "Medication saved successfully."
+                                                        else "Medication saved. Enable notifications in Settings to receive reminders."
                                                     appScreen = AppScreen.Medications
                                                 }
                                                 .addOnFailureListener {
@@ -382,6 +465,7 @@ class MainActivity : ComponentActivity() {
                                                 .document(medication.id)
                                                 .delete()
                                                 .addOnSuccessListener {
+                                                    medicationReminderScheduler.cancel(medication)
                                                     selectedMedication = null
                                                     medicationSaveError = null
                                                     medicationSuccessMessage = "Medication removed successfully."
@@ -397,142 +481,142 @@ class MainActivity : ComponentActivity() {
 
                             AppScreen.Appointments -> {
                                 AppointmentsScreen(
-                                    appointments = appointmentRepository.list(
-                                        auth.currentUser?.uid ?: ""
-                                    ),
-                                    onNavigate = ::openTopLevel,
+                                    appointments = appointments,
+                                    isLoading = appointmentsLoading,
+                                    errorMessage = appointmentLoadError,
+                                    successMessage = appointmentSuccessMessage,
                                     onAddAppointment = {
+                                        selectedAppointment = null
+                                        appointmentSaveError = null
+                                        appointmentSuccessMessage = null
                                         appScreen = AppScreen.AddAppointment
+                                    },
+                                    onAppointmentSelected = { appointment ->
+                                        selectedAppointment = appointment
+                                        appointmentSaveError = null
+                                        appointmentSuccessMessage = null
+                                        appScreen = AppScreen.AppointmentDetails
+                                    },
+                                    onEditAppointment = { appointment ->
+                                        selectedAppointment = appointment
+                                        appointmentSaveError = null
+                                        appointmentSuccessMessage = null
+                                        appScreen = AppScreen.AddAppointment
+                                    },
+                                    onRetry = {
+                                        loadAppointments()
+                                    },
+                                    onNavigate = ::openTopLevel
+                                )
+                            }
+
+                            AppScreen.AppointmentDetails -> {
+                                AppointmentDetailsScreen(
+                                    appointment = selectedAppointment,
+                                    successMessage = appointmentSuccessMessage,
+                                    onEdit = {
+                                        appointmentSaveError = null
+                                        appScreen = AppScreen.AddAppointment
+                                    },
+                                    onCancelAppointment = { appointment ->
+                                        val user = auth.currentUser
+
+                                        if (user != null) {
+                                            val cancelledAppointment = appointment.copy(
+                                                status = AppointmentStatus.CANCELLED
+                                            )
+
+                                            firestore
+                                                .collection("users")
+                                                .document(user.uid)
+                                                .collection("appointments")
+                                                .document(appointment.id)
+                                                .set(cancelledAppointment.toFirestore())
+                                                .addOnSuccessListener {
+                                                    selectedAppointment = cancelledAppointment
+                                                    appointmentSuccessMessage =
+                                                        "Appointment cancelled successfully."
+                                                    loadAppointments()
+                                                }
+                                                .addOnFailureListener {
+                                                    appointmentSuccessMessage =
+                                                        "We couldn't cancel the appointment."
+                                                }
+                                        }
+                                    },
+                                    onBack = {
+                                        selectedAppointment = null
+                                        appointmentSuccessMessage = null
+                                        appScreen = AppScreen.Appointments
                                     }
                                 )
                             }
 
                             AppScreen.AddAppointment -> {
                                 AddEditAppointmentScreen(
+                                    appointment = selectedAppointment,
+                                    isSaving = isSavingAppointment,
+                                    saveError = appointmentSaveError,
                                     onSave = { appointment ->
-                                        val appointmentToSave = appointment.copy(
-                                            id = System.currentTimeMillis().toString(),
-                                            patientId = auth.currentUser?.uid ?: ""
-                                        )
+                                        val user = auth.currentUser
 
-                                        appointmentRepository.create(appointmentToSave)
-                                        appScreen = AppScreen.Appointments
+                                        if (user != null) {
+                                            isSavingAppointment = true
+                                            appointmentSaveError = null
+
+                                            val appointmentCollection = firestore
+                                                .collection("users")
+                                                .document(user.uid)
+                                                .collection("appointments")
+
+                                            val appointmentId = appointment.id.ifBlank {
+                                                appointmentCollection.document().id
+                                            }
+
+                                            val appointmentToSave = appointment.copy(
+                                                id = appointmentId,
+                                                patientId = user.uid
+                                            )
+
+                                            appointmentCollection
+                                                .document(appointmentId)
+                                                .set(appointmentToSave.toFirestore())
+                                                .addOnSuccessListener {
+                                                    isSavingAppointment = false
+                                                    selectedAppointment = null
+                                                    appointmentSaveError = null
+                                                    appointmentSuccessMessage =
+                                                        "Appointment saved successfully."
+
+                                                    loadAppointments()
+                                                    appScreen = AppScreen.Appointments
+                                                }
+                                                .addOnFailureListener {
+                                                    isSavingAppointment = false
+                                                    appointmentSaveError =
+                                                        "We couldn't save the appointment. Please try again."
+                                                }
+                                        } else {
+                                            appointmentSaveError =
+                                                "You must be signed in to save an appointment."
+                                        }
                                     },
                                     onCancel = {
-                                        appScreen = AppScreen.Appointments
+                                        appointmentSaveError = null
+
+                                        appScreen =
+                                            if (selectedAppointment != null) {
+                                                AppScreen.AppointmentDetails
+                                            } else {
+                                                AppScreen.Appointments
+                                            }
                                     }
                                 )
                             }
 
                             AppScreen.CareTasks -> {
-                                val patientId = auth.currentUser?.uid ?: ""
-                                var tasks by remember(patientId) {
-                                    mutableStateOf(
-                                        emptyList<com.example.carelink.model.CareTask>()
-                                    )
-                                }
-                                var loading by remember(patientId) { mutableStateOf(true) }
-                                var error by remember(patientId) {
-                                    mutableStateOf<String?>(null)
-                                }
-
-                                androidx.compose.runtime.DisposableEffect(patientId, firestore) {
-                                    val listener = firestore.collection("careTasks")
-                                        .whereEqualTo("patientId", patientId)
-                                        .addSnapshotListener { snapshot, exception ->
-                                            loading = false
-
-                                            if (exception != null) {
-                                                error = exception.localizedMessage
-                                                    ?: "Could not load care tasks."
-                                            } else {
-                                                error = null
-                                                tasks = snapshot?.documents.orEmpty().map { doc ->
-                                                    com.example.carelink.model.CareTask(
-                                                        id = doc.id,
-                                                        patientId = doc.getString("patientId") ?: "",
-                                                        title = doc.getString("title") ?: "",
-                                                        description = doc.getString("description") ?: "",
-                                                        dueDate = doc.getString("dueDate") ?: "",
-                                                        time = doc.getString("time") ?: "",
-                                                        completed = doc.getBoolean("completed") ?: false,
-                                                        appointmentId = doc.getString("appointmentId")
-                                                    )
-                                                }
-                                            }
-                                        }
-
-                                    onDispose { listener.remove() }
-                                }
-
-                                val context = androidx.compose.ui.platform.LocalContext.current
-
                                 CareTasksScreen(
-                                    tasks = tasks,
-                                    isLoading = loading,
-                                    error = error,
-                                    onAdd = {
-                                        appScreen = AppScreen.AddCareTask
-                                    },
-                                    onCompletedChange = { task, completed ->
-                                        firestore.collection("careTasks")
-                                            .document(task.id)
-                                            .update("completed", completed)
-                                            .addOnFailureListener { exception ->
-                                                android.widget.Toast.makeText(
-                                                    context,
-                                                    exception.localizedMessage
-                                                        ?: "Could not update task.",
-                                                    android.widget.Toast.LENGTH_LONG
-                                                ).show()
-                                            }
-                                    },
                                     onNavigate = ::openTopLevel
-                                )
-                            }
-                            AppScreen.AddCareTask -> {
-                                val context = androidx.compose.ui.platform.LocalContext.current
-                                var saving by remember { mutableStateOf(false) }
-
-                                AddEditCareTaskScreen(
-                                    patientId = auth.currentUser?.uid ?: "",
-                                    onSave = { careTask ->
-                                        if (!saving) {
-                                            if (careTask.patientId.isBlank() ||
-                                                careTask.title.isBlank()
-                                            ) {
-                                                android.widget.Toast.makeText(
-                                                    context,
-                                                    "A signed-in patient and title are required.",
-                                                    android.widget.Toast.LENGTH_LONG
-                                                ).show()
-                                            } else {
-                                                saving = true
-
-                                                firestore.collection("careTasks")
-                                                    .document(careTask.id)
-                                                    .set(careTask.toFirestore())
-                                                    .addOnSuccessListener {
-                                                        saving = false
-                                                        appScreen = AppScreen.CareTasks
-                                                    }
-                                                    .addOnFailureListener { exception ->
-                                                        saving = false
-                                                        android.widget.Toast.makeText(
-                                                            context,
-                                                            exception.localizedMessage
-                                                                ?: "Could not save task.",
-                                                            android.widget.Toast.LENGTH_LONG
-                                                        ).show()
-                                                    }
-                                            }
-                                        }
-                                    },
-                                    onCancel = {
-                                        if (!saving) {
-                                            appScreen = AppScreen.CareTasks
-                                        }
-                                    }
                                 )
                             }
 
@@ -626,6 +710,7 @@ class MainActivity : ComponentActivity() {
 
                             AppScreen.Settings -> {
                                 SettingsScreen(
+                                    onCaregiverAccess = { appScreen = AppScreen.MedicationCaregiverAccess },
                                     onBack = {
                                         appScreen = AppScreen.Profile
                                     },
@@ -635,12 +720,20 @@ class MainActivity : ComponentActivity() {
                                 )
                             }
 
+                            AppScreen.CaregiverMedications -> CaregiverMedicationsScreen(
+                                actorId = auth.currentUser!!.uid, onBack = { appScreen = AppScreen.Medications })
+
+                            AppScreen.MedicationCaregiverAccess -> MedicationCaregiverAccessScreen(
+                                patientId = auth.currentUser!!.uid, patientName = fullName,
+                                onBack = { appScreen = AppScreen.Settings })
+
                             AppScreen.Logout -> {
                                 LogoutScreen(
                                     onBack = {
                                         appScreen = AppScreen.Settings
                                     },
                                     onLogout = {
+                                        medicationReminderScheduler.clear()
                                         auth.signOut()
                                         appScreen = AppScreen.Home
                                         screen = AuthScreen.SignIn
@@ -758,7 +851,46 @@ class MainActivity : ComponentActivity() {
                             }
                         }
                     }
+
                 }
+
+                if (medicationPermissionExplanation != null) {
+                    AlertDialog(
+                        onDismissRequest = {
+                            medicationPermissionExplanation = null
+                        },
+                        title = {
+                            Text("Enable medication reminders?")
+                        },
+                        text = {
+                            Text(
+                                "CareLink needs notification permission to alert you when it is time to take your medication. You can continue using CareLink without reminders."
+                            )
+                        },
+                        confirmButton = {
+                            TextButton(
+                                onClick = {
+                                    medicationPermissionExplanation = null
+                                    notificationPermissionLauncher.launch(
+                                        Manifest.permission.POST_NOTIFICATIONS
+                                    )
+                                }
+                            ) {
+                                Text("Continue")
+                            }
+                        },
+                        dismissButton = {
+                            TextButton(
+                                onClick = {
+                                    medicationPermissionExplanation = null
+                                }
+                            ) {
+                                Text("Not now")
+                            }
+                        }
+                    )
+                }
+
             }
         }
     }
