@@ -1,5 +1,3 @@
-// Loads the signed-in patient's Firestore medications and sends selected records to MainActivity.
-
 package com.example.carelink.screens
 
 import androidx.compose.foundation.background
@@ -26,6 +24,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -55,14 +54,21 @@ fun MedicationsScreen(
     onMedicationSelected: (Medication) -> Unit = {},
     onMedicationScheduler: () -> Unit = {},
     successMessage: String? = null,
-    onNavigate: (BottomNavDestination) -> Unit = {}
+    onNavigate: (BottomNavDestination) -> Unit = {},
+    onCaregiverMedications: () -> Unit = {}
 ) {
 
     var medications by remember {
         mutableStateOf<List<Medication>>(emptyList())
     }
 
-    LaunchedEffect(Unit) {
+    var loading by remember { mutableStateOf(true) }
+    var loadError by remember { mutableStateOf<String?>(null) }
+    var retry by remember { mutableStateOf(0) }
+
+    LaunchedEffect(retry) {
+        loading = true
+        loadError = null
         val user = FirebaseAuth.getInstance().currentUser
 
         if (user != null) {
@@ -73,24 +79,18 @@ fun MedicationsScreen(
                 .get()
                 .addOnSuccessListener { result ->
 
-                    medications = result.documents.map { document ->
-                        Medication(
-                            id = document.id,
-                            patientId = user.uid,
-                            name = document.getString("name").orEmpty(),
-                            strength = document.getString("strength").orEmpty(),
-                            dose = document.getString("dose").orEmpty(),
-                            frequency = document.getString("frequency").orEmpty(),
-                            reminderTimes =
-                                document.get("reminderTimes") as? List<String>
-                                    ?: emptyList(),
-                            instructions =
-                                document.getString("instructions").orEmpty(),
-                            active =
-                                document.getBoolean("active") ?: true
-                        )
+                    medications = result.documents.mapNotNull { document ->
+                        Medication.fromFirestore(document.id, document.data.orEmpty() + ("patientId" to user.uid))
                     }
+                    loading = false
                 }
+                .addOnFailureListener {
+                    loading = false
+                    loadError = "We couldn't load your medications."
+                }
+        } else {
+            loading = false
+            loadError = "Sign in to view your medications."
         }
     }
 
@@ -134,6 +134,7 @@ fun MedicationsScreen(
             Text(
                 text = "Manage and schedule your medications"
             )
+            TextButton(onClick = onCaregiverMedications) { Text("Caregiver medications") }
 
             Spacer(modifier = Modifier.height(50.dp))
 
@@ -182,7 +183,12 @@ fun MedicationsScreen(
             Spacer(modifier = Modifier.height(18.dp))
 
 
-            if(medications.isEmpty()){
+            if (loading) {
+                Text("Loading medications")
+            } else if (loadError != null) {
+                Text(loadError!!, color = MaterialTheme.colorScheme.error)
+                Button(onClick = { retry++ }) { Text("Retry") }
+            } else if(medications.isEmpty()){
 
                 Box(
                     modifier = Modifier

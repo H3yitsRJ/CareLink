@@ -4,6 +4,9 @@
 
 package com.example.carelink.model
 
+internal fun isValidCareDocumentId(id: String) =
+    id.isNotBlank() && '/' !in id && id != "." && id != ".."
+
 enum class AppointmentStatus { SCHEDULED, COMPLETED, CANCELLED }
 
 data class Appointment(
@@ -73,6 +76,14 @@ data class CareTask(
     val id: String, val patientId: String, val title: String, val dueDate: String = "",
     val completed: Boolean = false, val appointmentId: String? = null
 ) {
+    fun validate(): String? = when {
+        !isValidCareDocumentId(id) -> "Care task ID is required"
+        !isValidCareDocumentId(patientId) -> "Patient ID is required"
+        title.isBlank() -> "Enter a task"
+        appointmentId != null && !isValidCareDocumentId(appointmentId) -> "Invalid appointment reference"
+        else -> null
+    }
+
     fun toFirestore(): Map<String, Any?> = mapOf(
         "patientId" to patientId, "title" to title, "dueDate" to dueDate,
         "completed" to completed, "appointmentId" to appointmentId
@@ -82,6 +93,10 @@ data class CareTask(
         fun fromFirestore(id: String, data: Map<String, Any?>): CareTask? {
             val patientId = data["patientId"] as? String ?: return null
             val title = data["title"] as? String ?: return null
+            // Missing optional fields retain their defaults; malformed values are not records.
+            if (data["dueDate"] != null && data["dueDate"] !is String) return null
+            if (data["completed"] != null && data["completed"] !is Boolean) return null
+            if (data["appointmentId"] != null && data["appointmentId"] !is String) return null
             return CareTask(
                 id = id,
                 patientId = patientId,
@@ -89,12 +104,14 @@ data class CareTask(
                 dueDate = data["dueDate"] as? String ?: "",
                 completed = data["completed"] as? Boolean ?: false,
                 appointmentId = data["appointmentId"] as? String
-            )
+            ).takeIf { it.validate() == null }
         }
     }
 }
 
 enum class InvitationStatus(val firestoreValue: String) {
+    // pending: awaiting a response; accepted: recipient agreed; declined: recipient refused;
+    // revoked: sender withdrew the invitation. Expiration is evaluated separately from status.
     PENDING("pending"), ACCEPTED("accepted"), DECLINED("declined"), REVOKED("revoked")
 }
 
@@ -104,6 +121,12 @@ data class CaregiverInvitation(
     val status: InvitationStatus, val expiresAtMillis: Long
 ) {
     fun isExpired(nowMillis: Long = System.currentTimeMillis()) = nowMillis >= expiresAtMillis
+    fun validate(): String? = when {
+        listOf(id, senderId, patientId).any { !isValidCareDocumentId(it) } -> "Invitation, sender and patient IDs are required"
+        !Regex("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$").matches(recipientEmail) -> "Enter a recipient email"
+        expiresAtMillis <= 0 -> "Expiration must be a positive epoch timestamp"
+        else -> null
+    }
     fun toFirestore(): Map<String, Any> = mapOf(
         "senderId" to senderId, "recipientEmail" to recipientEmail, "patientId" to patientId,
         "status" to status.firestoreValue, "expiresAtMillis" to expiresAtMillis
@@ -116,8 +139,8 @@ data class CaregiverInvitation(
                 id, data["senderId"] as? String ?: return null,
                 data["recipientEmail"] as? String ?: return null,
                 data["patientId"] as? String ?: return null, status,
-                (data["expiresAtMillis"] as? Number)?.toLong() ?: return null
-            )
+                (data["expiresAtMillis"] as? Long) ?: return null
+            ).takeIf { it.validate() == null }
         }
     }
 }

@@ -56,6 +56,32 @@ class Week3ScreensTest {
         compose.onNodeWithText("Cancel appointment").assertDoesNotExist()
     }
 
+    @Test fun cancellationShowsBriefFeedbackOnlyAfterConfirmation() {
+        val selected = mutableStateOf(appointment)
+        var cancellations = 0
+        compose.setContent { CareLinkTheme {
+            AppointmentDetailsScreen(selected.value, onCancelAppointment = {
+                cancellations++
+                selected.value = it.copy(status = AppointmentStatus.CANCELLED)
+            })
+        } }
+        compose.onNodeWithText("Cancel appointment").performScrollTo().performClick()
+        compose.onNodeWithText("Keep appointment").performClick()
+        compose.onNodeWithText("Appointment Cancelled").assertDoesNotExist()
+        compose.runOnIdle { assertEquals(0, cancellations) }
+        compose.onNodeWithText("Cancel appointment").performScrollTo().performClick()
+        compose.onNodeWithText("Keep appointment").assertIsDisplayed()
+        compose.mainClock.autoAdvance = false
+        compose.onNode(hasText("Cancel appointment") and hasAnyAncestor(isDialog())).performClick()
+        compose.mainClock.advanceTimeBy(100)
+        compose.runOnIdle { assertEquals(1, cancellations) }
+        compose.onNodeWithText("Appointment Cancelled").assertIsDisplayed()
+        compose.mainClock.advanceTimeBy(2_100)
+        compose.onNodeWithText("Appointment Cancelled").assertDoesNotExist()
+        compose.mainClock.autoAdvance = true
+        compose.onNodeWithText("Status: Cancelled").assertExists()
+    }
+
     @Test fun longAppointmentAtLargeTextKeepsBackReachable() {
         var backs = 0
         compose.setContent { CareLinkTheme {

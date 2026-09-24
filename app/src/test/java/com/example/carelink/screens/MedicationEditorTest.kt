@@ -5,6 +5,11 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class MedicationEditorTest {
+    @Test fun frequencyMustMatchTheNumberOfReminderTimes() {
+        assertTrue(validateMedicationEditor("Test", "5 mg", "1 tablet", "Twice daily", "08:00").hasErrors)
+        assertFalse(validateMedicationEditor("Test", "5 mg", "1 tablet", "Twice daily", "08:00, 20:00").hasErrors)
+        assertTrue(validateMedicationEditor("Test", "5 mg", "1 tablet", "unknown", "08:00").hasErrors)
+    }
     @Test
     fun `accepts complete medication values`() {
         assertFalse(validateMedicationEditor("Metformin", "500 mg", "1 tablet", "Daily", "08:30").hasErrors)
