@@ -29,7 +29,7 @@ import com.example.carelink.model.HealthConcern
 @Composable
 fun HealthConcernsScreen(
     concerns: List<HealthConcern> = emptyList(), isLoading: Boolean = false, error: String? = null,
-    onAdd: () -> Unit = {}, onSelect: (HealthConcern) -> Unit = {}
+    onAdd: (() -> Unit)? = null, onSelect: (HealthConcern) -> Unit = {}
 ) {
     var status by rememberSaveable { mutableStateOf<ConcernStatus?>(null) }
     var severity by rememberSaveable { mutableStateOf<ConcernSeverity?>(null) }
@@ -37,7 +37,7 @@ fun HealthConcernsScreen(
     val visible = concerns.filter { (status == null || it.status == status) && (severity == null || it.severity == severity) }
     Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text("Health concerns", style = MaterialTheme.typography.headlineLarge)
-        Button(onClick = onAdd, modifier = Modifier.fillMaxWidth()) { Text("Add concern") }
+        if (onAdd != null) Button(onClick = onAdd, modifier = Modifier.fillMaxWidth()) { Text("Add concern") }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             FilterChip(selected = status == null, onClick = { status = null }, label = { Text("All") })
             FilterChip(selected = status == ConcernStatus.ACTIVE, onClick = { status = ConcernStatus.ACTIVE }, label = { Text("Active") })
@@ -56,8 +56,8 @@ fun HealthConcernsScreen(
             // Higher-severity concerns come first without hiding the text severity label.
             else -> LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 items(visible.sortedByDescending { it.severity.ordinal }, key = { it.id }) { concern ->
-                    CareCard(concern.title) {
-                        Column(Modifier.fillMaxWidth().clickable(role = Role.Button) { onSelect(concern) }) {
+                    Column(Modifier.fillMaxWidth().clickable(role = Role.Button) { onSelect(concern) }) {
+                        CareCard(concern.title) {
                             Text("${concern.severity.name.lowercase().replaceFirstChar(Char::uppercase)} severity")
                             Text("${concern.recordedDate} · ${concern.status.name.lowercase().replaceFirstChar(Char::uppercase)}")
                         }

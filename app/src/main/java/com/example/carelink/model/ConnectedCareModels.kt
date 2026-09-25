@@ -59,10 +59,61 @@ data class Appointment(
 enum class ConcernSeverity { LOW, MEDIUM, HIGH }
 enum class ConcernStatus { ACTIVE, DISCUSSED }
 
+/**
+ * A care recipient's recorded health concern.
+ *
+ * Required: [id] (Firestore document ID), [patientId] (owner), [title], [description],
+ * [severity], and [recordedDate] (YYYY-MM-DD). Required text must be nonblank when read.
+ * [status] defaults to ACTIVE for new concerns and documents without a status field.
+ * [appointmentId] is optional; null means the concern is not linked to an appointment.
+ * Severity and status are stored as the exact enum names defined above.
+ * The document ID is supplied separately on read and is not duplicated in document data.
+ */
 data class HealthConcern(
-    val id: String, val patientId: String, val title: String, val severity: ConcernSeverity,
-    val recordedDate: String, val status: ConcernStatus = ConcernStatus.ACTIVE
-)
+    val id: String,
+    val patientId: String,
+    val title: String,
+    val severity: ConcernSeverity,
+    val recordedDate: String,
+    val description: String,
+    val status: ConcernStatus = ConcernStatus.ACTIVE,
+    val appointmentId: String? = null
+) {
+    fun toFirestore(): Map<String, Any?> = mapOf(
+        "patientId" to patientId,
+        "title" to title,
+        "description" to description,
+        "severity" to severity.name,
+        "recordedDate" to recordedDate,
+        "status" to status.name,
+        "appointmentId" to appointmentId
+    )
+
+    companion object {
+        /**
+         * Returns null for missing/invalid required fields or unsupported enum values,
+         * rather than inventing a severity or silently changing a recorded status.
+         * Missing, null, blank, or wrongly typed optional appointment IDs become null.
+         */
+        fun fromFirestore(id: String, data: Map<String, Any?>): HealthConcern? {
+            if (id.isBlank()) return null
+            fun requiredText(key: String) = (data[key] as? String)?.takeIf { it.isNotBlank() }
+            val severity = ConcernSeverity.entries.find { it.name == data["severity"] } ?: return null
+            val status = if (!data.containsKey("status")) ConcernStatus.ACTIVE
+                else ConcernStatus.entries.find { it.name == data["status"] } ?: return null
+            return HealthConcern(
+                id = id,
+                patientId = requiredText("patientId") ?: return null,
+                title = requiredText("title") ?: return null,
+                description = requiredText("description") ?: return null,
+                severity = severity,
+                recordedDate = requiredText("recordedDate") ?: return null,
+                status = status,
+                appointmentId = (data["appointmentId"] as? String)?.takeIf { it.isNotBlank() }
+            )
+        }
+    }
+}
 
 // appointmentId is optional because some care tasks start from an appointment and others do not.
 data class CareTask(

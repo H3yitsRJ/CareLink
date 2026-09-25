@@ -21,7 +21,7 @@ import navigation.BottomNavDestination
 import androidx.compose.foundation.layout.statusBarsPadding
 
 @Composable
-fun CareTasksScreen(tasks: List<CareTask> = emptyList(), isLoading: Boolean = false, error: String? = null, onAdd: () -> Unit = {},
+fun CareTasksScreen(tasks: List<CareTask> = emptyList(), isLoading: Boolean = false, error: String? = null, onAdd: () -> Unit = {}, onRetry: () -> Unit = {},
                     onCompletedChange: (CareTask, Boolean) -> Unit = { _, _ -> }, onNavigate: (BottomNavDestination) -> Unit = {}) {
     Scaffold(bottomBar = { BottomNavBar(BottomNavDestination.CareTasks, onNavigate) }) { innerPadding ->
         Column(
@@ -32,16 +32,17 @@ fun CareTasksScreen(tasks: List<CareTask> = emptyList(), isLoading: Boolean = fa
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
         Text("Care tasks", style = MaterialTheme.typography.headlineLarge)
-        Button(onClick = onAdd, modifier = Modifier.fillMaxWidth()) { Text("Add care task") }
+        Button(onClick = onAdd, enabled = !isLoading, modifier = Modifier.fillMaxWidth()) { Text("Add care task") }
         when {
             isLoading -> StateMessage("Loading care tasks")
-            error != null -> StateMessage(error, true)
+            error != null -> { StateMessage(error, true); Button(onClick = onRetry) { Text("Retry") } }
             tasks.isEmpty() -> StateMessage("No care tasks yet.")
             // Completion changes go back to the parent so the repository remains the source of truth.
             else -> LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(tasks, key = { it.id }) { task ->
                     CareCard(task.title) {
-                        if (task.dueDate.isNotBlank()) Text("Due ${task.dueDate}")
+                        if (task.dueDate.isNotBlank()) Text("Due ${task.dueDate} at ${task.time}")
+                        if (task.description.isNotBlank()) Text(task.description)
                         if (task.appointmentId != null) Text("Linked to appointment")
                         Checkbox(checked = task.completed, onCheckedChange = { onCompletedChange(task, it) })
                     }

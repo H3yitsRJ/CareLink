@@ -32,7 +32,10 @@ import com.example.carelink.screens.AddEditMedicationScreen
 import com.example.carelink.screens.AddEditAppointmentScreen
 import com.example.carelink.screens.AppointmentDetailsScreen
 import com.example.carelink.screens.AppointmentsScreen
-import com.example.carelink.screens.CareTasksScreen
+import com.example.carelink.screens.HealthConcernsFlow
+import com.example.carelink.data.FirestoreHealthConcernRepository
+import com.example.carelink.screens.CareTasksFlow
+import com.example.carelink.data.FirestoreCareTaskRepository
 import com.example.carelink.screens.CreateAccountScreen
 import com.example.carelink.screens.CreateProfileScreen
 import com.example.carelink.screens.DashboardScreen
@@ -45,7 +48,10 @@ import com.example.carelink.screens.PasswordResetEmailScreen
 import com.example.carelink.screens.PatientProfileDetails
 import com.example.carelink.screens.ProfileScreen
 import com.example.carelink.screens.SettingsScreen
-import com.example.carelink.screens.CaregiverMedicationsScreen
+import com.example.carelink.screens.CareRecipientSelector
+import com.example.carelink.data.FirestoreCareRecipientDirectory
+import com.example.carelink.data.MedicationCaregiverStore
+import androidx.compose.runtime.saveable.rememberSaveable
 import com.example.carelink.screens.MedicationCaregiverAccessScreen
 import com.example.carelink.ui.theme.CareLinkTheme
 import com.google.firebase.auth.FirebaseAuth
@@ -67,6 +73,7 @@ private enum class AppScreen {
     AppointmentDetails,
     AddAppointment,
     CareTasks,
+    HealthConcerns,
     Profile,
     EditProfile,
     Settings,
@@ -98,6 +105,11 @@ class MainActivity : ComponentActivity() {
                 ) { medicationReminderScheduler.restore(auth.currentUser?.uid) }
 
                 val firestore = remember { FirebaseFirestore.getInstance() }
+                val recipientDirectory = remember(firestore) { FirestoreCareRecipientDirectory(firestore) }
+                val caregiverMedicationData = remember(firestore) { MedicationCaregiverStore(firestore) }
+                var selectedCareRecipient by rememberSaveable(auth.currentUser?.uid) { mutableStateOf<String?>(null) }
+                val healthConcernRepository = remember(firestore) { FirestoreHealthConcernRepository(firestore) }
+                val careTaskRepository = remember(firestore) { FirestoreCareTaskRepository(firestore) }
                 var isAuthenticated by remember { mutableStateOf(auth.currentUser != null) }
                 var screen by remember { mutableStateOf(AuthScreen.SignIn) }
                 var isSubmitting by remember { mutableStateOf(false) }
@@ -318,6 +330,7 @@ class MainActivity : ComponentActivity() {
                                             "medications" -> AppScreen.Medications
                                             "appointments" -> AppScreen.Appointments
                                             "care-tasks" -> AppScreen.CareTasks
+                                            "health-concerns" -> AppScreen.HealthConcerns
                                             else -> AppScreen.Home
                                         }
                                     },
@@ -614,8 +627,18 @@ class MainActivity : ComponentActivity() {
                                 )
                             }
 
+                            AppScreen.HealthConcerns -> {
+                                HealthConcernsFlow(
+                                    patientId = auth.currentUser!!.uid,
+                                    repository = healthConcernRepository,
+                                    onBack = { appScreen = AppScreen.Home }
+                                )
+                            }
+
                             AppScreen.CareTasks -> {
-                                CareTasksScreen(
+                                CareTasksFlow(
+                                    patientId = auth.currentUser!!.uid,
+                                    repository = careTaskRepository,
                                     onNavigate = ::openTopLevel
                                 )
                             }
@@ -720,8 +743,10 @@ class MainActivity : ComponentActivity() {
                                 )
                             }
 
-                            AppScreen.CaregiverMedications -> CaregiverMedicationsScreen(
-                                actorId = auth.currentUser!!.uid, onBack = { appScreen = AppScreen.Medications })
+                            AppScreen.CaregiverMedications -> CareRecipientSelector(
+                                actorId = auth.currentUser!!.uid, selectedPatientId = selectedCareRecipient,
+                                onSelect = { selectedCareRecipient = it }, directory = recipientDirectory,
+                                medicationData = caregiverMedicationData, onBack = { appScreen = AppScreen.Medications })
 
                             AppScreen.MedicationCaregiverAccess -> MedicationCaregiverAccessScreen(
                                 patientId = auth.currentUser!!.uid, patientName = fullName,

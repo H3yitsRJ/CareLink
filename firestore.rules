@@ -57,15 +57,31 @@ service cloud.firestore {
         && request.resource.data.completionTimeMillis is int && request.resource.data.completionTimeMillis > 0;
       allow delete: if owner(patientId);
     }
-    // Retain existing access for other workflows; do not let that rule bypass medication ownership.
+    // Collection-group discovery exposes only the signed-in caregiver's own grants.
+    // Record access continues to be checked by the medication rules above.
+    match /{path=**}/medicationCaregivers/{grantId} {
+      allow list: if request.auth != null && resource.data.caregiverId == request.auth.uid;
+    }
+    // Profiles remain private to their owner, matching the published rules.
     match /users/{userId} {
-      allow read, write: if request.auth != null;
-      match /{collection}/{document=**} {
-        allow read, write: if request.auth != null && !(collection in ['medications', 'doseRecords', 'medicationCaregivers']);
+      allow read, create, update: if owner(userId);
+      match /{collection}/{documentId} {
+        allow read, delete: if owner(userId)
+          && collection in ['appointments', 'healthConcerns', 'careTasks'];
+        allow create, update: if owner(userId)
+          && collection in ['appointments', 'healthConcerns', 'careTasks']
+          && request.resource.data.patientId == userId;
       }
     }
-    match /{collection}/{document=**} {
-      allow read, write: if request.auth != null && collection != 'users';
+    // Preserve access to legacy top-level care tasks shown in the published rules.
+    match /careTasks/{taskId} {
+      allow read, delete: if request.auth != null
+        && resource.data.patientId == request.auth.uid;
+      allow create: if request.auth != null
+        && request.resource.data.patientId == request.auth.uid;
+      allow update: if request.auth != null
+        && resource.data.patientId == request.auth.uid
+        && request.resource.data.patientId == resource.data.patientId;
     }
   }
 }

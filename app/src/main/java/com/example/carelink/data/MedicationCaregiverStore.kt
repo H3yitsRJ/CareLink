@@ -21,8 +21,7 @@ class MedicationCaregiverStore(private val db: FirebaseFirestore) : CaregiverMed
     fun saveAccess(access: CaregiverAccess, patientName: String) = db.runTransaction { transaction ->
         val reference = grants(access.patientId).document(access.caregiverId)
         transaction.get(reference)
-        transaction.set(reference, mapOf("patientId" to access.patientId, "caregiverId" to access.caregiverId,
-            "patientName" to patientName.take(200), "permissions" to access.permissions.map { it.name }, "revoked" to access.revoked))
+        transaction.set(reference, access.toFirestore() + ("patientName" to patientName.take(200)))
     }
 
     override fun watchAccess(patientId: String, caregiverId: String, changed: (CaregiverAccess?, String, Boolean) -> Unit): () -> Unit {
@@ -69,10 +68,7 @@ class MedicationCaregiverStore(private val db: FirebaseFirestore) : CaregiverMed
         fun validId(id: String) = id.isNotBlank() && id.length <= 128 && '/' !in id && id != "." && id != ".."
         fun access(patientId: String, caregiverId: String, data: Map<String, Any?>): CaregiverAccess? {
             if (data["patientId"] != patientId || data["caregiverId"] != caregiverId) return null
-            val permissions = (data["permissions"] as? List<*>)?.mapNotNull { value ->
-                CarePermission.entries.find { it.name == value }
-            }?.toSet() ?: return null
-            return CaregiverAccess(caregiverId, patientId, caregiverId, permissions, data["revoked"] != false)
+            return CaregiverAccess.fromFirestore(caregiverId, data)
         }
         fun editableFields(medication: Medication): Map<String, Any> = medication.toFirestore().filterKeys {
             it in setOf("name", "strength", "dose", "frequency", "reminderTimes", "instructions")
