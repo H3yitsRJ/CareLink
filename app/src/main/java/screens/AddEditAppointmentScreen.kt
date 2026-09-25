@@ -39,6 +39,7 @@ fun AddEditAppointmentScreen(
     var location by rememberSaveable(appointment?.id) { mutableStateOf(appointment?.location.orEmpty()) }
     var notes by rememberSaveable(appointment?.id) { mutableStateOf(appointment?.notes.orEmpty()) }
     var attemptedSave by rememberSaveable(appointment?.id) { mutableStateOf(false) }
+
     val titleError = attemptedSave && title.isBlank()
     val dateError = if (attemptedSave) appointmentDateError(date) else null
     val timeError = attemptedSave && !isValidTime(time.trim())
@@ -51,7 +52,7 @@ fun AddEditAppointmentScreen(
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         Text(
-            text = if   (appointment == null) {
+            text = if (appointment == null) {
                 "Add appointment"
             } else {
                 "Edit appointment"
