@@ -29,12 +29,12 @@ fun AddEditAppointmentScreen(
     onSave: (Appointment) -> Unit = {},
     onCancel: () -> Unit = {}
 ) {
-    var title by rememberSaveable { mutableStateOf("") }
-    var provider by rememberSaveable { mutableStateOf("") }
-    var date by rememberSaveable { mutableStateOf("") }
-    var time by rememberSaveable { mutableStateOf("") }
-    var location by rememberSaveable { mutableStateOf("") }
-    var notes by rememberSaveable { mutableStateOf("") }
+    var title by rememberSaveable { mutableStateOf(appointment?.title ?: "") }
+    var provider by rememberSaveable { mutableStateOf(appointment?.provider ?: "") }
+    var date by rememberSaveable { mutableStateOf(appointment?.date ?: "") }
+    var time by rememberSaveable { mutableStateOf(appointment?.time ?: "") }
+    var location by rememberSaveable { mutableStateOf(appointment?.location ?: "") }
+    var notes by rememberSaveable { mutableStateOf(appointment?.notes ?: "") }
     var attemptedSave by rememberSaveable { mutableStateOf(false) }
     val titleError = attemptedSave && title.isBlank()
     val dateError = attemptedSave && date.isBlank()
