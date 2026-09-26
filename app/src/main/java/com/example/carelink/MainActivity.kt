@@ -23,8 +23,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import com.example.carelink.data.DoseHistoryStore
 import com.example.carelink.model.Appointment
 import com.example.carelink.model.AppointmentStatus
+import com.example.carelink.model.DoseStatus
 import com.example.carelink.model.Medication
 import com.example.carelink.notifications.AndroidMedicationReminderScheduler
 import com.example.carelink.notifications.NotificationPermissionManager
@@ -32,6 +34,7 @@ import com.example.carelink.screens.AddEditMedicationScreen
 import com.example.carelink.screens.AddEditAppointmentScreen
 import com.example.carelink.screens.AppointmentDetailsScreen
 import com.example.carelink.screens.AppointmentsScreen
+import com.example.carelink.screens.CareHistoryScreen
 import com.example.carelink.screens.CareTasksScreen
 import com.example.carelink.screens.CreateAccountScreen
 import com.example.carelink.screens.CreateProfileScreen
@@ -64,6 +67,7 @@ private enum class AppScreen {
     Home,
     Medications,
     MedicationDetails,
+    CareHistory,
     Appointments,
     AppointmentDetails,
     AddAppointment,
@@ -101,6 +105,10 @@ class MainActivity : ComponentActivity() {
                 ) { medicationReminderScheduler.restore(auth.currentUser?.uid) }
 
                 val firestore = remember { FirebaseFirestore.getInstance() }
+                val doseHistoryStore = remember { DoseHistoryStore(firestore) }
+                var isSavingDose by remember { mutableStateOf(false) }
+                var doseMessage by remember { mutableStateOf<String?>(null) }
+                var doseError by remember { mutableStateOf<String?>(null) }
                 var isAuthenticated by remember { mutableStateOf(auth.currentUser != null) }
                 var screen by remember { mutableStateOf(AuthScreen.SignIn) }
                 var isSubmitting by remember { mutableStateOf(false) }
@@ -342,6 +350,9 @@ class MainActivity : ComponentActivity() {
                                             medicationSuccessMessage = null
                                             appScreen = AppScreen.MedicationDetails
                                     },
+                                    onOpenCareHistory = {
+                                        appScreen = AppScreen.CareHistory
+                                    },
                                     onMedicationScheduler = {
                                         appScreen = AppScreen.MedicationScheduler
                                     },
@@ -355,6 +366,32 @@ class MainActivity : ComponentActivity() {
                                 MedicationDetailsScreen(
                                     medication = selectedMedication,
                                     errorMessage = medicationSaveError,
+                                    isSavingDose = isSavingDose,
+                                    doseMessage = doseMessage,
+                                    doseError = doseError,
+                                    onRecordDose = { medication, scheduledTimeMillis, status ->
+                                        val user = auth.currentUser
+                                        if (user == null) {
+                                            doseError = "Sign in to record a dose."
+                                        } else {
+                                            isSavingDose = true
+                                            doseError = null
+                                            doseMessage = null
+                                            doseHistoryStore.record(
+                                                patientId = user.uid,
+                                                medication = medication,
+                                                scheduledTimeMillis = scheduledTimeMillis,
+                                                status = status
+                                            ) { result ->
+                                                isSavingDose = false
+                                                result.onSuccess {
+                                                    doseMessage = "Dose recorded as ${status.name.lowercase()}."
+                                                }.onFailure {
+                                                    doseError = "We couldn't save this dose. Please try again."
+                                                }
+                                            }
+                                        }
+                                    },
                                     onEdit = { medication ->
                                         selectedMedication = medication
                                         medicationSaveError = null
@@ -630,6 +667,15 @@ class MainActivity : ComponentActivity() {
                                 )
                             }
 
+                            AppScreen.CareHistory -> {
+                                CareHistoryScreen(
+                                    onBack = {
+                                        appScreen = AppScreen.Medications
+                                    },
+                                    onNavigate = ::openTopLevel
+                                )
+                            }
+
                             AppScreen.Profile -> {
                                 ProfileScreen(
                                     fullName = fullName,
@@ -756,6 +802,7 @@ class MainActivity : ComponentActivity() {
 
                     else -> {
                         when (screen) {
+
                             AuthScreen.SignIn -> {
                                 LoginScreen(
                                     isSubmitting = isSubmitting,
