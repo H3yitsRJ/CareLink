@@ -17,6 +17,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -34,9 +35,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.example.carelink.model.DoseStatus
 import com.example.carelink.model.Medication
 import navigation.BottomNavBar
 import navigation.BottomNavDestination
+import java.util.Calendar
 
 @Composable
 fun MedicationDetailsScreen(
@@ -49,9 +52,15 @@ fun MedicationDetailsScreen(
     onNavigate: (BottomNavDestination) -> Unit = {},
     canEdit: Boolean = true,
     canRemove: Boolean = true,
-    showNavigation: Boolean = true
+    showNavigation: Boolean = true,
+    isSavingDose: Boolean = false,
+    doseMessage: String? = null,
+    doseError: String? = null,
+    onRecordDose: (Medication, Long, DoseStatus) -> Unit = { _, _, _ -> }
+
 ) {
     var showRemoveDialog by remember(medication?.id) { mutableStateOf(false) }
+    var selectedReminder by remember(medication?.id) { mutableStateOf(medication?.reminderTimes?.firstOrNull().orEmpty()) }
 
     Scaffold(
         bottomBar = {
@@ -85,7 +94,10 @@ fun MedicationDetailsScreen(
             }
 
             Spacer(modifier = Modifier.height(32.dp))
-            if (errorMessage != null) Text(errorMessage, color = MaterialTheme.colorScheme.error)
+
+            if (errorMessage != null) { Text(errorMessage, color = MaterialTheme.colorScheme.error) }
+            if (doseError != null) { Text(doseError, color = MaterialTheme.colorScheme.error) }
+            if (doseMessage != null) { Text(doseMessage, color = MaterialTheme.colorScheme.primary) }
 
             when {
                 isLoading -> MedicationLoadingState()
@@ -97,7 +109,16 @@ fun MedicationDetailsScreen(
                     canEdit = canEdit,
                     canRemove = canRemove,
                     onEdit = { onEdit(medication) },
-                    onRemove = { showRemoveDialog = true }
+                    onRemove = { showRemoveDialog = true },
+                    selectedReminder = selectedReminder,
+                    onSelectReminder = { selectedReminder = it },
+                    isSavingDose = isSavingDose,
+                    onRecordDose = { status ->
+                        val scheduledTime = todayAt(selectedReminder)
+                        if (scheduledTime != null) {
+                            onRecordDose(medication, scheduledTime, status)
+                        }
+                    }
                 )
             }
         }
@@ -135,7 +156,11 @@ private fun MedicationDetailsContent(
     canEdit: Boolean,
     canRemove: Boolean,
     onEdit: () -> Unit,
-    onRemove: () -> Unit
+    onRemove: () -> Unit,
+    selectedReminder: String,
+    onSelectReminder: (String) -> Unit,
+    isSavingDose: Boolean,
+    onRecordDose: (DoseStatus) -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -190,9 +215,11 @@ private fun MedicationDetailsContent(
         Spacer(modifier = Modifier.height(28.dp))
 
         medication.updatedById?.let { editor ->
-            Text(if (editor == medication.patientId) "Last edited by patient" else "Last edited by caregiver: $editor",
+            Text(if (editor == medication.patientId)
+                "Last edited by patient" else "Last edited by caregiver: $editor",
                 style = MaterialTheme.typography.bodySmall)
         }
+
         HorizontalDivider()
 
         Spacer(modifier = Modifier.height(24.dp))
@@ -202,6 +229,50 @@ private fun MedicationDetailsContent(
             textAlign = TextAlign.Center,
             style = MaterialTheme.typography.bodyLarge
         )
+
+        Spacer(modifier = Modifier.height(28.dp))
+
+        Text(
+            text = "Record today's dose",
+            style = MaterialTheme.typography.titleMedium
+        )
+        Text("Choose the scheduled time, then record what happened.")
+
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            medication.reminderTimes.forEach { time ->
+                FilterChip(
+                    selected = selectedReminder == time,
+                    onClick = { onSelectReminder(time) },
+                    label = { Text(formatReminderTime(time)) }
+                )
+            }
+        }
+
+        if (medication.reminderTimes.isNotEmpty()) {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                listOf(
+                    DoseStatus.TAKEN,
+                    DoseStatus.MISSED,
+                    DoseStatus.DELAYED
+                ).forEach { status ->
+                    OutlinedButton(
+                        onClick = { onRecordDose(status) },
+                        enabled = !isSavingDose &&
+                                selectedReminder.isNotBlank(),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            status.name.lowercase()
+                                .replaceFirstChar(Char::uppercase)
+                        )
+                    }
+                }
+            }
+
+            if (isSavingDose) {
+                CircularProgressIndicator()
+            }
+        }
 
         Spacer(modifier = Modifier.height(28.dp))
 
@@ -289,9 +360,7 @@ private fun MedicationMissingState(
 private fun medicationInstructions(
     medication: Medication
 ): String {
-    if (medication.instructions.isNotBlank()) {
-        return medication.instructions
-    }
+    if (medication.instructions.isNotBlank()) { return medication.instructions }
 
     val nextDose = medication.reminderTimes
         .firstOrNull()
@@ -316,4 +385,21 @@ private fun formatReminderTime(time: String): String {
     }
 
     return "%d:%02d %s".format(displayHour, minute, suffix)
+}
+
+/** Reminder times are local HH:mm values, so use today's device-local date. */
+private fun todayAt(time: String): Long? {
+    val parts = time.split(":")
+    if (parts.size != 2) return null
+
+    val hour = parts[0].toIntOrNull() ?: return null
+    val minute = parts[1].toIntOrNull() ?: return null
+    if (hour !in 0..23 || minute !in 0..59) return null
+
+    return Calendar.getInstance().apply {
+        set(Calendar.HOUR_OF_DAY, hour)
+        set(Calendar.MINUTE, minute)
+        set(Calendar.SECOND, 0)
+        set(Calendar.MILLISECOND, 0)
+    }.timeInMillis
 }
