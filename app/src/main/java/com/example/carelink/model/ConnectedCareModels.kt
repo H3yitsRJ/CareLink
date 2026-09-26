@@ -105,7 +105,7 @@ data class HealthConcern(
                 id = id,
                 patientId = requiredText("patientId") ?: return null,
                 title = requiredText("title") ?: return null,
-                description = requiredText("description") ?: return null,
+                description = (data["description"] as? String).orEmpty(),
                 severity = severity,
                 recordedDate = requiredText("recordedDate") ?: return null,
                 status = status,

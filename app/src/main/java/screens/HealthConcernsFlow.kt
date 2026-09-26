@@ -13,34 +13,52 @@ import com.example.carelink.model.*
 fun HealthConcernsFlow(patientId: String, repository: HealthConcernRepository, onBack: () -> Unit = {}) {
     key(patientId) {
         var selectedId by rememberSaveable { mutableStateOf<String?>(null) }
+        var isAdding by rememberSaveable { mutableStateOf(false) }
         BackHandler { if (selectedId != null) selectedId = null else onBack() }
         val id = selectedId
-        if (id != null) key(id) {
-            ConcernDetailRoute(patientId, id, repository, onBack = { selectedId = null })
+        if (isAdding) {
+            AddHealthConcernScreen(
+                patientId = patientId,
+                repository = repository,
+                onSaved = { isAdding = false },
+                onCancel = { isAdding = false }
+            )
         } else {
-            var concerns by remember { mutableStateOf<List<HealthConcern>>(emptyList()) }
-            var loading by remember { mutableStateOf(true) }
-            var error by remember { mutableStateOf<String?>(null) }
-            var retry by remember { mutableIntStateOf(0) }
-            DisposableEffect(patientId, repository, retry) {
-                var active = true
-                loading = true
-                error = null
-                val stop = repository.watchList(patientId) { result ->
-                    if (active) {
-                        loading = false
-                        result.onSuccess { concerns = it }.onFailure { error = "We couldn't load your health concerns." }
+            val id = selectedId
+            if (id != null) key(id) {
+                ConcernDetailRoute(
+                    patientId,
+                    id,
+                    repository,
+                    onBack = { selectedId = null }
+                )
+            } else {
+                var concerns by remember { mutableStateOf<List<HealthConcern>>(emptyList()) }
+                var loading by remember { mutableStateOf(true) }
+                var error by remember { mutableStateOf<String?>(null) }
+                var retry by remember { mutableIntStateOf(0) }
+                DisposableEffect(patientId, repository, retry) {
+                    var active = true
+                    loading = true
+                    error = null
+                    val stop = repository.watchList(patientId) { result ->
+                        if (active) {
+                            loading = false
+                            result.onSuccess { concerns = it }
+                                .onFailure { error = "We couldn't load your health concerns." }
+                        }
                     }
+                    onDispose { active = false; stop() }
                 }
-                onDispose { active = false; stop() }
-            }
-            Scaffold(Modifier.safeDrawingPadding(), bottomBar = {
-                TextButton(onClick = onBack) { Text("Back to home") }
-            }) { padding ->
-                Column(Modifier.padding(padding)) {
-                    if (error != null) TextButton(onClick = { retry++ }) { Text("Retry") }
-                    HealthConcernsScreen(concerns = concerns, isLoading = loading, error = error,
-                        onSelect = { selectedId = it.id })
+                Scaffold(Modifier.safeDrawingPadding(), bottomBar = {
+                    TextButton(onClick = onBack) { Text("Back to home") }
+                }) { padding ->
+                    Column(Modifier.padding(padding)) {
+                        if (error != null) TextButton(onClick = { retry++ }) { Text("Retry") }
+                        HealthConcernsScreen(
+                            concerns = concerns, isLoading = loading, error = error, onAdd = { isAdding = true },
+                            onSelect = { selectedId = it.id })
+                    }
                 }
             }
         }

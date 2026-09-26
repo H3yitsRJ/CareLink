@@ -23,6 +23,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import com.example.carelink.model.Appointment
+import androidx.compose.foundation.layout.statusBarsPadding
 
 @Composable
 fun AddEditAppointmentScreen(
@@ -47,6 +48,7 @@ fun AddEditAppointmentScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .statusBarsPadding()
             .verticalScroll(rememberScrollState())
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)

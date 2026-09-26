@@ -7,6 +7,8 @@ interface HealthConcernRepository {
     fun watchList(patientId: String, changed: (Result<List<HealthConcern>>) -> Unit): () -> Unit
     fun watchConcern(patientId: String, id: String, changed: (Result<HealthConcern?>) -> Unit): () -> Unit
     fun watchAppointments(patientId: String, changed: (Result<List<Appointment>>) -> Unit): () -> Unit
+
+    fun addConcern(patientId: String, concern: HealthConcern, completed: (Result<Unit>) -> Unit)
     fun setStatus(patientId: String, id: String, status: ConcernStatus, completed: (Result<Unit>) -> Unit)
     fun linkAppointment(patientId: String, id: String, appointmentId: String?, completed: (Result<Unit>) -> Unit)
 }
@@ -18,17 +20,41 @@ class FirestoreHealthConcernRepository(private val db: FirebaseFirestore) : Heal
         val listener = concerns(patientId).addSnapshotListener { snapshot, error ->
             if (error != null) changed(Result.failure(error))
             else if (snapshot != null) changed(Result.success(snapshot.documents.mapNotNull {
-                HealthConcern.fromFirestore(it.id, it.data.orEmpty())
+                HealthConcern.fromFirestore(
+                    it.id,
+                    it.data.orEmpty() + ("patientId" to patientId)
+                )
             }))
         }
         return { listener.remove() }
     }
-    override fun watchConcern(patientId: String, id: String, changed: (Result<HealthConcern?>) -> Unit): () -> Unit {
-        val listener = concerns(patientId).document(id).addSnapshotListener { snapshot, error ->
-            if (error != null) changed(Result.failure(error))
-            else if (snapshot != null) changed(Result.success(if (snapshot.exists())
-                HealthConcern.fromFirestore(snapshot.id, snapshot.data.orEmpty()) else null))
-        }
+    override fun watchConcern(
+        patientId: String,
+        id: String,
+        changed: (Result<HealthConcern?>) -> Unit
+    ): () -> Unit {
+        val listener = concerns(patientId)
+            .document(id)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    changed(Result.failure(error))
+                } else if (snapshot != null) {
+                    changed(
+                        Result.success(
+                            if (snapshot.exists()) {
+                                HealthConcern.fromFirestore(
+                                    snapshot.id,
+                                    snapshot.data.orEmpty() +
+                                            ("patientId" to patientId)
+                                )
+                            } else {
+                                null
+                            }
+                        )
+                    )
+                }
+            }
+
         return { listener.remove() }
     }
     override fun watchAppointments(patientId: String, changed: (Result<List<Appointment>>) -> Unit): () -> Unit {
@@ -37,6 +63,20 @@ class FirestoreHealthConcernRepository(private val db: FirebaseFirestore) : Heal
             else if (snapshot != null) changed(Result.success(snapshot.documents.map { Appointment.fromFirestore(it.id, it.data.orEmpty()) }))
         }
         return { listener.remove() }
+    }
+    override fun addConcern(
+        patientId: String,
+        concern: HealthConcern,
+        completed: (Result<Unit>) -> Unit
+    ) {
+        concerns(patientId)
+            .add(concern.toFirestore())
+            .addOnSuccessListener {
+                completed(Result.success(Unit))
+            }
+            .addOnFailureListener { error ->
+                completed(Result.failure(error))
+            }
     }
     override fun setStatus(patientId: String, id: String, status: ConcernStatus, completed: (Result<Unit>) -> Unit) {
         concerns(patientId).document(id).update("status", status.name)

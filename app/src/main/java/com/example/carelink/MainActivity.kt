@@ -136,6 +136,15 @@ class MainActivity : ComponentActivity() {
                 var selectedMedication by remember { mutableStateOf< com.example.carelink.model.Medication? >(null) }
                 var medicationSuccessMessage by remember { mutableStateOf<String?>(null) }
                 var medicationPermissionExplanation by remember { mutableStateOf<Medication?>(null) }
+                var dashboardMedications by remember {
+                    mutableStateOf<List<com.example.carelink.model.Medication>>(emptyList())
+                }
+                var dashboardCareTasks by remember {
+                    mutableStateOf<List<com.example.carelink.model.CareTask>>(emptyList())
+                }
+                var dashboardHealthConcerns by remember {
+                    mutableStateOf<List<com.example.carelink.model.HealthConcern>>(emptyList())
+                }
                 var appointments by remember { mutableStateOf<List<Appointment>>(emptyList()) }
                 var appointmentsLoading by remember { mutableStateOf(false) }
                 var appointmentLoadError by remember { mutableStateOf<String?>(null) }
@@ -150,6 +159,14 @@ class MainActivity : ComponentActivity() {
                     var active = true
                     val listener = firestore.collection("users").document(patientId).collection("medications")
                         .addSnapshotListener { snapshot, _ ->
+                            if (active && auth.currentUser?.uid == patientId && snapshot != null) {
+                                dashboardMedications = snapshot.documents.mapNotNull { document ->
+                                    com.example.carelink.model.Medication.fromFirestore(
+                                        document.id,
+                                        document.data.orEmpty() + ("patientId" to patientId)
+                                    )
+                                }.filter { it.active }
+                            }
                             if (active && auth.currentUser?.uid == patientId) snapshot?.documentChanges?.forEach { change ->
                                 com.example.carelink.model.Medication.fromFirestore(change.document.id, change.document.data)
                                     ?.let { medication ->
@@ -160,6 +177,138 @@ class MainActivity : ComponentActivity() {
                         }
                     onDispose { active = false; listener.remove() }
                 }
+                DisposableEffect(isAuthenticated, auth.currentUser?.uid) {
+                    val patientId = auth.currentUser?.uid
+
+                    if (!isAuthenticated || patientId == null) {
+                        return@DisposableEffect onDispose { }
+                    }
+
+                    var active = true
+
+                    val listener = firestore
+                        .collection("users")
+                        .document(patientId)
+                        .collection("careTasks")
+                        .addSnapshotListener { snapshot, _ ->
+
+                            if (
+                                active &&
+                                auth.currentUser?.uid == patientId &&
+                                snapshot != null
+                            ) {
+                                dashboardCareTasks =
+                                    snapshot.documents.mapNotNull { document ->
+                                        com.example.carelink.model.CareTask.fromFirestore(
+                                            document.id,
+                                            document.data.orEmpty() +
+                                                    ("patientId" to patientId)
+                                        )
+                                    }
+                            }
+                        }
+
+                    onDispose {
+                        active = false
+                        listener.remove()
+                    }
+                }
+                DisposableEffect(isAuthenticated, auth.currentUser?.uid) {
+                    val patientId = auth.currentUser?.uid
+
+                    if (!isAuthenticated || patientId == null) {
+                        return@DisposableEffect onDispose { }
+                    }
+
+                    var active = true
+
+                    val listener = firestore
+                        .collection("users")
+                        .document(patientId)
+                        .collection("healthConcerns")
+                        .addSnapshotListener { snapshot, _ ->
+
+                            if (
+                                active &&
+                                auth.currentUser?.uid == patientId &&
+                                snapshot != null
+                            ) {
+                                dashboardHealthConcerns =
+                                    snapshot.documents.mapNotNull { document ->
+                                        com.example.carelink.model.HealthConcern.fromFirestore(
+                                            document.id,
+                                            document.data.orEmpty() +
+                                                    ("patientId" to patientId)
+                                        )
+                                    }
+                            }
+                        }
+
+                    onDispose {
+                        active = false
+                        listener.remove()
+                    }
+                }
+                val currentTime = java.text.SimpleDateFormat(
+                    "HH:mm",
+                    java.util.Locale.getDefault()
+                ).format(java.util.Date())
+
+                val nextMedicationDose = dashboardMedications
+                    .flatMap { medication ->
+                        medication.reminderTimes.map { time ->
+                            Triple(time, medication.name, medication.dose)
+                        }
+                    }
+                    .filter { (time, _, _) -> time >= currentTime }
+                    .minByOrNull { (time, _, _) -> time }
+                    ?.let { (time, name, dose) ->
+                        "$name - $dose at $time"
+                    }
+                    ?: "No more medication doses today"
+                val nextCareTask = dashboardCareTasks
+                    .filter { !it.completed }
+                    .minByOrNull { it.dueDate }
+                    ?.let { task ->
+                        if (task.dueDate.isNotBlank()) {
+                            "${task.title} - ${task.dueDate} at ${task.time}"
+                        } else {
+                            task.title
+                        }
+                    }
+                    ?: "No open care tasks"
+                val nextHealthConcern = dashboardHealthConcerns
+                    .firstOrNull { it.status == com.example.carelink.model.ConcernStatus.ACTIVE }
+                    ?.title
+                    ?: "No active health concerns"
+                val appointmentDateTimeFormat = java.text.SimpleDateFormat(
+                    "yyyy-MM-dd HH:mm",
+                    java.util.Locale.getDefault()
+                )
+
+                val now = java.util.Date()
+
+                val nextAppointment = appointments
+                    .mapNotNull { appointment ->
+                        try {
+                            val dateTime = appointmentDateTimeFormat.parse(
+                                "${appointment.date} ${appointment.time}"
+                            )
+
+                            if (dateTime != null && !dateTime.before(now)) {
+                                appointment to dateTime
+                            } else {
+                                null
+                            }
+                        } catch (_: Exception) {
+                            null
+                        }
+                    }
+                    .minByOrNull { (_, dateTime) -> dateTime }
+                    ?.let { (appointment, _) ->
+                        "${appointment.title} - ${appointment.date} at ${appointment.time}"
+                    }
+                    ?: "No upcoming appointments"
 
                 fun loadAppointments() {
                     val user = auth.currentUser
@@ -189,10 +338,16 @@ class MainActivity : ComponentActivity() {
 
                             appointmentsLoading = false
                         }
-                        .addOnFailureListener {
+                        .addOnFailureListener { exception ->
                             appointmentsLoading = false
                             appointmentLoadError =
                                 "We couldn't load your appointments. Please try again."
+
+                            android.util.Log.e(
+                                "CareLinkAppointments",
+                                "Failed to load appointments",
+                                exception
+                            )
                         }
                 }
 
@@ -323,10 +478,10 @@ class MainActivity : ComponentActivity() {
                                 DashboardScreen(
                                     fullName = fullName,
                                     summary = DashboardSummary(
-                                        medication = "Review today's medication schedule",
-                                        appointment = "View upcoming appointments",
-                                        healthConcern = "Review active health concerns",
-                                        careTask = "Check open care tasks"
+                                        medication = nextMedicationDose,
+                                        appointment = nextAppointment,
+                                        healthConcern = nextHealthConcern,
+                                        careTask = nextCareTask
                                     ),
                                     onOpen = { destination ->
                                         appScreen = when (destination) {
