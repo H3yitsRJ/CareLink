@@ -50,6 +50,7 @@ import com.example.carelink.screens.ProfileScreen
 import com.example.carelink.screens.SettingsScreen
 import com.example.carelink.screens.CaregiverMedicationsScreen
 import com.example.carelink.screens.MedicationCaregiverAccessScreen
+import com.example.carelink.screens.MedicationScheduleScreen
 import com.example.carelink.ui.theme.CareLinkTheme
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseAuthInvalidUserException
@@ -77,7 +78,9 @@ private enum class AppScreen {
     CaregiverMedications,
     MedicationCaregiverAccess,
     Logout,
-    AddMedication
+    AddMedication,
+
+    MedicationScheduler
 }
 
 class MainActivity : ComponentActivity() {
@@ -350,6 +353,9 @@ class MainActivity : ComponentActivity() {
                                     onOpenCareHistory = {
                                         appScreen = AppScreen.CareHistory
                                     },
+                                    onMedicationScheduler = {
+                                        appScreen = AppScreen.MedicationScheduler
+                                    },
                                     successMessage =
                                         medicationSuccessMessage,
                                     onNavigate = ::openTopLevel
@@ -514,6 +520,10 @@ class MainActivity : ComponentActivity() {
                                         }
                                     }
                                 )
+                            }
+
+                            AppScreen.MedicationScheduler -> {
+                                MedicationScheduleScreen()
                             }
 
                             AppScreen.Appointments -> {
