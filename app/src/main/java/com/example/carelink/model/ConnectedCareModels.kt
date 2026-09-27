@@ -135,7 +135,7 @@ data class CareTask(
 
     fun toFirestore(): Map<String, Any?> = mapOf(
         "patientId" to patientId,
-        "title" to title,x`
+        "title" to title,
         "description" to description,
         "dueDate" to dueDate,
         "time" to time,

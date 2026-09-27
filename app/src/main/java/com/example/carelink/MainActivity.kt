@@ -63,6 +63,7 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseAuthInvalidUserException
 import com.google.firebase.firestore.FirebaseFirestore
 import navigation.BottomNavDestination
+import com.example.carelink.notifications.AppointmentReminderScheduler
 
 private enum class AuthScreen {
     SignIn,
@@ -91,6 +92,8 @@ private enum class AppScreen {
 
 class MainActivity : ComponentActivity() {
     private val medicationReminderScheduler by lazy { AndroidMedicationReminderScheduler(this) }
+
+    private val appointmentReminderScheduler by lazy { AppointmentReminderScheduler(this) }
 
     override fun onResume() {
         super.onResume()
@@ -203,6 +206,14 @@ class MainActivity : ComponentActivity() {
                                     id = document.id,
                                     data = document.data.orEmpty()
                                 )
+                            }
+
+                            appointments.forEach { appointment ->
+                                if (appointment.status == AppointmentStatus.SCHEDULED) {
+                                    appointmentReminderScheduler.schedule(appointment)
+                                } else {
+                                    appointmentReminderScheduler.cancel(appointment)
+                                }
                             }
 
                             appointmentsLoading = false
@@ -573,6 +584,7 @@ class MainActivity : ComponentActivity() {
                                                 .document(appointment.id)
                                                 .set(cancelledAppointment.toFirestore())
                                                 .addOnSuccessListener {
+                                                    appointmentReminderScheduler.cancel(cancelledAppointment)
                                                     selectedAppointment = cancelledAppointment
                                                     appointmentSuccessMessage =
                                                         "Appointment cancelled successfully."
@@ -622,6 +634,7 @@ class MainActivity : ComponentActivity() {
                                                 .document(appointmentId)
                                                 .set(appointmentToSave.toFirestore())
                                                 .addOnSuccessListener {
+                                                    appointmentReminderScheduler.schedule(appointmentToSave)
                                                     isSavingAppointment = false
                                                     selectedAppointment = null
                                                     appointmentSaveError = null
@@ -786,6 +799,7 @@ class MainActivity : ComponentActivity() {
 
                     else -> {
                         when (screen) {
+
                             AuthScreen.SignIn -> {
                                 LoginScreen(
                                     isSubmitting = isSubmitting,
@@ -889,6 +903,7 @@ class MainActivity : ComponentActivity() {
                                     }
                                 )
                             }
+
                         }
                     }
 

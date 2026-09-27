@@ -149,7 +149,7 @@ fun AppointmentsScreen(
                         if (pastAppointments.isNotEmpty()) {
                             item {
                                 SectionHeading(
-                                    title = "Past Appointments",
+                                    title = "Past and Cancelled Appointments",
                                     modifier = Modifier.padding(top = 12.dp)
                                 )
                             }

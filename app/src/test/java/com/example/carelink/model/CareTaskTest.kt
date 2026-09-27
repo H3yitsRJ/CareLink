@@ -15,7 +15,7 @@ class CareTaskTest {
         assertEquals(CareTaskStatus.PENDING, task.status)
         assertEquals("", task.description)
         assertEquals("", task.dueDate)
-        assertEquals("", task.dueTime)
+        assertEquals("", task.time)
         assertNull(task.appointmentId)
     }
 
