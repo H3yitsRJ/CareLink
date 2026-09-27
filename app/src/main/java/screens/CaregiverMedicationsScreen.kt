@@ -19,10 +19,10 @@ import com.google.firebase.firestore.FirebaseFirestore
 
 /** The same medication form is used for patient and caregiver edits. */
 @Composable
-fun CaregiverMedicationsScreen(actorId: String, onBack: () -> Unit, data: CaregiverMedicationData? = null) {
+fun CaregiverMedicationsScreen(actorId: String, onBack: () -> Unit, data: CaregiverMedicationData? = null, initialPatientId: String? = null) {
     val store = data ?: remember { MedicationCaregiverStore(FirebaseFirestore.getInstance()) }
     var patientInput by rememberSaveable { mutableStateOf("") }
-    var patientId by remember { mutableStateOf<String?>(null) }
+    var patientId by remember { mutableStateOf(initialPatientId) }
     var patientName by remember { mutableStateOf("") }
     var access by remember { mutableStateOf<CaregiverAccess?>(null) }
     var medications by remember { mutableStateOf<List<Medication>>(emptyList()) }
@@ -47,7 +47,9 @@ fun CaregiverMedicationsScreen(actorId: String, onBack: () -> Unit, data: Caregi
         val patient = patientId
         if (patient == null) return@DisposableEffect onDispose { }
         loading = true
+        var active = true
         val stop = store.watchAccess(patient, actorId) { latest, name, online ->
+            if (!active) return@watchAccess
             connected = online
             access = if (connected) latest else null
             patientName = if (connected && latest?.allows(CarePermission.VIEW) == true) name else ""
@@ -62,13 +64,15 @@ fun CaregiverMedicationsScreen(actorId: String, onBack: () -> Unit, data: Caregi
                     else "Medication access is unavailable or has been revoked. Ask the patient to grant access."
             }
         }
-        onDispose { stop() }
+        onDispose { active = false; stop() }
     }
     DisposableEffect(patientId, access?.allows(CarePermission.VIEW), retry) {
         val patient = patientId
         if (patient == null || access?.allows(CarePermission.VIEW) != true) return@DisposableEffect onDispose { }
         loading = true
+        var active = true
         val stop = store.watchMedications(patient) { latest, failure ->
+            if (!active) return@watchMedications
             loading = false
             if (failure != null || latest == null) {
                 medications = emptyList()
@@ -82,7 +86,7 @@ fun CaregiverMedicationsScreen(actorId: String, onBack: () -> Unit, data: Caregi
                 error = null
             }
         }
-        onDispose { stop() }
+        onDispose { active = false; stop() }
     }
 
     Column(Modifier.fillMaxSize().safeDrawingPadding()) {
@@ -120,6 +124,7 @@ fun CaregiverMedicationsScreen(actorId: String, onBack: () -> Unit, data: Caregi
             }
             else -> Column(Modifier.verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text("Caregiver medications", style = MaterialTheme.typography.headlineMedium)
+                if (initialPatientId == null) {
                 OutlinedTextField(patientInput, { patientInput = it }, label = { Text("Patient CareLink ID") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
                 Button(onClick = {
                     val candidate = patientInput.trim()
@@ -130,6 +135,7 @@ fun CaregiverMedicationsScreen(actorId: String, onBack: () -> Unit, data: Caregi
                         patientId = candidate; retry++
                     }
                 }, enabled = !loading && !saving, modifier = Modifier.fillMaxWidth()) { Text("Open patient medications") }
+                }
                 if (loading) Text("Loading medications")
                 if (error != null) StateMessage(error!!, true)
                 if (access?.allows(CarePermission.VIEW) == true && !loading) {

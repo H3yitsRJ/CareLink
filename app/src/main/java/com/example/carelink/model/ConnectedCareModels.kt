@@ -124,18 +124,18 @@ data class CareTask(
     val id: String,
     val patientId: String,
     val title: String,
-    val dueDate: String = "",
-    val completed: Boolean = false,
-    val appointmentId: String? = null,
     val description: String = "",
-    val time: String = ""
+    val dueDate: String = "",
+    val time: String = "",
+    val completed: Boolean = false,
+    val appointmentId: String? = null
 ) {
     val status: CareTaskStatus
         get() = if (completed) CareTaskStatus.COMPLETED else CareTaskStatus.PENDING
 
     fun toFirestore(): Map<String, Any?> = mapOf(
         "patientId" to patientId,
-        "title" to title,
+        "title" to title,x`
         "description" to description,
         "dueDate" to dueDate,
         "time" to time,

@@ -19,7 +19,11 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import com.example.carelink.model.Appointment
+import androidx.compose.foundation.layout.statusBarsPadding
 
 @Composable
 fun AddEditAppointmentScreen(
@@ -29,26 +33,28 @@ fun AddEditAppointmentScreen(
     onSave: (Appointment) -> Unit = {},
     onCancel: () -> Unit = {}
 ) {
-    var title by rememberSaveable { mutableStateOf(appointment?.title ?: "") }
-    var provider by rememberSaveable { mutableStateOf(appointment?.provider ?: "") }
-    var date by rememberSaveable { mutableStateOf(appointment?.date ?: "") }
-    var time by rememberSaveable { mutableStateOf(appointment?.time ?: "") }
-    var location by rememberSaveable { mutableStateOf(appointment?.location ?: "") }
-    var notes by rememberSaveable { mutableStateOf(appointment?.notes ?: "") }
-    var attemptedSave by rememberSaveable { mutableStateOf(false) }
+    var title by rememberSaveable(appointment?.id) { mutableStateOf(appointment?.title.orEmpty()) }
+    var provider by rememberSaveable(appointment?.id) { mutableStateOf(appointment?.provider.orEmpty()) }
+    var date by rememberSaveable(appointment?.id) { mutableStateOf(appointment?.date.orEmpty()) }
+    var time by rememberSaveable(appointment?.id) { mutableStateOf(appointment?.time.orEmpty()) }
+    var location by rememberSaveable(appointment?.id) { mutableStateOf(appointment?.location.orEmpty()) }
+    var notes by rememberSaveable(appointment?.id) { mutableStateOf(appointment?.notes.orEmpty()) }
+    var attemptedSave by rememberSaveable(appointment?.id) { mutableStateOf(false) }
+
     val titleError = attemptedSave && title.isBlank()
-    val dateError = attemptedSave && date.isBlank()
-    val timeError = attemptedSave && time.isBlank()
+    val dateError = if (attemptedSave) appointmentDateError(date) else null
+    val timeError = attemptedSave && !isValidTime(time.trim())
 
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .statusBarsPadding()
             .verticalScroll(rememberScrollState())
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         Text(
-            text = if   (appointment == null) {
+            text = if (appointment == null) {
                 "Add appointment"
             } else {
                 "Edit appointment"
@@ -86,10 +92,10 @@ fun AddEditAppointmentScreen(
             placeholder = { Text("YYYY-MM-DD") },
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
-            isError = dateError,
+            isError = dateError != null,
             supportingText = {
-                if (dateError) {
-                    Text("Use a valid date in YYYY-MM-DD format")
+                if (dateError != null) {
+                    Text(dateError)
                 }
             },
             shape = RoundedCornerShape(12.dp)
@@ -139,8 +145,8 @@ fun AddEditAppointmentScreen(
 
                 if (
                     title.isNotBlank() &&
-                    date.isNotBlank() &&
-                    time.isNotBlank()
+                    appointmentDateError(date) == null &&
+                    isValidTime(time.trim())
                 ) {
                     onSave(
                         Appointment (
@@ -181,6 +187,18 @@ fun AddEditAppointmentScreen(
     }
 }
 
+internal fun appointmentDateError(
+    value: String,
+    today: String = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
+): String? {
+    val date = value.trim()
+    return when {
+        !isValidDate(date) -> "Use a valid date in YYYY-MM-DD format"
+        date < today -> "Choose today or a future date"
+        else -> null
+    }
+}
+
 private fun isValidDate(value: String): Boolean {
     if (!Regex("""\d{4}-\d{2}-\d{2}""").matches(value)) {
         return false
@@ -214,6 +232,6 @@ private fun isValidDate(value: String): Boolean {
     return day in 1..daysInMonth
 }
 
-private fun isValidTime(value: String): Boolean {
+internal fun isValidTime(value: String): Boolean {
     return Regex("""([01]\d|2[0-3]):[0-5]\d""").matches(value)
 }
