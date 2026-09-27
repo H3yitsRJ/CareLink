@@ -59,15 +59,66 @@ data class Appointment(
 enum class ConcernSeverity { LOW, MEDIUM, HIGH }
 enum class ConcernStatus { ACTIVE, DISCUSSED }
 
+/**
+ * A care recipient's recorded health concern.
+ *
+ * Required: [id] (Firestore document ID), [patientId] (owner), [title], [description],
+ * [severity], and [recordedDate] (YYYY-MM-DD). Required text must be nonblank when read.
+ * [status] defaults to ACTIVE for new concerns and documents without a status field.
+ * [appointmentId] is optional; null means the concern is not linked to an appointment.
+ * Severity and status are stored as the exact enum names defined above.
+ * The document ID is supplied separately on read and is not duplicated in document data.
+ */
 data class HealthConcern(
-    val id: String, val patientId: String, val title: String, val severity: ConcernSeverity,
-    val recordedDate: String, val status: ConcernStatus = ConcernStatus.ACTIVE
-)
+    val id: String,
+    val patientId: String,
+    val title: String,
+    val severity: ConcernSeverity,
+    val recordedDate: String,
+    val description: String,
+    val status: ConcernStatus = ConcernStatus.ACTIVE,
+    val appointmentId: String? = null
+) {
+    fun toFirestore(): Map<String, Any?> = mapOf(
+        "patientId" to patientId,
+        "title" to title,
+        "description" to description,
+        "severity" to severity.name,
+        "recordedDate" to recordedDate,
+        "status" to status.name,
+        "appointmentId" to appointmentId
+    )
+
+    companion object {
+        /**
+         * Returns null for missing/invalid required fields or unsupported enum values,
+         * rather than inventing a severity or silently changing a recorded status.
+         * Missing, null, blank, or wrongly typed optional appointment IDs become null.
+         */
+        fun fromFirestore(id: String, data: Map<String, Any?>): HealthConcern? {
+            if (id.isBlank()) return null
+            fun requiredText(key: String) = (data[key] as? String)?.takeIf { it.isNotBlank() }
+            val severity = ConcernSeverity.entries.find { it.name == data["severity"] } ?: return null
+            val status = if (!data.containsKey("status")) ConcernStatus.ACTIVE
+                else ConcernStatus.entries.find { it.name == data["status"] } ?: return null
+            return HealthConcern(
+                id = id,
+                patientId = requiredText("patientId") ?: return null,
+                title = requiredText("title") ?: return null,
+                description = (data["description"] as? String).orEmpty(),
+                severity = severity,
+                recordedDate = requiredText("recordedDate") ?: return null,
+                status = status,
+                appointmentId = (data["appointmentId"] as? String)?.takeIf { it.isNotBlank() }
+            )
+        }
+    }
+}
 
 enum class CareTaskStatus { PENDING, COMPLETED }
 
 // Required: id, patientId, and title.
-// Optional: description, dueDate, dueTime, and appointmentId.
+// Optional: description, dueDate, time, and appointmentId.
 // A new task starts pending unless completed is explicitly set.
 data class CareTask(
     val id: String,
@@ -77,7 +128,7 @@ data class CareTask(
     val completed: Boolean = false,
     val appointmentId: String? = null,
     val description: String = "",
-    val dueTime: String = ""
+    val time: String = ""
 ) {
     val status: CareTaskStatus
         get() = if (completed) CareTaskStatus.COMPLETED else CareTaskStatus.PENDING
@@ -87,7 +138,7 @@ data class CareTask(
         "title" to title,
         "description" to description,
         "dueDate" to dueDate,
-        "dueTime" to dueTime,
+        "time" to time,
         "completed" to completed,
         "status" to status.name,
         "appointmentId" to appointmentId
@@ -98,7 +149,7 @@ data class CareTask(
             val patientId = data["patientId"] as? String ?: return null
             val title = data["title"] as? String ?: return null
 
-            // Existing records may have "completed" but no "status".
+            // Older records may have "completed" but no "status".
             val completed = when (data["status"] as? String) {
                 CareTaskStatus.COMPLETED.name -> true
                 CareTaskStatus.PENDING.name -> false
@@ -113,77 +164,40 @@ data class CareTask(
                 completed = completed,
                 appointmentId = data["appointmentId"] as? String,
                 description = data["description"] as? String ?: "",
-                dueTime = data["dueTime"] as? String ?: ""
+                time = data["time"] as? String
+                    ?: data["dueTime"] as? String
+                    ?: ""
             )
         }
     }
 }
 
-enum class InvitationStatus(val firestoreValue: String) {
-    PENDING("pending"), ACCEPTED("accepted"), DECLINED("declined"), REVOKED("revoked")
-}
+    enum class InvitationStatus(val firestoreValue: String) {
+        PENDING("pending"), ACCEPTED("accepted"), DECLINED("declined"), REVOKED("revoked")
+    }
 
-// Invitations expire even if nobody explicitly declines them.
-data class CaregiverInvitation(
-    val id: String, val senderId: String, val recipientEmail: String, val patientId: String,
-    val status: InvitationStatus, val expiresAtMillis: Long
-) {
-    fun isExpired(nowMillis: Long = System.currentTimeMillis()) = nowMillis >= expiresAtMillis
-    fun toFirestore(): Map<String, Any> = mapOf(
-        "senderId" to senderId, "recipientEmail" to recipientEmail, "patientId" to patientId,
-        "status" to status.firestoreValue, "expiresAtMillis" to expiresAtMillis
-    )
+    // Invitations expire even if nobody explicitly declines them.
+    data class CaregiverInvitation(
+        val id: String, val senderId: String, val recipientEmail: String, val patientId: String,
+        val status: InvitationStatus, val expiresAtMillis: Long
+    ) {
+        fun isExpired(nowMillis: Long = System.currentTimeMillis()) = nowMillis >= expiresAtMillis
+        fun toFirestore(): Map<String, Any> = mapOf(
+            "senderId" to senderId, "recipientEmail" to recipientEmail, "patientId" to patientId,
+            "status" to status.firestoreValue, "expiresAtMillis" to expiresAtMillis
+        )
 
-    companion object {
-        fun fromFirestore(id: String, data: Map<String, Any?>): CaregiverInvitation? {
-            val status = InvitationStatus.entries.firstOrNull { it.firestoreValue == data["status"] } ?: return null
-            return CaregiverInvitation(
-                id, data["senderId"] as? String ?: return null,
-                data["recipientEmail"] as? String ?: return null,
-                data["patientId"] as? String ?: return null, status,
-                (data["expiresAtMillis"] as? Number)?.toLong() ?: return null
-            )
+        companion object {
+            fun fromFirestore(id: String, data: Map<String, Any?>): CaregiverInvitation? {
+                val status =
+                    InvitationStatus.entries.firstOrNull { it.firestoreValue == data["status"] }
+                        ?: return null
+                return CaregiverInvitation(
+                    id, data["senderId"] as? String ?: return null,
+                    data["recipientEmail"] as? String ?: return null,
+                    data["patientId"] as? String ?: return null, status,
+                    (data["expiresAtMillis"] as? Number)?.toLong() ?: return null
+                )
+            }
         }
     }
-}
-
-enum class CarePermission { VIEW, ADD, EDIT, DELETE, RECORD_DOSE, RECEIVE_REMINDERS }
-
-// Access is kept as a set of small permissions so the patient does not have to grant everything.
-data class CaregiverAccess(
-    val id: String, val patientId: String, val caregiverId: String,
-    val permissions: Set<CarePermission>, val revoked: Boolean = false
-) {
-    fun allows(permission: CarePermission) = !revoked && permission in permissions
-}
-
-enum class CareActivityType { MEDICATION, APPOINTMENT, HEALTH_CONCERN, CARE_TASK, CAREGIVER_ACCESS }
-
-data class CareHistoryEntry(
-    val id: String, val patientId: String, val occurredAtMillis: Long,
-    val type: CareActivityType, val summary: String
-)
-
-// Filtering is plain Kotlin so it can be tested without Compose or Firebase.
-data class CareHistoryFilter(
-    val startMillis: Long? = null, val endMillis: Long? = null,
-    val types: Set<CareActivityType> = emptySet()
-) {
-    fun validate(): String? = if (startMillis != null && endMillis != null && startMillis > endMillis) "Start date must be before end date" else null
-    fun apply(entries: List<CareHistoryEntry>): List<CareHistoryEntry> {
-        require(validate() == null) { validate()!! }
-        return entries.filter { entry ->
-            (startMillis == null || entry.occurredAtMillis >= startMillis) &&
-                (endMillis == null || entry.occurredAtMillis <= endMillis) &&
-                (types.isEmpty() || entry.type in types)
-        }
-    }
-}
-
-enum class RefillRequestStatus { REQUESTED, PROCESSING, COMPLETED, CANCELLED }
-
-data class RefillRequest(
-    val id: String, val patientId: String, val medicationId: String,
-    val requestedById: String, val note: String = "",
-    val status: RefillRequestStatus = RefillRequestStatus.REQUESTED
-)
