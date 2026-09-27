@@ -7,11 +7,19 @@ import java.util.Locale
 internal object MedicationSchedule {
     fun validTime(time: String) = Regex("^(?:[01]\\d|2[0-3]):[0-5]\\d$").matches(time)
 
-    fun requiredTimes(frequency: String): Int? = when (frequency.trim().lowercase(Locale.ROOT)) {
-        "once daily", "once a day" -> 1
-        "twice daily", "twice a day" -> 2
-        "three times daily", "3 times daily" -> 3
-        "four times daily", "4 times daily" -> 4
+    fun requiredTimes(frequency: String): Int? = when (
+        frequency.trim().lowercase(Locale.ROOT)
+    ) {
+        "once daily", "once a day", "1 time daily", "1 time a day" -> 1
+
+        "twice daily", "twice a day", "2 times daily", "2 times a day" -> 2
+
+        "three times daily", "three times a day",
+        "3 times daily", "3 times a day" -> 3
+
+        "four times daily", "four times a day",
+        "4 times daily", "4 times a day" -> 4
+
         else -> null
     }
 

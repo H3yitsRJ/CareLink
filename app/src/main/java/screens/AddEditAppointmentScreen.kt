@@ -24,6 +24,13 @@ import java.util.Date
 import java.util.Locale
 import com.example.carelink.model.Appointment
 import androidx.compose.foundation.layout.statusBarsPadding
+import android.app.DatePickerDialog
+import android.app.TimePickerDialog
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
+import androidx.compose.ui.platform.LocalContext
+import java.util.Calendar
+
 
 @Composable
 fun AddEditAppointmentScreen(
@@ -40,6 +47,47 @@ fun AddEditAppointmentScreen(
     var location by rememberSaveable(appointment?.id) { mutableStateOf(appointment?.location.orEmpty()) }
     var notes by rememberSaveable(appointment?.id) { mutableStateOf(appointment?.notes.orEmpty()) }
     var attemptedSave by rememberSaveable(appointment?.id) { mutableStateOf(false) }
+    val context = LocalContext.current
+    val calendar = Calendar.getInstance()
+
+    fun showDatePicker() {
+        DatePickerDialog(
+            context,
+            { _, year, month, dayOfMonth ->
+                date = String.format(
+                    Locale.US,
+                    "%04d-%02d-%02d",
+                    year,
+                    month + 1,
+                    dayOfMonth
+                )
+            },
+            calendar.get(Calendar.YEAR),
+            calendar.get(Calendar.MONTH),
+            calendar.get(Calendar.DAY_OF_MONTH)
+        ).apply {
+            datePicker.minDate = System.currentTimeMillis()
+        }.show()
+    }
+
+    fun showTimePicker() {
+        val calendar = Calendar.getInstance()
+
+        TimePickerDialog(
+            context,
+            { _, hourOfDay, minute ->
+                time = String.format(
+                    Locale.US,
+                    "%02d:%02d",
+                    hourOfDay,
+                    minute
+                )
+            },
+            calendar.get(Calendar.HOUR_OF_DAY),
+            calendar.get(Calendar.MINUTE),
+            false
+        ).show()
+    }
 
     val titleError = attemptedSave && title.isBlank()
     val dateError = if (attemptedSave) appointmentDateError(date) else null
@@ -85,37 +133,57 @@ fun AddEditAppointmentScreen(
             shape = RoundedCornerShape(12.dp)
         )
 
-        OutlinedTextField(
-            value = date,
-            onValueChange = { date = it },
-            label = { Text("Date") },
-            placeholder = { Text("YYYY-MM-DD") },
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true,
-            isError = dateError != null,
-            supportingText = {
-                if (dateError != null) {
-                    Text(dateError)
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable {
+                    showDatePicker()
                 }
-            },
-            shape = RoundedCornerShape(12.dp)
-        )
-
-        OutlinedTextField(
-            value = time,
-            onValueChange = { time = it },
-            label = { Text("Time") },
-            placeholder = { Text("HH:MM") },
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true,
-            isError = timeError,
-            supportingText = {
-                if (timeError) {
-                    Text("Use 24-hour time in HH:MM format")
+        ) {
+            OutlinedTextField(
+                value = date,
+                onValueChange = {},
+                label = { Text("Date") },
+                placeholder = { Text("YYYY-MM-DD") },
+                modifier = Modifier
+                    .fillMaxWidth(),
+                singleLine = true,
+                readOnly = true,
+                enabled = false,
+                isError = dateError != null,
+                supportingText = {
+                    if (dateError != null) {
+                        Text(dateError)
+                    }
+                },
+                shape = RoundedCornerShape(12.dp)
+            )
+        }
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable {
+                    showTimePicker()
                 }
-            },
-            shape = RoundedCornerShape(12.dp)
-        )
+        ) {
+            OutlinedTextField(
+                value = time,
+                onValueChange = {},
+                label = { Text("Time") },
+                placeholder = { Text("HH:MM") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                readOnly = true,
+                enabled = false,
+                isError = timeError,
+                supportingText = {
+                    if (timeError) {
+                        Text("Enter a valid time (HH:MM)")
+                    }
+                },
+                shape = RoundedCornerShape(12.dp)
+            )
+        }
 
         OutlinedTextField(
             value = location,
