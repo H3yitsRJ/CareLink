@@ -64,27 +64,56 @@ data class HealthConcern(
     val recordedDate: String, val status: ConcernStatus = ConcernStatus.ACTIVE
 )
 
-// appointmentId is optional because some care tasks start from an appointment and others do not.
+enum class CareTaskStatus { PENDING, COMPLETED }
+
+// Required: id, patientId, and title.
+// Optional: description, dueDate, dueTime, and appointmentId.
+// A new task starts pending unless completed is explicitly set.
 data class CareTask(
-    val id: String, val patientId: String, val title: String, val dueDate: String = "",
-    val completed: Boolean = false, val appointmentId: String? = null
+    val id: String,
+    val patientId: String,
+    val title: String,
+    val dueDate: String = "",
+    val completed: Boolean = false,
+    val appointmentId: String? = null,
+    val description: String = "",
+    val dueTime: String = ""
 ) {
+    val status: CareTaskStatus
+        get() = if (completed) CareTaskStatus.COMPLETED else CareTaskStatus.PENDING
+
     fun toFirestore(): Map<String, Any?> = mapOf(
-        "patientId" to patientId, "title" to title, "dueDate" to dueDate,
-        "completed" to completed, "appointmentId" to appointmentId
+        "patientId" to patientId,
+        "title" to title,
+        "description" to description,
+        "dueDate" to dueDate,
+        "dueTime" to dueTime,
+        "completed" to completed,
+        "status" to status.name,
+        "appointmentId" to appointmentId
     )
 
     companion object {
         fun fromFirestore(id: String, data: Map<String, Any?>): CareTask? {
             val patientId = data["patientId"] as? String ?: return null
             val title = data["title"] as? String ?: return null
+
+            // Existing records may have "completed" but no "status".
+            val completed = when (data["status"] as? String) {
+                CareTaskStatus.COMPLETED.name -> true
+                CareTaskStatus.PENDING.name -> false
+                else -> data["completed"] as? Boolean ?: false
+            }
+
             return CareTask(
                 id = id,
                 patientId = patientId,
                 title = title,
                 dueDate = data["dueDate"] as? String ?: "",
-                completed = data["completed"] as? Boolean ?: false,
-                appointmentId = data["appointmentId"] as? String
+                completed = completed,
+                appointmentId = data["appointmentId"] as? String,
+                description = data["description"] as? String ?: "",
+                dueTime = data["dueTime"] as? String ?: ""
             )
         }
     }
