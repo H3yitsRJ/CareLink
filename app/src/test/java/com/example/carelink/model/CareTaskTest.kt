@@ -29,7 +29,7 @@ class CareTaskTest {
             completed = true,
             appointmentId = "appointment-1",
             description = "Call the caregiver",
-            dueTime = "09:30"
+            time = "09:30"
         )
 
         val stored = original.toFirestore()
