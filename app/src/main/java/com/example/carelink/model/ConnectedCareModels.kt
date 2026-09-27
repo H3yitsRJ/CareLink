@@ -115,7 +115,11 @@ data class HealthConcern(
     }
 }
 
-// appointmentId is optional because some care tasks start from an appointment and others do not.
+enum class CareTaskStatus { PENDING, COMPLETED }
+
+// Required: id, patientId, and title.
+// Optional: description, dueDate, time, and appointmentId.
+// A new task starts pending unless completed is explicitly set.
 data class CareTask(
     val id: String,
     val patientId: String,
@@ -126,13 +130,17 @@ data class CareTask(
     val completed: Boolean = false,
     val appointmentId: String? = null
 ) {
+    val status: CareTaskStatus
+        get() = if (completed) CareTaskStatus.COMPLETED else CareTaskStatus.PENDING
+
     fun toFirestore(): Map<String, Any?> = mapOf(
         "patientId" to patientId,
-        "title" to title,
+        "title" to title,x`
         "description" to description,
         "dueDate" to dueDate,
         "time" to time,
         "completed" to completed,
+        "status" to status.name,
         "appointmentId" to appointmentId
     )
 
@@ -141,18 +149,28 @@ data class CareTask(
             val patientId = data["patientId"] as? String ?: return null
             val title = data["title"] as? String ?: return null
 
+            // Older records may have "completed" but no "status".
+            val completed = when (data["status"] as? String) {
+                CareTaskStatus.COMPLETED.name -> true
+                CareTaskStatus.PENDING.name -> false
+                else -> data["completed"] as? Boolean ?: false
+            }
+
             return CareTask(
                 id = id,
                 patientId = patientId,
                 title = title,
-                description = data["description"] as? String ?: "",
                 dueDate = data["dueDate"] as? String ?: "",
-                time = data["time"] as? String ?: "",
-                completed = data["completed"] as? Boolean ?: false,
-                appointmentId = data["appointmentId"] as? String
+                completed = completed,
+                appointmentId = data["appointmentId"] as? String,
+                description = data["description"] as? String ?: "",
+                time = data["time"] as? String
+                    ?: data["dueTime"] as? String
+                    ?: ""
             )
         }
     }
+}
 
     enum class InvitationStatus(val firestoreValue: String) {
         PENDING("pending"), ACCEPTED("accepted"), DECLINED("declined"), REVOKED("revoked")
@@ -183,7 +201,3 @@ data class CareTask(
             }
         }
     }
-}
-
-
-
