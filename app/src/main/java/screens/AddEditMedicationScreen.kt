@@ -35,6 +35,11 @@ import com.example.carelink.model.Medication
 import androidx.compose.foundation.layout.Row
 import androidx.compose.material3.AlertDialog
 import com.example.carelink.notifications.MedicationSchedule
+import android.app.TimePickerDialog
+import androidx.compose.foundation.clickable
+import androidx.compose.ui.platform.LocalContext
+import java.util.Calendar
+import androidx.compose.foundation.layout.Box
 
 
 
@@ -73,6 +78,14 @@ fun AddEditMedicationScreen(
     canSave: Boolean = true,
     canDelete: Boolean = true
 ) {
+    val context = LocalContext.current
+    val calendar = Calendar.getInstance()
+    val frequencyOptions = arrayOf(
+        "Once daily",
+        "Twice daily",
+        "3 times daily",
+        "4 times daily"
+    )
     // Saveable state keeps entered values through rotation and process recreation.
     var name by rememberSaveable(medication?.id) { mutableStateOf(medication?.name.orEmpty()) }
     var strength by rememberSaveable(medication?.id) { mutableStateOf(medication?.strength.orEmpty()) }
@@ -82,6 +95,37 @@ fun AddEditMedicationScreen(
     var instructions by rememberSaveable(medication?.id) { mutableStateOf(medication?.instructions.orEmpty()) }
     var attemptedSave by rememberSaveable { mutableStateOf(false) }
     var showDeleteDialog by rememberSaveable { mutableStateOf(false) }
+    fun showFrequencyPicker() {
+        android.app.AlertDialog.Builder(context)
+            .setTitle("Select frequency")
+            .setItems(frequencyOptions) { _, which ->
+                frequency = frequencyOptions[which]
+                reminderTime = ""
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+    fun showTimePicker() {
+        TimePickerDialog(
+            context,
+            { _, hourOfDay, minute ->
+                val selectedTime = String.format(
+                    "%02d:%02d",
+                    hourOfDay,
+                    minute
+                )
+
+                reminderTime = if (reminderTime.isBlank()) {
+                    selectedTime
+                } else {
+                    "$reminderTime, $selectedTime"
+                }
+            },
+            calendar.get(Calendar.HOUR_OF_DAY),
+            calendar.get(Calendar.MINUTE),
+            false
+        ).show()
+    }
     val errors = remember(name, strength, dose, frequency, reminderTime, attemptedSave) {
         if (attemptedSave) validateMedicationEditor(name, strength, dose, frequency, reminderTime) else MedicationEditorErrors()
     }
@@ -137,8 +181,22 @@ fun AddEditMedicationScreen(
             }
         }
         MedicationFormCard("Schedule") {
-            MedicationField(frequency, { frequency = it }, "Frequency", errors.frequency)
-            MedicationField(reminderTime, { reminderTime = it }, "Reminder times (24-hour)", errors.reminderTime)
+            MedicationField(
+                value = frequency,
+                onValueChange = { },
+                label = "Frequency",
+                error = errors.frequency,
+                readOnly = true,
+                onClick = { showFrequencyPicker() }
+            )
+            MedicationField(
+                value = reminderTime,
+                onValueChange = { },
+                label = "Reminder times",
+                error = errors.reminderTime,
+                readOnly = true,
+                onClick = { showTimePicker() }
+            )
         }
         MedicationFormCard("Instructions") {
             OutlinedTextField(
@@ -222,21 +280,34 @@ private fun MedicationField(
     label: String,
     error: String?,
     keyboardType: KeyboardType = KeyboardType.Text,
+    readOnly: Boolean = false,
+    onClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier.fillMaxWidth()
 ) {
-    OutlinedTextField(
-        value = value,
-        onValueChange = onValueChange,
-        label = { Text(label) },
-        isError = error != null,
-        supportingText = error?.let { message ->
-            { Text(message) }
-        },
-        keyboardOptions = KeyboardOptions(
-            keyboardType = keyboardType
-        ),
-        singleLine = true,
-        modifier = modifier,
-        shape = RoundedCornerShape(12.dp)
-    )
+    Box(
+        modifier = modifier.clickable(
+            enabled = onClick != null
+        ) {
+            onClick?.invoke()
+        }
+    ) {
+        OutlinedTextField(
+            value = value,
+            onValueChange = onValueChange,
+            readOnly = readOnly,
+            label = { Text(label) },
+            isError = error != null,
+            supportingText = error?.let { message ->
+                { Text(message) }
+            },
+            keyboardOptions = KeyboardOptions(
+                keyboardType = keyboardType
+            ),
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth(),
+            enabled = onClick == null,
+            shape = RoundedCornerShape(12.dp)
+        )
+    }
 }
+
