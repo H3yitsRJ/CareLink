@@ -10,6 +10,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.Column
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.TextButton
@@ -29,6 +30,8 @@ import com.example.carelink.data.FirestoreCareRecipientDirectory
 import com.example.carelink.model.Appointment
 import com.example.carelink.model.AppointmentStatus
 import com.example.carelink.model.Medication
+import com.example.carelink.model.CareActivityType
+import com.example.carelink.model.CareHistoryEntry
 import com.example.carelink.notifications.AndroidMedicationReminderScheduler
 import com.example.carelink.notifications.NotificationPermissionManager
 import com.example.carelink.screens.AddEditMedicationScreen
@@ -40,6 +43,7 @@ import com.example.carelink.screens.CareTasksScreen
 import com.example.carelink.screens.HealthConcernsFlow
 import com.example.carelink.data.FirestoreHealthConcernRepository
 import com.example.carelink.screens.CareTasksFlow
+import com.example.carelink.screens.CareRecipientSelector
 import com.example.carelink.data.FirestoreCareTaskRepository
 import com.example.carelink.data.MedicationCaregiverStore
 import com.example.carelink.notifications.MedicationReminderScheduler
@@ -73,8 +77,10 @@ private enum class AuthScreen {
 
 private enum class AppScreen {
     Home,
+    HealthConcerns,
     Medications,
     MedicationDetails,
+    CareHistory,
     Appointments,
     AppointmentDetails,
     AddAppointment,
@@ -361,6 +367,7 @@ class MainActivity : ComponentActivity() {
                                         appScreen = when (destination) {
                                             "medications" -> AppScreen.Medications
                                             "appointments" -> AppScreen.Appointments
+                                            "health-concerns" -> AppScreen.HealthConcerns
                                             "care-tasks" -> AppScreen.CareTasks
                                             else -> AppScreen.Home
                                         }
@@ -369,12 +376,74 @@ class MainActivity : ComponentActivity() {
                                 )
                             }
 
+                            AppScreen.HealthConcerns -> {
+                                val actorId = auth.currentUser?.uid
+
+                                if (actorId != null) {
+                                    var caregiverMode by rememberSaveable(actorId) {
+                                        mutableStateOf(false)
+                                    }
+
+                                    if (caregiverMode) {
+                                        CareRecipientSelector(
+                                            actorId = actorId,
+                                            selectedPatientId = selectedCareRecipient,
+                                            onSelect = {
+                                                selectedCareRecipient = it
+                                            },
+                                            directory = recipientDirectory,
+                                            medicationData = caregiverMedicationData,
+                                            onBack = {
+                                                caregiverMode = false
+                                            },
+                                            content = { patientId ->
+                                                HealthConcernsFlow(
+                                                    patientId = patientId,
+                                                    repository = healthConcernRepository,
+                                                    onBack = {
+                                                        caregiverMode = false
+                                                    }
+                                                )
+                                            }
+                                        )
+                                    } else {
+                                        Column {
+                                            TextButton(
+                                                onClick = {
+                                                    caregiverMode = true
+                                                }
+                                            ) {
+                                                Text("Care recipient health concerns")
+                                            }
+
+                                            androidx.compose.foundation.layout.Box(
+                                                modifier = Modifier.weight(1f)
+                                            ) {
+                                                HealthConcernsFlow(
+                                                    patientId = actorId,
+                                                    repository = healthConcernRepository,
+                                                    onBack = {
+                                                        appScreen = AppScreen.Home
+                                                    }
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
                             AppScreen.Medications -> {
                                 MedicationsScreen(
-                                    onCaregiverMedications = { appScreen = AppScreen.CaregiverMedications },
+                                    onCaregiverMedications = {
+                                        appScreen = AppScreen.CaregiverMedications },
+                                    onOpenCareHistory = {
+                                        appScreen = AppScreen.CareHistory
+                                    },
                                     onAddMedication = {
                                         selectedMedication = null
                                         medicationSuccessMessage = null
+                                        doseMessage = null
+                                        doseError = null
                                         appScreen = AppScreen.AddMedication
                                     },
                                     onMedicationSelected = {
@@ -396,6 +465,44 @@ class MainActivity : ComponentActivity() {
                                 MedicationDetailsScreen(
                                     medication = selectedMedication,
                                     errorMessage = medicationSaveError,
+                                    isSavingDose = isSavingDose,
+                                    doseMessage = doseMessage,
+                                    doseError = doseError,
+                                    onRecordDose = { medication, scheduledTime, status ->
+                                        val user = auth.currentUser
+
+                                        if (user == null) {
+                                            doseMessage = null
+                                            doseError = "Sign in to record a dose."
+                                        } else if (!isSavingDose) {
+                                            isSavingDose = true
+                                            doseMessage = null
+                                            doseError = null
+
+                                            doseHistoryStore.record(
+                                                patientId = user.uid,
+                                                medication = medication,
+                                                scheduledTimeMillis = scheduledTime,
+                                                status = status,
+                                                onComplete = { result ->
+                                                    isSavingDose = false
+
+                                                    result.fold(
+                                                        onSuccess = {
+                                                            val statusLabel = status.name.lowercase()
+                                                            doseMessage = "Dose recorded as $statusLabel."
+                                                            doseError = null
+                                                        },
+                                                        onFailure = {
+                                                            doseMessage = null
+                                                            doseError =
+                                                                "We couldn't record the dose. Please try again."
+                                                        }
+                                                    )
+                                                }
+                                            )
+                                        }
+                                    },
                                     onEdit = { medication ->
                                         selectedMedication = medication
                                         medicationSaveError = null
@@ -428,6 +535,71 @@ class MainActivity : ComponentActivity() {
                                         appScreen = AppScreen.Medications
                                     },
                                     onNavigate = ::openTopLevel
+                                )
+                            }
+
+                            AppScreen.CareHistory -> {
+                                val patientId = auth.currentUser?.uid.orEmpty()
+
+                                var historyEntries by remember(patientId) {
+                                    mutableStateOf<List<CareHistoryEntry>>(emptyList())
+                                }
+                                var historyLoading by remember(patientId) {
+                                    mutableStateOf(true)
+                                }
+                                var historyError by remember(patientId) {
+                                    mutableStateOf<String?>(null)
+                                }
+                                var historyRetry by remember(patientId) {
+                                    mutableStateOf(0)
+                                }
+
+                                DisposableEffect(patientId, historyRetry) {
+                                    var active = true
+                                    historyLoading = true
+                                    historyError = null
+
+                                    doseHistoryStore.load(patientId) { result ->
+                                        if (active) {
+                                            historyLoading = false
+
+                                            result.fold(
+                                                onSuccess = { items ->
+                                                    historyEntries = items.map { item ->
+                                                        CareHistoryEntry(
+                                                            id = item.record.id,
+                                                            patientId = patientId,
+                                                            occurredAtMillis =
+                                                                item.record.scheduledTimeMillis,
+                                                            type = CareActivityType.MEDICATION,
+                                                            summary =
+                                                                "${item.medicationName} • ${item.dosage} • " +
+                                                                        item.record.status.name.lowercase()
+                                                                            .replaceFirstChar(Char::uppercase)
+                                                        )
+                                                    }
+                                                },
+                                                onFailure = {
+                                                    historyError =
+                                                        "We couldn't load your care history. Please try again."
+                                                }
+                                            )
+                                        }
+                                    }
+
+                                    onDispose {
+                                        active = false
+                                    }
+                                }
+
+                                CareHistoryScreen(
+                                    entries = historyEntries,
+                                    isLoading = historyLoading,
+                                    loadError = historyError,
+                                    onRetry = { historyRetry++ },
+                                    onBack = {
+                                        appScreen = AppScreen.Medications
+                                    }
                                 )
                             }
 
