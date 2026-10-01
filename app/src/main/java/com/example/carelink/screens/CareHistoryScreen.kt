@@ -1,38 +1,20 @@
 package com.example.carelink.screens
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.example.carelink.model.CareActivityType
-import com.example.carelink.model.CareHistoryEntry
-import com.example.carelink.model.CareHistoryFilter
+import com.example.carelink.model.*
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.TimeZone
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CareHistoryScreen(
     entries: List<CareHistoryEntry> = emptyList(),
@@ -43,175 +25,115 @@ fun CareHistoryScreen(
 ) {
     var start by rememberSaveable { mutableStateOf("") }
     var end by rememberSaveable { mutableStateOf("") }
-    var selectedTypes by rememberSaveable { mutableStateOf(setOf<String>()) }
-    // Draft values do not change the list until the patient taps Apply filters.
-    var applied by remember { mutableStateOf(CareHistoryFilter()) }
+    var selectedTypes by rememberSaveable { mutableStateOf(emptyList<String>()) }
+    var appliedStart by rememberSaveable { mutableStateOf<Long?>(null) }
+    var appliedEnd by rememberSaveable { mutableStateOf<Long?>(null) }
+    var appliedTypes by rememberSaveable { mutableStateOf(emptyList<String>()) }
     var error by rememberSaveable { mutableStateOf<String?>(null) }
-    // Validation should catch bad ranges first, but this guard keeps rendering safe.
-    val visible = runCatching { applied.apply(entries) }.getOrDefault(emptyList())
-    Scaffold { paddingValues ->
+    var dateField by remember { mutableStateOf<String?>(null) }
+    val applied = remember(appliedStart, appliedEnd, appliedTypes) {
+        CareHistoryFilter(appliedStart, appliedEnd, CareActivityType.entries.filter { it.name in appliedTypes }.toSet())
+    }
+    val visible = remember(entries, applied) { applied.apply(entries) }
+    if (dateField != null) {
+        val picker = rememberDatePickerState()
+        DatePickerDialog(
+            onDismissRequest = { dateField = null },
+            confirmButton = {
+                TextButton(onClick = {
+                    picker.selectedDateMillis?.let { millis ->
+                        // Material date picker dates are UTC calendar dates, not local instants.
+                        val date = SimpleDateFormat("yyyy-MM-dd", Locale.US).apply {
+                            timeZone = TimeZone.getTimeZone("UTC")
+                        }.format(Date(millis))
+                        if (dateField == "start") start = date else end = date
+                    }
+                    dateField = null
+                }, enabled = picker.selectedDateMillis != null) { Text("Select") }
+            },
+            dismissButton = { TextButton(onClick = { dateField = null }) { Text("Cancel") } }
+        ) { DatePicker(state = picker) }
+    }
+    Scaffold { padding ->
         LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-                .padding(16.dp),
+            Modifier.fillMaxSize().padding(padding).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             item {
-                TextButton(onClick = onBack) {
-                    Text("‹ Back to medications")
-                }
-
-                Text(
-                    text = "Care history",
-                    style = MaterialTheme.typography.headlineMedium
-                )
+                TextButton(onClick = onBack) { Text("‹ Back to medications") }
+                Text("Care history", style = MaterialTheme.typography.headlineMedium)
             }
-
             item {
-                Text(
-                    "Optional filters use Unix timestamps in milliseconds."
-                )
-
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedTextField(
-                        value = start,
-                        onValueChange = { start = it },
-                        label = { Text("Start timestamp") },
-                        modifier = Modifier.weight(1f),
-                        singleLine = true
+                        start, { start = it }, label = { Text("Start date") },
+                        placeholder = { Text("YYYY-MM-DD") }, singleLine = true,
+                        trailingIcon = { TextButton(onClick = { dateField = "start" }) { Text("Choose") } },
+                        modifier = Modifier.fillMaxWidth()
                     )
-
                     OutlinedTextField(
-                        value = end,
-                        onValueChange = { end = it },
-                        label = { Text("End timestamp") },
-                        modifier = Modifier.weight(1f),
-                        singleLine = true
+                        end, { end = it }, label = { Text("End date") },
+                        placeholder = { Text("YYYY-MM-DD") }, singleLine = true,
+                        trailingIcon = { TextButton(onClick = { dateField = "end" }) { Text("Choose") } },
+                        modifier = Modifier.fillMaxWidth()
                     )
                 }
             }
-
             item {
-                CareActivityType.entries.forEach { type ->
-                    FilterChip(
-                        selected = type.name in selectedTypes,
-                        onClick = {
-                            selectedTypes =
-                                if (type.name in selectedTypes) {
-                                    selectedTypes - type.name
-                                } else {
-                                    selectedTypes + type.name
-                                }
-                        },
-                        label = {
-                            Text(
-                                type.name.lowercase()
-                                    .replace('_', ' ')
-                                    .replaceFirstChar(Char::uppercase)
-                            )
-                        }
-                    )
-                }
-            }
-
-            item {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Button(
-                        onClick = {
-                            val startMillis = start.trim().toLongOrNull()
-                            val endMillis = end.trim().toLongOrNull()
-
-                            if (
-                                (start.isNotBlank() && startMillis == null) ||
-                                (end.isNotBlank() && endMillis == null)
-                            ) {
-                                error =
-                                    "Enter valid timestamps or leave them blank."
-                            } else {
-                                val candidate = CareHistoryFilter(
-                                    startMillis = startMillis,
-                                    endMillis = endMillis,
-                                    types = CareActivityType.entries
-                                        .filter { it.name in selectedTypes }
-                                        .toSet()
-                                )
-
-                                error = candidate.validate()
-
-                                if (error == null) {
-                                    applied = candidate
-                                }
-                            }
-                        }
-                    ) {
-                        Text("Apply filters")
-                    }
-
-                    OutlinedButton(
-                        onClick = {
-                            start = ""
-                            end = ""
-                            selectedTypes = emptySet()
-                            applied = CareHistoryFilter()
-                            error = null
-                        }
-                    ) {
-                        Text("Clear")
+                Column {
+                    CareActivityType.entries.forEach { type ->
+                        FilterChip(
+                            selected = type.name in selectedTypes,
+                            onClick = {
+                                selectedTypes = if (type.name in selectedTypes) selectedTypes - type.name
+                                    else selectedTypes + type.name
+                            }, label = { Text(type.label) }
+                        )
                     }
                 }
             }
-
-            error?.let { message ->
+            item {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(onClick = {
+                        val first = historyDateBoundary(start.trim())
+                        val last = historyDateBoundary(end.trim(), endOfDay = true)
+                        error = if ((start.isNotBlank() && first == null) || (end.isNotBlank() && last == null)) {
+                            "Enter dates as YYYY-MM-DD or leave them blank."
+                        } else CareHistoryFilter(first, last).validate()
+                        if (error == null) {
+                            appliedStart = first
+                            appliedEnd = last
+                            appliedTypes = selectedTypes.toList()
+                        }
+                    }) { Text("Apply filters") }
+                    OutlinedButton(onClick = {
+                        start = ""; end = ""; selectedTypes = emptyList()
+                        appliedStart = null; appliedEnd = null; appliedTypes = emptyList(); error = null
+                    }) { Text("Clear") }
+                }
+            }
+            error?.let { item { Text(it, color = MaterialTheme.colorScheme.error) } }
+            if (applied.isActive) {
                 item {
-                    Text(
-                        message,
-                        color = MaterialTheme.colorScheme.error
-                    )
+                    val dateFormat = SimpleDateFormat("MMM d, yyyy", Locale.getDefault())
+                    Text("Active filters: " + listOfNotNull(
+                        appliedStart?.let { "From ${dateFormat.format(Date(it))}" },
+                        appliedEnd?.let { "Through ${dateFormat.format(Date(it))}" },
+                        applied.types.takeIf { it.isNotEmpty() }?.joinToString { it.label }
+                    ).joinToString(" • "), style = MaterialTheme.typography.bodyMedium)
                 }
             }
-
             when {
-                isLoading -> {
-                    item {
-                        CircularProgressIndicator()
-                        Text("Loading care history...")
-                    }
+                isLoading -> item { CircularProgressIndicator(); Text("Loading care history...") }
+                loadError != null -> item {
+                    Text(loadError, color = MaterialTheme.colorScheme.error)
+                    Button(onClick = onRetry) { Text("Retry") }
                 }
-
-                loadError != null -> {
-                    item {
-                        Text(
-                            loadError,
-                            color = MaterialTheme.colorScheme.error
-                        )
-                        Button(onClick = onRetry) {
-                            Text("Retry")
-                        }
-                    }
+                visible.isEmpty() -> item {
+                    Text(if (applied.isActive) "No history matches these filters. Clear filters or choose other dates or activity types."
+                        else "No care history yet.")
                 }
-
-                visible.isEmpty() -> {
-                    item {
-                        Text(
-                            if (entries.isEmpty()) {
-                                "No recorded doses yet."
-                            } else {
-                                "No history matches these filters."
-                            }
-                        )
-                    }
-                }
-
-                else -> {
-                    items(visible, key = { it.id }) { entry ->
-                        CareHistoryCard(entry)
-                    }
-                }
+                else -> items(visible, key = { it.id }) { entry -> CareHistoryCard(entry) }
             }
         }
     }
@@ -219,22 +141,13 @@ fun CareHistoryScreen(
 
 @Composable
 private fun CareHistoryCard(entry: CareHistoryEntry) {
-    val formattedDate = SimpleDateFormat(
-        "MMM d, yyyy • h:mm a",
-        Locale.getDefault()
-    ).format(Date(entry.occurredAtMillis))
-
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            Text(
-                text = entry.summary,
-                style = MaterialTheme.typography.titleMedium
-            )
-
-            Text("Scheduled dose: $formattedDate")
+    val date = remember(entry.occurredAtMillis) {
+        SimpleDateFormat("MMM d, yyyy • h:mm a", Locale.getDefault()).format(Date(entry.occurredAtMillis))
+    }
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(entry.summary, style = MaterialTheme.typography.titleMedium)
+            Text(if (entry.type == CareActivityType.MEDICATION) "Scheduled dose: $date" else date)
         }
     }
 }

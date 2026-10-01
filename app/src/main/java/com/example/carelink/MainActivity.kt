@@ -25,6 +25,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import com.example.carelink.data.CareHistoryStore
 import com.example.carelink.data.DoseHistoryStore
 import com.example.carelink.data.FirestoreCareRecipientDirectory
 import com.example.carelink.model.Appointment
@@ -125,6 +126,7 @@ class MainActivity : ComponentActivity() {
 
                 val firestore = remember { FirebaseFirestore.getInstance() }
                 val doseHistoryStore = remember { DoseHistoryStore(firestore) }
+                val careHistoryStore = remember { CareHistoryStore(firestore) }
                 var isSavingDose by remember { mutableStateOf(false) }
                 var doseMessage by remember { mutableStateOf<String?>(null) }
                 var doseError by remember { mutableStateOf<String?>(null) }
@@ -560,25 +562,13 @@ class MainActivity : ComponentActivity() {
                                     historyLoading = true
                                     historyError = null
 
-                                    doseHistoryStore.load(patientId) { result ->
+                                    careHistoryStore.load(patientId) { result ->
                                         if (active) {
                                             historyLoading = false
 
                                             result.fold(
                                                 onSuccess = { items ->
-                                                    historyEntries = items.map { item ->
-                                                        CareHistoryEntry(
-                                                            id = item.record.id,
-                                                            patientId = patientId,
-                                                            occurredAtMillis =
-                                                                item.record.scheduledTimeMillis,
-                                                            type = CareActivityType.MEDICATION,
-                                                            summary =
-                                                                "${item.medicationName} • ${item.dosage} • " +
-                                                                        item.record.status.name.lowercase()
-                                                                            .replaceFirstChar(Char::uppercase)
-                                                        )
-                                                    }
+                                                    historyEntries = items
                                                 },
                                                 onFailure = {
                                                     historyError =
