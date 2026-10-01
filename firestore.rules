@@ -25,6 +25,13 @@ service cloud.firestore {
           && request.resource.data.patientId == userId;
       }
 
+      match /careTasks/{taskId} {
+        allow read, delete: if isOwner(userId);
+        allow create: if isOwner(userId) && request.resource.data.patientId == userId;
+        allow update: if isOwner(userId)
+          && resource.data.patientId == userId
+          && request.resource.data.patientId == userId;
+      }
       match /healthConcerns/{concernId} {
         allow read, delete: if isOwner(userId);
         allow create, update: if isOwner(userId)

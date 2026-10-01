@@ -1,6 +1,8 @@
 package com.example.carelink.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -35,7 +37,7 @@ fun AppointmentDetailsScreen(
     // Cancellation needs its own saved state so rotation does not bypass the confirmation step.
     var confirmingCancellation by rememberSaveable { mutableStateOf(false) }
     Column(
-        Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).padding(16.dp),
+        Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).verticalScroll(rememberScrollState()).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         Text("Appointment details", style = MaterialTheme.typography.headlineLarge)

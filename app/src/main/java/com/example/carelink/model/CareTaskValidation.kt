@@ -5,7 +5,7 @@ import java.util.Date
 import java.util.Locale
 import java.text.ParsePosition
 
-fun CareTask.validationErrors(now: Date = Date()): Map<String, String> {
+fun CareTask.validationErrors(now: Date = Date(), requireFuture: Boolean = true): Map<String, String> {
     val errors = mutableMapOf<String, String>()
     if (title.isBlank()) errors["title"] = "Enter a task title"
     val date = dueDate.trim()
@@ -19,7 +19,7 @@ fun CareTask.validationErrors(now: Date = Date()): Map<String, String> {
     if (validDate && validTime) {
         val deadline = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US).apply { isLenient = false }
             .parse("$date $clock", ParsePosition(0))
-        if (deadline == null || !deadline.after(now)) errors["dueDate"] = "Choose a future due date and time"
+        if (deadline == null || (requireFuture && !deadline.after(now))) errors["dueDate"] = "Choose a future due date and time"
     }
     return errors
 }

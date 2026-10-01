@@ -85,6 +85,7 @@ private enum class AppScreen {
     AppointmentDetails,
     AddAppointment,
     CareTasks,
+    FollowUpTask,
     Profile,
     EditProfile,
     Settings,
@@ -741,6 +742,7 @@ class MainActivity : ComponentActivity() {
                                         appointmentSaveError = null
                                         appScreen = AppScreen.AddAppointment
                                     },
+                                    onGenerateFollowUp = { appScreen = AppScreen.FollowUpTask },
                                     onCancelAppointment = { appointment ->
                                         val user = auth.currentUser
 
@@ -839,10 +841,17 @@ class MainActivity : ComponentActivity() {
                                 )
                             }
 
-                            AppScreen.CareTasks -> {
-                                CareTasksScreen(
-                                    onNavigate = ::openTopLevel
-                                )
+                            AppScreen.CareTasks, AppScreen.FollowUpTask -> {
+                                val patientId = auth.currentUser?.uid
+                                if (patientId != null) {
+                                    CareTasksFlow(
+                                        patientId = patientId,
+                                        repository = careTaskRepository,
+                                        sourceAppointment = if (appScreen == AppScreen.FollowUpTask) selectedAppointment else null,
+                                        onCancelFollowUp = { appScreen = AppScreen.AppointmentDetails },
+                                        onNavigate = ::openTopLevel
+                                    )
+                                }
                             }
 
                             AppScreen.Profile -> {

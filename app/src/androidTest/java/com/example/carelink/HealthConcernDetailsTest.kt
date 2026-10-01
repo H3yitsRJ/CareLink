@@ -22,6 +22,10 @@ class HealthConcernDetailsTest {
         var delay = false
         var fail = false
         var observer: ((Result<HealthConcern?>) -> Unit)? = null
+        override fun addConcern(patientId: String, concern: HealthConcern, completed: (Result<Unit>) -> Unit) {
+            records[concern.id] = concern
+            completed(Result.success(Unit))
+        }
         override fun watchList(patientId: String, changed: (Result<List<HealthConcern>>) -> Unit): () -> Unit {
             changed(Result.success(records.values.toList())); return {}
         }
