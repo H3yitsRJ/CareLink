@@ -13,8 +13,13 @@ import com.example.carelink.data.*
 
 @Composable
 fun CareRecipientSelector(
-    actorId: String, selectedPatientId: String?, onSelect: (String?) -> Unit,
-    directory: CareRecipientDirectory, medicationData: CaregiverMedicationData, onBack: () -> Unit
+    actorId: String,
+    selectedPatientId: String?,
+    onSelect: (String?) -> Unit,
+    directory: CareRecipientDirectory,
+    medicationData: CaregiverMedicationData,
+    onBack: () -> Unit,
+    content: (@Composable (String) -> Unit)? = null
 ) {
     key(actorId) {
         var recipients by remember { mutableStateOf<List<CareRecipient>>(emptyList()) }
@@ -24,7 +29,9 @@ fun CareRecipientSelector(
         var retry by remember { mutableIntStateOf(0) }
         val currentSelected by rememberUpdatedState(selectedPatientId)
         val selectCallback by rememberUpdatedState(onSelect)
+
         BackHandler { if (choosing) choosing = false else onBack() }
+
         DisposableEffect(actorId, directory, retry) {
             var active = true
             loading = true
@@ -44,7 +51,9 @@ fun CareRecipientSelector(
             }
             onDispose { active = false; stop() }
         }
+
         val selected = recipients.find { it.patientId == selectedPatientId }
+
         if (!loading && error == null && selected != null && !choosing) {
             Column(Modifier.fillMaxSize()) {
                 Row(Modifier.statusBarsPadding().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -53,14 +62,29 @@ fun CareRecipientSelector(
                 }
                 Box(Modifier.weight(1f)) {
                     key(actorId, selected.patientId) {
-                        CaregiverMedicationsScreen(actorId, onBack, medicationData, selected.patientId)
+                        if (content != null) {
+                            content(selected.patientId)
+                        } else {
+                            CaregiverMedicationsScreen(
+                                actorId,
+                                onBack,
+                                medicationData,
+                                selected.patientId
+                            )
+                        }
                     }
                 }
             }
+
         } else {
-            Column(Modifier.fillMaxSize().safeDrawingPadding().verticalScroll(rememberScrollState()).padding(16.dp),
+            Column(
+                Modifier.fillMaxSize()
+                    .safeDrawingPadding()
+                    .verticalScroll(rememberScrollState())
+                    .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text("Choose a care recipient", style = MaterialTheme.typography.headlineMedium)
+
                 when {
                     loading -> Text("Loading care recipients...")
                     error != null -> { Text(error!!); Button(onClick = { retry++ }) { Text("Retry") } }

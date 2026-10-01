@@ -161,6 +161,7 @@ fun MedicationCaregiverAccessScreen(patientId: String, patientName: String, onBa
     var error by remember { mutableStateOf<String?>(null) }
     var success by remember { mutableStateOf<String?>(null) }
     var retry by remember { mutableIntStateOf(0) }
+
     DisposableEffect(patientId, retry) {
         loading = true
         var active = true

@@ -10,19 +10,37 @@ import com.example.carelink.data.HealthConcernRepository
 import com.example.carelink.model.*
 
 @Composable
-fun HealthConcernsFlow(patientId: String, repository: HealthConcernRepository, onBack: () -> Unit = {}) {
+fun HealthConcernsFlow(
+    patientId: String,
+    repository: HealthConcernRepository,
+    onBack: () -> Unit = {}
+) {
     key(patientId) {
         var selectedId by rememberSaveable { mutableStateOf<String?>(null) }
         var isAdding by rememberSaveable { mutableStateOf(false) }
-        BackHandler { if (selectedId != null) selectedId = null else onBack() }
+        var successMessage by rememberSaveable { mutableStateOf<String?>(null) }
+
+        BackHandler {
+            when {
+                isAdding -> isAdding = false
+                selectedId != null -> selectedId = null
+                else -> onBack()
+            }
+        }
+
         val id = selectedId
+
         if (isAdding) {
             AddHealthConcernScreen(
                 patientId = patientId,
                 repository = repository,
-                onSaved = { isAdding = false },
+                onSaved = {
+                    isAdding = false
+                    successMessage = "Health concern saved successfully."
+                },
                 onCancel = { isAdding = false }
             )
+
         } else {
             val id = selectedId
             if (id != null) key(id) {
@@ -32,12 +50,18 @@ fun HealthConcernsFlow(patientId: String, repository: HealthConcernRepository, o
                     repository,
                     onBack = { selectedId = null }
                 )
+
             } else {
                 var concerns by remember { mutableStateOf<List<HealthConcern>>(emptyList()) }
                 var loading by remember { mutableStateOf(true) }
                 var error by remember { mutableStateOf<String?>(null) }
                 var retry by remember { mutableIntStateOf(0) }
-                DisposableEffect(patientId, repository, retry) {
+
+                DisposableEffect(
+                    patientId,
+                    repository,
+                    retry
+                ) {
                     var active = true
                     loading = true
                     error = null
@@ -54,9 +78,21 @@ fun HealthConcernsFlow(patientId: String, repository: HealthConcernRepository, o
                     TextButton(onClick = onBack) { Text("Back to home") }
                 }) { padding ->
                     Column(Modifier.padding(padding)) {
+                        successMessage?.let { message ->
+                            Text(
+                                text = message,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
                         if (error != null) TextButton(onClick = { retry++ }) { Text("Retry") }
                         HealthConcernsScreen(
-                            concerns = concerns, isLoading = loading, error = error, onAdd = { isAdding = true },
+                            concerns = concerns,
+                            isLoading = loading,
+                            error = error,
+                            onAdd = {
+                                successMessage = null
+                                isAdding = true
+                            },
                             onSelect = { selectedId = it.id })
                     }
                 }
@@ -66,7 +102,11 @@ fun HealthConcernsFlow(patientId: String, repository: HealthConcernRepository, o
 }
 
 @Composable
-private fun ConcernDetailRoute(patientId: String, id: String, repository: HealthConcernRepository, onBack: () -> Unit) {
+private fun ConcernDetailRoute(
+    patientId: String, id: String,
+    repository: HealthConcernRepository,
+    onBack: () -> Unit
+) {
     var concern by remember { mutableStateOf<HealthConcern?>(null) }
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -77,6 +117,7 @@ private fun ConcernDetailRoute(patientId: String, id: String, repository: Health
     var saveError by remember { mutableStateOf<String?>(null) }
     var retry by remember { mutableIntStateOf(0) }
     val alive = remember { mutableStateOf(true) }
+
     DisposableEffect(Unit) { alive.value = true; onDispose { alive.value = false } }
     DisposableEffect(patientId, id, repository, retry) {
         var active = true

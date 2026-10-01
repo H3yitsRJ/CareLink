@@ -10,6 +10,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.Column
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.TextButton
@@ -42,6 +43,7 @@ import com.example.carelink.screens.CareTasksScreen
 import com.example.carelink.screens.HealthConcernsFlow
 import com.example.carelink.data.FirestoreHealthConcernRepository
 import com.example.carelink.screens.CareTasksFlow
+import com.example.carelink.screens.CareRecipientSelector
 import com.example.carelink.data.FirestoreCareTaskRepository
 import com.example.carelink.data.MedicationCaregiverStore
 import com.example.carelink.notifications.MedicationReminderScheduler
@@ -75,6 +77,7 @@ private enum class AuthScreen {
 
 private enum class AppScreen {
     Home,
+    HealthConcerns,
     Medications,
     MedicationDetails,
     CareHistory,
@@ -364,12 +367,69 @@ class MainActivity : ComponentActivity() {
                                         appScreen = when (destination) {
                                             "medications" -> AppScreen.Medications
                                             "appointments" -> AppScreen.Appointments
+                                            "health-concerns" -> AppScreen.HealthConcerns
                                             "care-tasks" -> AppScreen.CareTasks
                                             else -> AppScreen.Home
                                         }
                                     },
                                     onNavigate = ::openTopLevel
                                 )
+                            }
+
+                            AppScreen.HealthConcerns -> {
+                                val actorId = auth.currentUser?.uid
+
+                                if (actorId != null) {
+                                    var caregiverMode by rememberSaveable(actorId) {
+                                        mutableStateOf(false)
+                                    }
+
+                                    if (caregiverMode) {
+                                        CareRecipientSelector(
+                                            actorId = actorId,
+                                            selectedPatientId = selectedCareRecipient,
+                                            onSelect = {
+                                                selectedCareRecipient = it
+                                            },
+                                            directory = recipientDirectory,
+                                            medicationData = caregiverMedicationData,
+                                            onBack = {
+                                                caregiverMode = false
+                                            },
+                                            content = { patientId ->
+                                                HealthConcernsFlow(
+                                                    patientId = patientId,
+                                                    repository = healthConcernRepository,
+                                                    onBack = {
+                                                        caregiverMode = false
+                                                    }
+                                                )
+                                            }
+                                        )
+                                    } else {
+                                        Column {
+                                            TextButton(
+                                                onClick = {
+                                                    caregiverMode = true
+                                                }
+                                            ) {
+                                                Text("Care recipient health concerns")
+                                            }
+
+                                            androidx.compose.foundation.layout.Box(
+                                                modifier = Modifier.weight(1f)
+                                            ) {
+                                                HealthConcernsFlow(
+                                                    patientId = actorId,
+                                                    repository = healthConcernRepository,
+                                                    onBack = {
+                                                        appScreen = AppScreen.Home
+                                                    }
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
                             }
 
                             AppScreen.Medications -> {
