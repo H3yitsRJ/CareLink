@@ -15,7 +15,7 @@ interface CaregiverMedicationData {
 
 interface CaregiverAccessData {
     fun watchGrants(patientId: String, changed: (List<CaregiverAccess>, Boolean) -> Unit): () -> Unit
-    fun save(access: CaregiverAccess, patientName: String, completed: (Result<Unit>) -> Unit)
+    fun save(access: CaregiverAccess, patientName: String, expected: CaregiverAccess?, completed: (Result<Unit>) -> Unit)
 }
 
 /** Medication-only delegation. The patient owns grants; caregivers cannot grant themselves access. */
@@ -23,12 +23,14 @@ class MedicationCaregiverStore(private val db: FirebaseFirestore) : CaregiverMed
     fun grants(patientId: String) = db.collection("users").document(patientId).collection("medicationCaregivers")
     fun medications(patientId: String) = db.collection("users").document(patientId).collection("medications")
 
-    fun saveAccess(access: CaregiverAccess, patientName: String) = db.runTransaction { transaction ->
+    fun saveAccess(access: CaregiverAccess, patientName: String, expected: CaregiverAccess?) = db.runTransaction { transaction ->
         require(validId(access.patientId) && validId(access.caregiverId) && access.patientId != access.caregiverId)
         require(access.permissions.all { it in setOf(CarePermission.VIEW, CarePermission.EDIT) })
         require(CarePermission.EDIT !in access.permissions || CarePermission.VIEW in access.permissions)
         val reference = grants(access.patientId).document(access.caregiverId)
         val previous = transaction.get(reference)
+        check(expected != null || !previous.exists()) { "Caregiver access changed. Reopen it before saving." }
+        checkAccessUnchanged(expected, if (previous.exists()) access(access.patientId, access.caregiverId, previous.data.orEmpty()) else null)
         val event = db.collection("users").document(access.patientId).collection("careHistory").document()
         val action = accessAction(previous.exists(), access.revoked)
         transaction.set(reference, access.toFirestore() + mapOf("patientName" to patientName.take(200), "historyEventId" to event.id))
@@ -38,8 +40,8 @@ class MedicationCaregiverStore(private val db: FirebaseFirestore) : CaregiverMed
         ))
     }
 
-    override fun save(access: CaregiverAccess, patientName: String, completed: (Result<Unit>) -> Unit) {
-        saveAccess(access, patientName).addOnSuccessListener { completed(Result.success(Unit)) }
+    override fun save(access: CaregiverAccess, patientName: String, expected: CaregiverAccess?, completed: (Result<Unit>) -> Unit) {
+        saveAccess(access, patientName, expected).addOnSuccessListener { completed(Result.success(Unit)) }
             .addOnFailureListener { completed(Result.failure(it)) }
     }
 
@@ -87,6 +89,9 @@ class MedicationCaregiverStore(private val db: FirebaseFirestore) : CaregiverMed
     }
 
     companion object {
+        internal fun checkAccessUnchanged(expected: CaregiverAccess?, current: CaregiverAccess?) {
+            check(expected == current) { "Caregiver access changed. Reopen it before saving." }
+        }
         internal fun accessAction(exists: Boolean, revoked: Boolean) = if (revoked) "REVOKED" else if (exists) "UPDATED" else "GRANTED"
         internal fun editFields(original: Medication, current: Medication?, edited: Medication): Map<String, Any> {
             require(original.id == edited.id && original.patientId == edited.patientId)

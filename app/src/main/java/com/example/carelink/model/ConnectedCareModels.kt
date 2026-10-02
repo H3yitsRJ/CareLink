@@ -64,10 +64,11 @@ enum class ConcernStatus { ACTIVE, DISCUSSED }
 /**
  * A care recipient's recorded health concern.
  *
- * Required: [id] (Firestore document ID), [patientId] (owner), [title], [description],
+ * Required: [id] (Firestore document ID), [patientId] (owner), [title],
  * [severity], and [recordedDate] (YYYY-MM-DD). Required text must be nonblank when read.
  * [status] defaults to ACTIVE for new concerns and documents without a status field.
  * [appointmentId] is optional; null means the concern is not linked to an appointment.
+ * [description] contains optional details; missing or malformed values become empty text.
  * Severity and status are stored as the exact enum names defined above.
  * The document ID is supplied separately on read and is not duplicated in document data.
  */

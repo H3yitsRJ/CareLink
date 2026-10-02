@@ -156,6 +156,7 @@ fun MedicationCaregiverAccessScreen(patientId: String, patientName: String, onBa
     var grants by remember { mutableStateOf<List<CaregiverAccess>>(emptyList()) }
     var caregiverId by rememberSaveable { mutableStateOf("") }
     var selected by remember { mutableStateOf<CaregiverAccess?>(null) }
+    var baseline by remember { mutableStateOf<CaregiverAccess?>(null) }
     var revoke by remember { mutableStateOf<CaregiverAccess?>(null) }
     var loading by remember { mutableStateOf(true) }
     var saving by remember { mutableStateOf(false) }
@@ -179,17 +180,17 @@ fun MedicationCaregiverAccessScreen(patientId: String, patientName: String, onBa
         }
         onDispose { active = false; stop() }
     }
-    fun save(value: CaregiverAccess) {
+    fun save(value: CaregiverAccess, expected: CaregiverAccess?) {
         saving = true; error = null; success = null
-        store.save(value, patientName) { result ->
+        store.save(value, patientName, expected) { result ->
             saving = false
             result.onSuccess { selected = null; success = if (value.revoked) "Access revoked." else "Medication access saved." }
-                .onFailure { error = "Couldn't save access. Check your connection and the caregiver's CareLink ID. They need a completed profile." }
+                .onFailure { error = "Couldn't save access. It may have changed on another device. Cancel and reopen it, or check your connection and the caregiver's profile." }
         }
     }
     if (selected != null) {
         CaregiverAccessScreen(selected, "Medication access for ${selected!!.caregiverId}", true,
-            onSave = { save(it.copy(revoked = false)) }, onCancel = { selected = null; error = null },
+            onSave = { save(it.copy(revoked = false), baseline) }, onCancel = { selected = null; error = null },
             availablePermissions = setOf(CarePermission.VIEW, CarePermission.EDIT), isSaving = saving || !connected, error = error)
     } else Column(Modifier.fillMaxSize().safeDrawingPadding().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text("Medication caregiver access", style = MaterialTheme.typography.headlineMedium)
@@ -200,7 +201,7 @@ fun MedicationCaregiverAccessScreen(patientId: String, patientName: String, onBa
         Button(onClick = {
             val id = caregiverId.trim()
             if (!MedicationCaregiverStore.validId(id) || id == patientId) error = "Enter a different person's CareLink ID."
-            else { error = null; selected = grants.find { it.caregiverId == id }?.copy(revoked = false) ?: CaregiverAccess(id, patientId, id, setOf(CarePermission.VIEW)) }
+            else { error = null; baseline = grants.find { it.caregiverId == id }; selected = baseline?.copy(revoked = false) ?: CaregiverAccess(id, patientId, id, setOf(CarePermission.VIEW)) }
         }, enabled = !saving && connected && !loading, modifier = Modifier.fillMaxWidth()) { Text("Choose medication access") }
         if (loading) Text("Loading caregiver access")
         if (error != null) { StateMessage(error!!, true); TextButton(onClick = { retry++ }) { Text("Retry") } }
@@ -209,7 +210,7 @@ fun MedicationCaregiverAccessScreen(patientId: String, patientName: String, onBa
             Card(Modifier.fillMaxWidth()) { Column(Modifier.padding(16.dp)) {
                 Text(grant.caregiverId)
                 Text(if (grant.allows(CarePermission.EDIT)) "View and edit medications" else if (grant.allows(CarePermission.VIEW)) "View medications" else "No medication access")
-                TextButton(onClick = { selected = grant }, enabled = !saving && connected) { Text("Edit access") }
+                TextButton(onClick = { baseline = grant; selected = grant }, enabled = !saving && connected) { Text("Edit access") }
                 TextButton(onClick = { revoke = grant }, enabled = !saving && connected) { Text("Revoke access") }
             } }
         }
@@ -217,6 +218,6 @@ fun MedicationCaregiverAccessScreen(patientId: String, patientName: String, onBa
     }
     revoke?.let { grant -> AlertDialog(onDismissRequest = { revoke = null }, title = { Text("Revoke medication access?") },
         text = { Text("This caregiver will no longer be able to view or edit your medications.") },
-        confirmButton = { Button(onClick = { revoke = null; save(grant.copy(revoked = true)) }) { Text("Revoke") } },
+        confirmButton = { Button(onClick = { revoke = null; save(grant.copy(revoked = true), grant) }) { Text("Revoke") } },
         dismissButton = { TextButton(onClick = { revoke = null }) { Text("Cancel") } }) }
 }

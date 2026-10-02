@@ -5,6 +5,15 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class MedicationCaregiverStoreTest {
+    @Test fun staleGrantCannotUndoRevocationOrOverwritePermissions() {
+        val original = CaregiverAccess("caregiver", "patient", "caregiver", setOf(CarePermission.VIEW))
+        MedicationCaregiverStore.checkAccessUnchanged(original, original)
+        MedicationCaregiverStore.checkAccessUnchanged(null, null)
+        listOf(null, original.copy(revoked = true), original.copy(permissions = setOf(CarePermission.VIEW, CarePermission.EDIT))).forEach { current ->
+            assertTrue(runCatching { MedicationCaregiverStore.checkAccessUnchanged(original, current) }.isFailure)
+        }
+        assertTrue(runCatching { MedicationCaregiverStore.checkAccessUnchanged(null, original) }.isFailure)
+    }
     @Test fun accessHistoryDistinguishesNewUpdatesAndRevocations() {
         assertEquals("GRANTED", MedicationCaregiverStore.accessAction(false, false))
         assertEquals("UPDATED", MedicationCaregiverStore.accessAction(true, false))

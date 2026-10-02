@@ -35,6 +35,24 @@ class AppointmentFollowUpTest {
         compose.onNodeWithText("Due date").performScrollTo().performTextReplacement("2099-01-01")
         compose.onNodeWithText("Time").performScrollTo().performTextReplacement("09:00")
     }
+    private fun saveBeforeListReturns(result: Result<List<CareTask>>) {
+        lateinit var finish: (Result<List<CareTask>>) -> Unit
+        val delayed = object : CareTaskRepository by store {
+            override fun list(patientId: String, completed: (Result<List<CareTask>>) -> Unit) { finish = completed }
+        }
+        open(delayed); fill()
+        compose.onNodeWithText("Save care task").performScrollTo().performClick()
+        compose.runOnIdle { finish(result) }
+        compose.onNodeWithText("Call provider").assertExists()
+        compose.onNodeWithText("We couldn't load your care tasks. Please try again.").assertDoesNotExist()
+    }
+    @Test fun delayedListFailureDoesNotHideSavedFollowUp() {
+        saveBeforeListReturns(Result.failure(IllegalStateException("Offline")))
+    }
+    @Test fun delayedListSuccessKeepsExistingTasksAndSavedFollowUp() {
+        saveBeforeListReturns(Result.success(listOf(CareTask("old", "patient", "Existing task", dueDate = "2099-01-02", time = "09:00"))))
+        compose.onNodeWithText("Existing task").assertExists()
+    }
     @Test fun longAppointmentDetailsRemainReachableWithLargerText() {
         compose.setContent {
             val density = androidx.compose.ui.platform.LocalDensity.current

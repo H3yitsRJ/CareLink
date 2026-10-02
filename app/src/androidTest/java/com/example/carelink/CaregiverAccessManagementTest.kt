@@ -41,19 +41,30 @@ class CaregiverAccessManagementTest {
         compose.onNodeWithText("Revoke access").assertExists()
         compose.runOnIdle { assertFalse(data.grant.revoked); assertEquals(0, data.saves) }
     }
+    @Test fun staleEditorCannotRestoreRevokedAccess() {
+        open()
+        compose.onNodeWithText("Edit access").performScrollTo().performClick()
+        compose.runOnIdle { data.revokeElsewhere() }
+        compose.onNodeWithText("Save access").performScrollTo().performClick()
+        compose.runOnIdle { assertTrue(data.grant.revoked); assertEquals(0, data.saves) }
+        compose.onNodeWithText("Couldn't save access. It may have changed on another device. Cancel and reopen it, or check your connection and the caregiver's profile.").assertExists()
+        compose.onNodeWithText("Cancel").performScrollTo().performClick()
+        compose.onNodeWithText("Edit access").assertDoesNotExist()
+    }
 
     private class FakeAccessData : CaregiverAccessData {
         var grant = CaregiverAccess("caregiver", "patient", "caregiver", setOf(CarePermission.VIEW, CarePermission.EDIT))
         var saves = 0
         var fail = false
         private var changed: ((List<CaregiverAccess>, Boolean) -> Unit)? = null
+        fun revokeElsewhere() { grant = grant.copy(revoked = true); changed?.invoke(listOf(grant), true) }
         override fun watchGrants(patientId: String, changed: (List<CaregiverAccess>, Boolean) -> Unit): () -> Unit {
             this.changed = changed
             changed(listOf(grant), true)
             return { this.changed = null }
         }
-        override fun save(access: CaregiverAccess, patientName: String, completed: (Result<Unit>) -> Unit) {
-            if (fail) completed(Result.failure(IllegalStateException("Offline")))
+        override fun save(access: CaregiverAccess, patientName: String, expected: CaregiverAccess?, completed: (Result<Unit>) -> Unit) {
+            if (fail || expected != grant) completed(Result.failure(IllegalStateException("Access changed or offline")))
             else { grant = access; saves++; changed?.invoke(listOf(grant), true); completed(Result.success(Unit)) }
         }
     }

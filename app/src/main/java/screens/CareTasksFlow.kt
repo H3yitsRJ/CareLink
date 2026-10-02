@@ -21,6 +21,7 @@ fun CareTasksFlow(patientId: String, repository: CareTaskRepository,
         var saveError by remember { mutableStateOf<String?>(null) }
         val active = remember { mutableStateOf(true) }
         var revision by remember { mutableStateOf(0) }
+        val changes = remember { mutableMapOf<String, Pair<Int, CareTask>>() }
         fun refresh() {
             val requestedRevision = revision
             loading = true
@@ -28,8 +29,11 @@ fun CareTasksFlow(patientId: String, repository: CareTaskRepository,
             repository.list(patientId) { result ->
                 if (active.value) {
                     loading = false
-                    result.onSuccess { if (revision == requestedRevision) tasks = it.sortedWith(compareBy(CareTask::dueDate, CareTask::time)) }
-                        .onFailure { error = "We couldn't load your care tasks. Please try again." }
+                    result.onSuccess { loaded ->
+                        val newer = changes.values.filter { it.first > requestedRevision }.map { it.second }
+                        tasks = (loaded.filterNot { task -> newer.any { it.id == task.id } } + newer)
+                            .sortedWith(compareBy(CareTask::dueDate, CareTask::time))
+                    }.onFailure { if (revision == requestedRevision) error = "We couldn't load your care tasks. Please try again." }
                 }
             }
         }
@@ -54,6 +58,7 @@ fun CareTasksFlow(patientId: String, repository: CareTaskRepository,
                                 saving = false
                                 result.onSuccess { saved ->
                                     revision++
+                                    changes[saved.id] = revision to saved
                                     tasks = (tasks.filterNot { it.id == saved.id } + saved)
                                         .sortedWith(compareBy(CareTask::dueDate, CareTask::time))
                                     error = null
@@ -72,6 +77,7 @@ fun CareTasksFlow(patientId: String, repository: CareTaskRepository,
                         if (active.value) result.onSuccess {
                             revision++
                             tasks = tasks.map { if (it.id == task.id) it.copy(completed = completed) else it }
+                            tasks.find { it.id == task.id }?.let { changes[it.id] = revision to it }
                         }.onFailure { error = "We couldn't update the care task. Please try again." }
                     }
                 }, onNavigate = onNavigate)
