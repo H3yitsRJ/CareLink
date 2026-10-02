@@ -41,13 +41,20 @@ class HealthConcernTest {
 
     @Test fun invalidRequiredFieldsAreRejectedWithoutCrashing() {
         val data = concern.toFirestore()
-        listOf("patientId", "title", "description", "recordedDate", "severity").forEach { key ->
+        listOf("patientId", "title", "recordedDate", "severity").forEach { key ->
             assertNull("Missing $key", HealthConcern.fromFirestore(concern.id, data - key))
             listOf(null, "", "  ", 123, true).forEach { value ->
                 assertNull("Invalid $key: $value", HealthConcern.fromFirestore(concern.id, data + (key to value)))
             }
         }
         assertNull(HealthConcern.fromFirestore(" ", data))
+    }
+    @Test fun optionalDetailsCanBeAbsentOrEmpty() {
+        val data = concern.toFirestore()
+        assertEquals("", HealthConcern.fromFirestore(concern.id, data - "description")!!.description)
+        listOf(null, "", 123, true).forEach { value ->
+            assertEquals("", HealthConcern.fromFirestore(concern.id, data + ("description" to value))!!.description)
+        }
     }
 
     @Test fun unknownEnumsAreRejectedRatherThanMisrepresented() {

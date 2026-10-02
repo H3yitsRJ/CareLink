@@ -10,13 +10,82 @@ service cloud.firestore {
       return signedIn() && request.auth.uid == userId;
     }
 
+    function delegated(userId, permission) {
+      let path = /databases/$(database)/documents/users/$(userId)/medicationCaregivers/$(request.auth.uid);
+      return signedIn() && exists(path) && get(path).data.revoked == false
+        && get(path).data.patientId == userId && get(path).data.caregiverId == request.auth.uid
+        && get(path).data.permissions.hasAny(['VIEW']) && get(path).data.permissions.hasAny([permission]);
+    }
+
+    function validMedication(data, userId) {
+      return data.patientId == userId && data.name is string && data.name.size() > 0
+        && data.strength is string && data.strength.size() > 0
+        && data.dose is string && data.dose.size() > 0
+        && data.frequency is string && data.frequency.size() > 0
+        && data.reminderTimes is list && data.reminderTimes.size() > 0
+        && data.instructions is string && data.active is bool;
+    }
+
+    function validGrant(data, userId, caregiverId) {
+      return data.keys().hasOnly(['patientId', 'caregiverId', 'patientName', 'permissions', 'revoked', 'historyEventId'])
+        && data.patientId == userId && data.caregiverId == caregiverId && userId != caregiverId
+        && exists(/databases/$(database)/documents/users/$(caregiverId))
+        && data.patientName is string && data.patientName.size() <= 200
+        && data.permissions is list && data.permissions.hasOnly(['VIEW', 'EDIT'])
+        && (!data.permissions.hasAny(['EDIT']) || data.permissions.hasAny(['VIEW']))
+        && data.revoked is bool && data.historyEventId is string;
+    }
+
+    function validAccessEvent(data, userId, caregiverId) {
+      let grantPath = /databases/$(database)/documents/users/$(userId)/medicationCaregivers/$(caregiverId);
+      return data.keys().hasOnly(['patientId', 'caregiverId', 'permissions', 'revoked', 'actorId', 'type', 'action', 'title', 'occurredAt'])
+        && data.patientId == userId && data.caregiverId == caregiverId && data.actorId == request.auth.uid
+        && data.type == 'CAREGIVER_ACCESS' && data.occurredAt == request.time
+        && data.permissions == getAfter(grantPath).data.permissions && data.revoked == getAfter(grantPath).data.revoked
+        && ((data.revoked == true && data.action == 'REVOKED' && data.title == 'Caregiver access revoked')
+          || (data.revoked == false && exists(grantPath) && data.action == 'UPDATED' && data.title == 'Caregiver access updated')
+          || (data.revoked == false && !exists(grantPath) && data.action == 'GRANTED' && data.title == 'Caregiver access granted'));
+    }
+
+    // Collection-group lookup exposes only the signed-in caregiver's grant metadata.
+    match /{parent=**}/medicationCaregivers/{grantId} {
+      allow list: if signedIn() && resource.data.caregiverId == request.auth.uid;
+    }
+
     match /users/{userId} {
       allow read, create, update: if isOwner(userId);
 
       match /medications/{medicationId} {
+        allow read: if isOwner(userId) || delegated(userId, 'VIEW');
+        allow delete: if isOwner(userId);
+        allow create: if isOwner(userId) && validMedication(request.resource.data, userId);
+        allow update: if validMedication(request.resource.data, userId) && (isOwner(userId)
+          || (delegated(userId, 'EDIT') && resource.data.patientId == userId
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'strength', 'dose', 'frequency', 'reminderTimes', 'instructions', 'updatedById', 'updatedAt'])
+            && request.resource.data.updatedById == request.auth.uid && request.resource.data.updatedAt == request.time));
+      }
+
+      match /medicationCaregivers/{caregiverId} {
+        allow read: if isOwner(userId) || (signedIn() && request.auth.uid == caregiverId);
+        allow create, update: if isOwner(userId) && validGrant(request.resource.data, userId, caregiverId)
+          && (!exists(/databases/$(database)/documents/users/$(userId)/careHistory/$(request.resource.data.historyEventId)))
+          && validAccessEvent(getAfter(/databases/$(database)/documents/users/$(userId)/careHistory/$(request.resource.data.historyEventId)).data, userId, caregiverId);
+      }
+
+      match /careHistory/{eventId} {
+        allow read: if isOwner(userId);
+        allow create: if isOwner(userId) && validAccessEvent(request.resource.data, userId, request.resource.data.caregiverId)
+          && getAfter(/databases/$(database)/documents/users/$(userId)/medicationCaregivers/$(request.resource.data.caregiverId)).data.historyEventId == eventId
+          && (!exists(/databases/$(database)/documents/users/$(userId)/medicationCaregivers/$(request.resource.data.caregiverId))
+            || get(/databases/$(database)/documents/users/$(userId)/medicationCaregivers/$(request.resource.data.caregiverId)).data.get('historyEventId', '') != eventId);
+      }
+
+      match /doseRecords/{doseId} {
         allow read, delete: if isOwner(userId);
         allow create, update: if isOwner(userId)
-          && request.resource.data.patientId == userId;
+          && request.resource.data.medicationId is string && request.resource.data.medicationId.size() > 0
+          && request.resource.data.scheduledTimeMillis is int && request.resource.data.completionTimeMillis is int
+          && request.resource.data.status in ['taken', 'missed', 'delayed', 'skipped'];
       }
 
       match /appointments/{appointmentId} {
@@ -25,6 +94,13 @@ service cloud.firestore {
           && request.resource.data.patientId == userId;
       }
 
+      match /careTasks/{taskId} {
+        allow read, delete: if isOwner(userId);
+        allow create: if isOwner(userId) && request.resource.data.patientId == userId;
+        allow update: if isOwner(userId)
+          && resource.data.patientId == userId
+          && request.resource.data.patientId == userId;
+      }
       match /healthConcerns/{concernId} {
         allow read, delete: if isOwner(userId);
         allow create, update: if isOwner(userId)

@@ -1,5 +1,7 @@
 package com.example.carelink.model
 
+internal fun validCareDocumentId(id: String) = id.isNotBlank() && '/' !in id && id != "." && id != ".."
+
 enum class AppointmentStatus { SCHEDULED, COMPLETED, CANCELLED }
 
 data class Appointment(
@@ -62,10 +64,11 @@ enum class ConcernStatus { ACTIVE, DISCUSSED }
 /**
  * A care recipient's recorded health concern.
  *
- * Required: [id] (Firestore document ID), [patientId] (owner), [title], [description],
+ * Required: [id] (Firestore document ID), [patientId] (owner), [title],
  * [severity], and [recordedDate] (YYYY-MM-DD). Required text must be nonblank when read.
  * [status] defaults to ACTIVE for new concerns and documents without a status field.
  * [appointmentId] is optional; null means the concern is not linked to an appointment.
+ * [description] contains optional details; missing or malformed values become empty text.
  * Severity and status are stored as the exact enum names defined above.
  * The document ID is supplied separately on read and is not duplicated in document data.
  */
@@ -172,32 +175,38 @@ data class CareTask(
     }
 }
 
-    enum class InvitationStatus(val firestoreValue: String) {
-        PENDING("pending"), ACCEPTED("accepted"), DECLINED("declined"), REVOKED("revoked")
+enum class InvitationStatus(val firestoreValue: String) {
+    // pending: awaiting a response; accepted: recipient agreed; declined: recipient refused;
+    // revoked: sender withdrew the invitation. Expiration is evaluated separately from status.
+    PENDING("pending"), ACCEPTED("accepted"), DECLINED("declined"), REVOKED("revoked")
+}
+
+// Invitations expire even if nobody explicitly declines them.
+data class CaregiverInvitation(
+    val id: String, val senderId: String, val recipientEmail: String, val patientId: String,
+    val status: InvitationStatus, val expiresAtMillis: Long
+) {
+    fun isExpired(nowMillis: Long = System.currentTimeMillis()) = nowMillis >= expiresAtMillis
+    fun validate(): String? = when {
+        listOf(id, senderId, patientId).any { !validCareDocumentId(it) } -> "Invitation, sender and patient IDs are required"
+        !Regex("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$").matches(recipientEmail) -> "Enter a recipient email"
+        expiresAtMillis <= 0 -> "Expiration must be a positive epoch timestamp"
+        else -> null
     }
+    fun toFirestore(): Map<String, Any> = mapOf(
+        "senderId" to senderId, "recipientEmail" to recipientEmail, "patientId" to patientId,
+        "status" to status.firestoreValue, "expiresAtMillis" to expiresAtMillis
+    )
 
-    // Invitations expire even if nobody explicitly declines them.
-    data class CaregiverInvitation(
-        val id: String, val senderId: String, val recipientEmail: String, val patientId: String,
-        val status: InvitationStatus, val expiresAtMillis: Long
-    ) {
-        fun isExpired(nowMillis: Long = System.currentTimeMillis()) = nowMillis >= expiresAtMillis
-        fun toFirestore(): Map<String, Any> = mapOf(
-            "senderId" to senderId, "recipientEmail" to recipientEmail, "patientId" to patientId,
-            "status" to status.firestoreValue, "expiresAtMillis" to expiresAtMillis
-        )
-
-        companion object {
-            fun fromFirestore(id: String, data: Map<String, Any?>): CaregiverInvitation? {
-                val status =
-                    InvitationStatus.entries.firstOrNull { it.firestoreValue == data["status"] }
-                        ?: return null
-                return CaregiverInvitation(
-                    id, data["senderId"] as? String ?: return null,
-                    data["recipientEmail"] as? String ?: return null,
-                    data["patientId"] as? String ?: return null, status,
-                    (data["expiresAtMillis"] as? Number)?.toLong() ?: return null
-                )
-            }
+    companion object {
+        fun fromFirestore(id: String, data: Map<String, Any?>): CaregiverInvitation? {
+            val status = InvitationStatus.entries.firstOrNull { it.firestoreValue == data["status"] } ?: return null
+            return CaregiverInvitation(
+                id, data["senderId"] as? String ?: return null,
+                data["recipientEmail"] as? String ?: return null,
+                data["patientId"] as? String ?: return null, status,
+                (data["expiresAtMillis"] as? Long) ?: return null
+            ).takeIf { it.validate() == null }
         }
     }
+}

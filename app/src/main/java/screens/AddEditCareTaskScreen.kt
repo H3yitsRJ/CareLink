@@ -21,7 +21,7 @@ fun AddEditCareTaskScreen(task: CareTask? = null, sourceAppointment: Appointment
     var title by rememberSaveable(task?.id, sourceAppointment?.id) {
         mutableStateOf(task?.title ?: sourceAppointment?.let { "Follow up after ${it.title}" }.orEmpty())
     }
-    var description by rememberSaveable(task?.id) { mutableStateOf(task?.description.orEmpty()) }
+    var description by rememberSaveable(task?.id) { mutableStateOf(task?.description ?: sourceAppointment?.notes.orEmpty()) }
     var dueDate by rememberSaveable(task?.id) { mutableStateOf(task?.dueDate.orEmpty()) }
     var time by rememberSaveable(task?.id) { mutableStateOf(task?.time.orEmpty()) }
     var attempted by rememberSaveable(task?.id) { mutableStateOf(false) }
