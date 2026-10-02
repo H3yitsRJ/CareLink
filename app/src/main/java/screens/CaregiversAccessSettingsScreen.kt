@@ -1,6 +1,3 @@
-// Caregiver-access summary and revoke confirmation, not yet routed from MainActivity. The caller must
-// connect onEdit and onRevoke to navigation and storage.
-
 package com.example.carelink.screens
 
 import androidx.compose.foundation.layout.Arrangement

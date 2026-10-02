@@ -1,6 +1,3 @@
-// Incoming medication schedule editor. MainActivity does not route here yet, and its medication list
-// has no loader, so this screen is not a completed scheduling workflow.
-
 package com.example.carelink.screens
 
 import androidx.compose.foundation.background

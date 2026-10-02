@@ -1,5 +1,3 @@
-// Shared Material typography definitions. Screens select text roles through MaterialTheme.typography.
-
 package com.example.carelink.ui.theme
 
 import androidx.compose.material3.Typography

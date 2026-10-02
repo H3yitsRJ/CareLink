@@ -1,6 +1,3 @@
-// Profile model and Firestore conversion. MainActivity currently writes its own profile field map from
-// PatientProfileDetails, so inspect both paths before changing stored profile fields.
-
 package com.example.carelink.model
 
 /**

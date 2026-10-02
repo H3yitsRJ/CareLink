@@ -6,119 +6,118 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    function isOwner(patientId) {
-      return signedIn() && request.auth.uid == patientId;
+    function isOwner(userId) {
+      return signedIn() && request.auth.uid == userId;
     }
 
-    function caregiverAccess(patientId) {
-      return get(/databases/$(database)/documents/patients/$(patientId)/caregiverAccess/$(request.auth.uid));
+    function delegated(userId, permission) {
+      let path = /databases/$(database)/documents/users/$(userId)/medicationCaregivers/$(request.auth.uid);
+      return signedIn() && exists(path) && get(path).data.revoked == false
+        && get(path).data.patientId == userId && get(path).data.caregiverId == request.auth.uid
+        && get(path).data.permissions.hasAny(['VIEW']) && get(path).data.permissions.hasAny([permission]);
     }
 
-    function caregiverMay(patientId, permission) {
-      return signedIn()
-        && exists(/databases/$(database)/documents/patients/$(patientId)/caregiverAccess/$(request.auth.uid))
-        && caregiverAccess(patientId).data.revoked == false
-        && permission in caregiverAccess(patientId).data.permissions;
-    }
-
-    function owner(patientId) {
-      return request.auth != null && request.auth.uid == patientId;
-    }
-    function validMedication(patientId) {
-      let data = request.resource.data;
-      return data.patientId == patientId
-        && data.name is string && data.name.size() > 0
+    function validMedication(data, userId) {
+      return data.patientId == userId && data.name is string && data.name.size() > 0
         && data.strength is string && data.strength.size() > 0
         && data.dose is string && data.dose.size() > 0
         && data.frequency is string && data.frequency.size() > 0
         && data.reminderTimes is list && data.reminderTimes.size() > 0
-        && data.active is bool;
+        && data.instructions is string && data.active is bool;
     }
-    function caregiverCan(patientId, permission) {
-      let path = /databases/$(database)/documents/users/$(patientId)/medicationCaregivers/$(request.auth.uid);
-      return request.auth != null && exists(path)
-        && get(path).data.revoked == false
-        && get(path).data.permissions.hasAll(['VIEW', permission]);
-    }
-    match /users/{patientId}/medicationCaregivers/{caregiverId} {
-      allow read: if owner(patientId) || (request.auth != null && request.auth.uid == caregiverId);
-      allow create, update: if owner(patientId) && caregiverId != patientId
+
+    function validGrant(data, userId, caregiverId) {
+      return data.keys().hasOnly(['patientId', 'caregiverId', 'patientName', 'permissions', 'revoked', 'historyEventId'])
+        && data.patientId == userId && data.caregiverId == caregiverId && userId != caregiverId
         && exists(/databases/$(database)/documents/users/$(caregiverId))
-        && request.resource.data.keys().hasOnly(['patientId', 'caregiverId', 'patientName', 'permissions', 'revoked'])
-        && request.resource.data.patientId == patientId && request.resource.data.caregiverId == caregiverId
-        && request.resource.data.patientName is string && request.resource.data.patientName.size() <= 200
-        && request.resource.data.revoked is bool
-        && request.resource.data.permissions is list
-        && request.resource.data.permissions.hasOnly(['VIEW', 'EDIT'])
-        && (!request.resource.data.permissions.hasAny(['EDIT']) || request.resource.data.permissions.hasAny(['VIEW']));
-      allow delete: if owner(patientId);
+        && data.patientName is string && data.patientName.size() <= 200
+        && data.permissions is list && data.permissions.hasOnly(['VIEW', 'EDIT'])
+        && (!data.permissions.hasAny(['EDIT']) || data.permissions.hasAny(['VIEW']))
+        && data.revoked is bool && data.historyEventId is string;
     }
-    match /users/{patientId}/medications/{medicationId} {
-      allow read: if owner(patientId) || caregiverCan(patientId, 'VIEW');
-      allow delete: if owner(patientId);
-      allow create: if owner(patientId) && validMedication(patientId);
-      allow update: if validMedication(patientId) && (owner(patientId) || (
-        caregiverCan(patientId, 'EDIT')
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-          'name', 'strength', 'dose', 'frequency', 'reminderTimes', 'instructions', 'updatedById', 'updatedAt'])
-        && request.resource.data.updatedById == request.auth.uid
-        && request.resource.data.updatedAt == request.time
-      ));
+
+    function validAccessEvent(data, userId, caregiverId) {
+      let grantPath = /databases/$(database)/documents/users/$(userId)/medicationCaregivers/$(caregiverId);
+      return data.keys().hasOnly(['patientId', 'caregiverId', 'permissions', 'revoked', 'actorId', 'type', 'action', 'title', 'occurredAt'])
+        && data.patientId == userId && data.caregiverId == caregiverId && data.actorId == request.auth.uid
+        && data.type == 'CAREGIVER_ACCESS' && data.occurredAt == request.time
+        && data.permissions == getAfter(grantPath).data.permissions && data.revoked == getAfter(grantPath).data.revoked
+        && ((data.revoked == true && data.action == 'REVOKED' && data.title == 'Caregiver access revoked')
+          || (data.revoked == false && exists(grantPath) && data.action == 'UPDATED' && data.title == 'Caregiver access updated')
+          || (data.revoked == false && !exists(grantPath) && data.action == 'GRANTED' && data.title == 'Caregiver access granted'));
     }
-    match /users/{patientId}/doseRecords/{doseId} {
-      allow read: if owner(patientId);
-      allow create, update: if owner(patientId)
-        && request.resource.data.keys().hasOnly(['medicationId', 'scheduledTimeMillis', 'status', 'completionTimeMillis'])
-        && request.resource.data.medicationId is string
-        && exists(/databases/$(database)/documents/users/$(patientId)/medications/$(request.resource.data.medicationId))
-        && request.resource.data.scheduledTimeMillis is int && request.resource.data.scheduledTimeMillis > 0
-        && request.resource.data.status in ['taken', 'skipped', 'missed', 'delayed']
-        && request.resource.data.completionTimeMillis is int && request.resource.data.completionTimeMillis > 0;
-      allow delete: if owner(patientId);
+
+    // Collection-group lookup exposes only the signed-in caregiver's grant metadata.
+    match /{parent=**}/medicationCaregivers/{grantId} {
+      allow list: if signedIn() && resource.data.caregiverId == request.auth.uid;
     }
-    // Retain existing access for other workflows; do not let that rule bypass medication ownership.
+
     match /users/{userId} {
-      allow read, write: if request.auth != null;
-      match /{collection}/{document=**} {
-        allow read, write: if request.auth != null && !(collection in ['medications', 'doseRecords', 'medicationCaregivers']);
-      }
-    }
-    match /patients/{patientId} {
-      allow read, write: if isOwner(patientId);
+      allow read, create, update: if isOwner(userId);
 
-      match /caregiverAccess/{caregiverId} {
-        allow read: if isOwner(patientId)
-          || (signedIn() && request.auth.uid == caregiverId);
-        allow create, update, delete: if isOwner(patientId);
+      match /medications/{medicationId} {
+        allow read: if isOwner(userId) || delegated(userId, 'VIEW');
+        allow delete: if isOwner(userId);
+        allow create: if isOwner(userId) && validMedication(request.resource.data, userId);
+        allow update: if validMedication(request.resource.data, userId) && (isOwner(userId)
+          || (delegated(userId, 'EDIT') && resource.data.patientId == userId
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'strength', 'dose', 'frequency', 'reminderTimes', 'instructions', 'updatedById', 'updatedAt'])
+            && request.resource.data.updatedById == request.auth.uid && request.resource.data.updatedAt == request.time));
       }
 
-      match /careHistory/{entryId} {
-        allow read: if isOwner(patientId) || caregiverMay(patientId, "VIEW");
-        allow create: if isOwner(patientId);
-        allow update, delete: if false;
+      match /medicationCaregivers/{caregiverId} {
+        allow read: if isOwner(userId) || (signedIn() && request.auth.uid == caregiverId);
+        allow create, update: if isOwner(userId) && validGrant(request.resource.data, userId, caregiverId)
+          && (!exists(/databases/$(database)/documents/users/$(userId)/careHistory/$(request.resource.data.historyEventId)))
+          && validAccessEvent(getAfter(/databases/$(database)/documents/users/$(userId)/careHistory/$(request.resource.data.historyEventId)).data, userId, caregiverId);
+      }
+
+      match /careHistory/{eventId} {
+        allow read: if isOwner(userId);
+        allow create: if isOwner(userId) && validAccessEvent(request.resource.data, userId, request.resource.data.caregiverId)
+          && getAfter(/databases/$(database)/documents/users/$(userId)/medicationCaregivers/$(request.resource.data.caregiverId)).data.historyEventId == eventId
+          && (!exists(/databases/$(database)/documents/users/$(userId)/medicationCaregivers/$(request.resource.data.caregiverId))
+            || get(/databases/$(database)/documents/users/$(userId)/medicationCaregivers/$(request.resource.data.caregiverId)).data.get('historyEventId', '') != eventId);
+      }
+
+      match /doseRecords/{doseId} {
+        allow read, delete: if isOwner(userId);
+        allow create, update: if isOwner(userId)
+          && request.resource.data.medicationId is string && request.resource.data.medicationId.size() > 0
+          && request.resource.data.scheduledTimeMillis is int && request.resource.data.completionTimeMillis is int
+          && request.resource.data.status in ['taken', 'missed', 'delayed', 'skipped'];
+      }
+
+      match /appointments/{appointmentId} {
+        allow read, delete: if isOwner(userId);
+        allow create, update: if isOwner(userId)
+          && request.resource.data.patientId == userId;
       }
 
       match /careTasks/{taskId} {
-        allow read, delete: if isOwner(patientId);
-        allow create, update: if isOwner(patientId)
-          && request.resource.data.keys().hasOnly(['patientId', 'title', 'dueDate', 'completed', 'appointmentId'])
-          && request.resource.data.patientId == patientId
-          && request.resource.data.title is string && request.resource.data.title.size() > 0
-          && request.resource.data.dueDate is string
-          && request.resource.data.completed is bool
-          && (request.resource.data.appointmentId == null ||
-            (request.resource.data.appointmentId is string && request.resource.data.appointmentId.size() > 0));
+        allow read, delete: if isOwner(userId);
+        allow create: if isOwner(userId) && request.resource.data.patientId == userId;
+        allow update: if isOwner(userId)
+          && resource.data.patientId == userId
+          && request.resource.data.patientId == userId;
       }
-
-      match /{collection}/{documentId} {
-        allow read: if collection != 'careTasks' && (isOwner(patientId) || caregiverMay(patientId, "VIEW"));
-        allow create: if collection != 'careTasks' && (isOwner(patientId) || caregiverMay(patientId, "ADD"));
-        allow update: if collection != 'careTasks' && (isOwner(patientId) || caregiverMay(patientId, "EDIT"));
-        allow delete: if collection != 'careTasks' && (isOwner(patientId) || caregiverMay(patientId, "DELETE"));
+      match /healthConcerns/{concernId} {
+        allow read, delete: if isOwner(userId);
+        allow create, update: if isOwner(userId)
+          && request.resource.data.patientId == userId;
       }
     }
-    match /{collection}/{document=**} {
-      allow read, write: if request.auth != null && !(collection in ['users', 'patients']);
+
+    match /careTasks/{taskId} {
+      allow read, delete: if signedIn()
+        && resource.data.patientId == request.auth.uid;
+
+      allow create: if signedIn()
+        && request.resource.data.patientId == request.auth.uid;
+
+      allow update: if signedIn()
+        && resource.data.patientId == request.auth.uid
+        && request.resource.data.patientId == resource.data.patientId;
     }
   }
 }

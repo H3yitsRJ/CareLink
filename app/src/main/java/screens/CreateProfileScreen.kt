@@ -1,6 +1,3 @@
-// Profile form and validation producing PatientProfileDetails. MainActivity saves these fields to
-// users/{uid} and opens the dashboard on success.
-
 package com.example.carelink.screens
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.foundation.background

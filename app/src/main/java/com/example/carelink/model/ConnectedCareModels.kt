@@ -1,11 +1,6 @@
-// Shared appointment, health-concern, care-task, caregiver-access, history, and refill models.
-// Serialization helpers define document fields; they do not perform writes or enforce server
-// permissions.
-
 package com.example.carelink.model
 
-internal fun isValidCareDocumentId(id: String) =
-    id.isNotBlank() && '/' !in id && id != "." && id != ".."
+internal fun validCareDocumentId(id: String) = id.isNotBlank() && '/' !in id && id != "." && id != ".."
 
 enum class AppointmentStatus { SCHEDULED, COMPLETED, CANCELLED }
 
@@ -66,45 +61,115 @@ data class Appointment(
 enum class ConcernSeverity { LOW, MEDIUM, HIGH }
 enum class ConcernStatus { ACTIVE, DISCUSSED }
 
+/**
+ * A care recipient's recorded health concern.
+ *
+ * Required: [id] (Firestore document ID), [patientId] (owner), [title], [description],
+ * [severity], and [recordedDate] (YYYY-MM-DD). Required text must be nonblank when read.
+ * [status] defaults to ACTIVE for new concerns and documents without a status field.
+ * [appointmentId] is optional; null means the concern is not linked to an appointment.
+ * Severity and status are stored as the exact enum names defined above.
+ * The document ID is supplied separately on read and is not duplicated in document data.
+ */
 data class HealthConcern(
-    val id: String, val patientId: String, val title: String, val severity: ConcernSeverity,
-    val recordedDate: String, val status: ConcernStatus = ConcernStatus.ACTIVE
-)
-
-// appointmentId is optional because some care tasks start from an appointment and others do not.
-data class CareTask(
-    val id: String, val patientId: String, val title: String, val dueDate: String = "",
-    val completed: Boolean = false, val appointmentId: String? = null
+    val id: String,
+    val patientId: String,
+    val title: String,
+    val severity: ConcernSeverity,
+    val recordedDate: String,
+    val description: String,
+    val status: ConcernStatus = ConcernStatus.ACTIVE,
+    val appointmentId: String? = null
 ) {
-    fun validate(): String? = when {
-        !isValidCareDocumentId(id) -> "Care task ID is required"
-        !isValidCareDocumentId(patientId) -> "Patient ID is required"
-        title.isBlank() -> "Enter a task"
-        appointmentId != null && !isValidCareDocumentId(appointmentId) -> "Invalid appointment reference"
-        else -> null
+    fun toFirestore(): Map<String, Any?> = mapOf(
+        "patientId" to patientId,
+        "title" to title,
+        "description" to description,
+        "severity" to severity.name,
+        "recordedDate" to recordedDate,
+        "status" to status.name,
+        "appointmentId" to appointmentId
+    )
+
+    companion object {
+        /**
+         * Returns null for missing/invalid required fields or unsupported enum values,
+         * rather than inventing a severity or silently changing a recorded status.
+         * Missing, null, blank, or wrongly typed optional appointment IDs become null.
+         */
+        fun fromFirestore(id: String, data: Map<String, Any?>): HealthConcern? {
+            if (id.isBlank()) return null
+            fun requiredText(key: String) = (data[key] as? String)?.takeIf { it.isNotBlank() }
+            val severity = ConcernSeverity.entries.find { it.name == data["severity"] } ?: return null
+            val status = if (!data.containsKey("status")) ConcernStatus.ACTIVE
+                else ConcernStatus.entries.find { it.name == data["status"] } ?: return null
+            return HealthConcern(
+                id = id,
+                patientId = requiredText("patientId") ?: return null,
+                title = requiredText("title") ?: return null,
+                description = (data["description"] as? String).orEmpty(),
+                severity = severity,
+                recordedDate = requiredText("recordedDate") ?: return null,
+                status = status,
+                appointmentId = (data["appointmentId"] as? String)?.takeIf { it.isNotBlank() }
+            )
+        }
     }
+}
+
+enum class CareTaskStatus { PENDING, COMPLETED }
+
+// Required: id, patientId, and title.
+// Optional: description, dueDate, time, and appointmentId.
+// A new task starts pending unless completed is explicitly set.
+data class CareTask(
+    val id: String,
+    val patientId: String,
+    val title: String,
+    val description: String = "",
+    val dueDate: String = "",
+    val time: String = "",
+    val completed: Boolean = false,
+    val appointmentId: String? = null
+) {
+    val status: CareTaskStatus
+        get() = if (completed) CareTaskStatus.COMPLETED else CareTaskStatus.PENDING
 
     fun toFirestore(): Map<String, Any?> = mapOf(
-        "patientId" to patientId, "title" to title, "dueDate" to dueDate,
-        "completed" to completed, "appointmentId" to appointmentId
+        "patientId" to patientId,
+        "title" to title,
+        "description" to description,
+        "dueDate" to dueDate,
+        "time" to time,
+        "completed" to completed,
+        "status" to status.name,
+        "appointmentId" to appointmentId
     )
 
     companion object {
         fun fromFirestore(id: String, data: Map<String, Any?>): CareTask? {
             val patientId = data["patientId"] as? String ?: return null
             val title = data["title"] as? String ?: return null
-            // Missing optional fields retain their defaults; malformed values are not records.
-            if (data["dueDate"] != null && data["dueDate"] !is String) return null
-            if (data["completed"] != null && data["completed"] !is Boolean) return null
-            if (data["appointmentId"] != null && data["appointmentId"] !is String) return null
+
+            // Older records may have "completed" but no "status".
+            val completed = when (data["status"] as? String) {
+                CareTaskStatus.COMPLETED.name -> true
+                CareTaskStatus.PENDING.name -> false
+                else -> data["completed"] as? Boolean ?: false
+            }
+
             return CareTask(
                 id = id,
                 patientId = patientId,
                 title = title,
                 dueDate = data["dueDate"] as? String ?: "",
-                completed = data["completed"] as? Boolean ?: false,
-                appointmentId = data["appointmentId"] as? String
-            ).takeIf { it.validate() == null }
+                completed = completed,
+                appointmentId = data["appointmentId"] as? String,
+                description = data["description"] as? String ?: "",
+                time = data["time"] as? String
+                    ?: data["dueTime"] as? String
+                    ?: ""
+            )
         }
     }
 }
@@ -122,7 +187,7 @@ data class CaregiverInvitation(
 ) {
     fun isExpired(nowMillis: Long = System.currentTimeMillis()) = nowMillis >= expiresAtMillis
     fun validate(): String? = when {
-        listOf(id, senderId, patientId).any { !isValidCareDocumentId(it) } -> "Invitation, sender and patient IDs are required"
+        listOf(id, senderId, patientId).any { !validCareDocumentId(it) } -> "Invitation, sender and patient IDs are required"
         !Regex("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$").matches(recipientEmail) -> "Enter a recipient email"
         expiresAtMillis <= 0 -> "Expiration must be a positive epoch timestamp"
         else -> null
@@ -144,76 +209,3 @@ data class CaregiverInvitation(
         }
     }
 }
-
-enum class CarePermission { VIEW, ADD, EDIT, DELETE, RECORD_DOSE, RECEIVE_REMINDERS }
-
-// Access is kept as a set of small permissions so the patient does not have to grant everything.
-data class CaregiverAccess(
-    val id: String, val patientId: String, val caregiverId: String,
-    val permissions: Set<CarePermission>, val revoked: Boolean = false
-) {
-    fun allows(permission: CarePermission) = !revoked && permission in permissions
-
-    fun toFirestore(): Map<String, Any> = mapOf(
-        "patientId" to patientId,
-        "caregiverId" to caregiverId,
-        "permissions" to permissions.map(CarePermission::name).sorted(),
-        "revoked" to revoked
-    )
-
-    companion object {
-        fun fromFirestore(id: String, data: Map<String, Any?>): CaregiverAccess? {
-            val patientId = data["patientId"] as? String ?: return null
-            val caregiverId = data["caregiverId"] as? String ?: return null
-            val permissions = (data["permissions"] as? List<*>)
-                ?.mapNotNull { value -> CarePermission.entries.firstOrNull { it.name == value } }
-                ?.toSet().orEmpty()
-            return CaregiverAccess(
-                id = id,
-                patientId = patientId,
-                caregiverId = caregiverId,
-                permissions = permissions,
-                revoked = data["revoked"] as? Boolean ?: false
-            )
-        }
-    }
-}
-
-enum class CareActivityType { MEDICATION, APPOINTMENT, HEALTH_CONCERN, CARE_TASK, CAREGIVER_ACCESS }
-
-data class CareHistoryEntry(
-    val id: String, val patientId: String, val occurredAtMillis: Long,
-    val type: CareActivityType, val summary: String, val changedById: String = ""
-) {
-    fun toFirestore(): Map<String, Any> = mapOf(
-        "patientId" to patientId,
-        "occurredAtMillis" to occurredAtMillis,
-        "type" to type.name,
-        "summary" to summary,
-        "changedById" to changedById
-    )
-}
-
-// Filtering is plain Kotlin so it can be tested without Compose or Firebase.
-data class CareHistoryFilter(
-    val startMillis: Long? = null, val endMillis: Long? = null,
-    val types: Set<CareActivityType> = emptySet()
-) {
-    fun validate(): String? = if (startMillis != null && endMillis != null && startMillis > endMillis) "Start date must be before end date" else null
-    fun apply(entries: List<CareHistoryEntry>): List<CareHistoryEntry> {
-        require(validate() == null) { validate()!! }
-        return entries.filter { entry ->
-            (startMillis == null || entry.occurredAtMillis >= startMillis) &&
-                (endMillis == null || entry.occurredAtMillis <= endMillis) &&
-                (types.isEmpty() || entry.type in types)
-        }
-    }
-}
-
-enum class RefillRequestStatus { REQUESTED, PROCESSING, COMPLETED, CANCELLED }
-
-data class RefillRequest(
-    val id: String, val patientId: String, val medicationId: String,
-    val requestedById: String, val note: String = "",
-    val status: RefillRequestStatus = RefillRequestStatus.REQUESTED
-)

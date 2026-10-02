@@ -1,6 +1,3 @@
-// Observes Android network connectivity for MainActivity and OfflineBanner. This reports connectivity
-// only; it does not queue writes or persist care records.
-
 package com.example.carelink.data
 
 import android.content.Context

@@ -1,6 +1,3 @@
-// Displays the name and email supplied by MainActivity. Opens Settings and shares bottom navigation;
-// profile editing is not connected here.
-
 package com.example.carelink.screens
 
 import androidx.compose.foundation.background

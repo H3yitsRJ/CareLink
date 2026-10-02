@@ -1,5 +1,3 @@
-// Schedules recurring medication reminders, replaces changed alarms, and restores saved schedules.
-
 package com.example.carelink.notifications
 
 import android.app.AlarmManager

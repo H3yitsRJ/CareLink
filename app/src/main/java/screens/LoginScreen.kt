@@ -1,6 +1,3 @@
-// Sign-in form returning email and password through a callback. MainActivity owns the Firebase request,
-// submission state, errors, and authentication routing.
-
 package com.example.carelink.screens
 
 import androidx.compose.foundation.Image

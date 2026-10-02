@@ -1,6 +1,3 @@
-// Shared offline banner rendered by MainActivity. The banner itself does not cache data, disable
-// submissions, or pause network operations.
-
 package com.example.carelink.screens
 
 import androidx.compose.foundation.layout.fillMaxWidth

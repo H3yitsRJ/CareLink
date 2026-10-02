@@ -1,6 +1,3 @@
-// Care-task list and completion controls. MainActivity provides records from FirestoreCareTaskRepository
-// and handles completion changes and navigation.
-
 package com.example.carelink.screens
 
 import androidx.compose.foundation.layout.Arrangement
@@ -17,20 +14,25 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.example.carelink.model.CareTask
 import navigation.BottomNavBar
 import navigation.BottomNavDestination
+import androidx.compose.foundation.layout.statusBarsPadding
 
 @Composable
-fun CareTasksScreen(tasks: List<CareTask> = emptyList(), isLoading: Boolean = false, error: String? = null, onAdd: () -> Unit = {}, onCompletedChange: (CareTask, Boolean) -> Unit = { _, _ -> }, onNavigate: (BottomNavDestination) -> Unit = {}, isSaving: Boolean = false, onRetry: () -> Unit = {}, success: String? = null) {
+fun CareTasksScreen(tasks: List<CareTask> = emptyList(), isLoading: Boolean = false, error: String? = null, onAdd: () -> Unit = {}, onRetry: () -> Unit = {},
+                    onCompletedChange: (CareTask, Boolean) -> Unit = { _, _ -> }, onNavigate: (BottomNavDestination) -> Unit = {}) {
     Scaffold(bottomBar = { BottomNavBar(BottomNavDestination.CareTasks, onNavigate) }) { innerPadding ->
-    Column(Modifier.fillMaxSize().padding(innerPadding).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Column(
+            Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
         Text("Care tasks", style = MaterialTheme.typography.headlineLarge)
-        Button(onClick = onAdd, enabled = !isSaving, modifier = Modifier.fillMaxWidth()) { Text("Add care task") }
-        if (success != null) StateMessage(success)
+        Button(onClick = onAdd, enabled = !isLoading, modifier = Modifier.fillMaxWidth()) { Text("Add care task") }
         when {
             isLoading -> StateMessage("Loading care tasks")
             error != null -> { StateMessage(error, true); Button(onClick = onRetry) { Text("Retry") } }
@@ -39,10 +41,10 @@ fun CareTasksScreen(tasks: List<CareTask> = emptyList(), isLoading: Boolean = fa
             else -> LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(tasks, key = { it.id }) { task ->
                     CareCard(task.title) {
-                        if (task.dueDate.isNotBlank()) Text("Due ${task.dueDate}")
+                        if (task.dueDate.isNotBlank()) Text("Due ${task.dueDate} at ${task.time}")
+                        if (task.description.isNotBlank()) Text(task.description)
                         if (task.appointmentId != null) Text("Linked to appointment")
-                        Checkbox(checked = task.completed, enabled = !isSaving, onCheckedChange = { onCompletedChange(task, it) },
-                            modifier = Modifier.semantics { contentDescription = "Complete ${task.title}" })
+                        Checkbox(checked = task.completed, onCheckedChange = { onCompletedChange(task, it) })
                     }
                 }
             }

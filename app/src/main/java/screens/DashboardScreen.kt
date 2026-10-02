@@ -1,6 +1,3 @@
-// Home screen with caller-provided summaries and navigation callbacks. MainActivity currently supplies
-// fixed prompts rather than calculated care totals.
-
 package com.example.carelink.screens
 
 import androidx.compose.foundation.background

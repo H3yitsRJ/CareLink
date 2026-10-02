@@ -13,16 +13,43 @@ interface CaregiverMedicationData {
     fun edit(original: Medication, edited: Medication, actorId: String, completed: (Result<Medication>) -> Unit)
 }
 
+interface CaregiverAccessData {
+    fun watchGrants(patientId: String, changed: (List<CaregiverAccess>, Boolean) -> Unit): () -> Unit
+    fun save(access: CaregiverAccess, patientName: String, completed: (Result<Unit>) -> Unit)
+}
+
 /** Medication-only delegation. The patient owns grants; caregivers cannot grant themselves access. */
-class MedicationCaregiverStore(private val db: FirebaseFirestore) : CaregiverMedicationData {
+class MedicationCaregiverStore(private val db: FirebaseFirestore) : CaregiverMedicationData, CaregiverAccessData {
     fun grants(patientId: String) = db.collection("users").document(patientId).collection("medicationCaregivers")
     fun medications(patientId: String) = db.collection("users").document(patientId).collection("medications")
 
     fun saveAccess(access: CaregiverAccess, patientName: String) = db.runTransaction { transaction ->
+        require(validId(access.patientId) && validId(access.caregiverId) && access.patientId != access.caregiverId)
+        require(access.permissions.all { it in setOf(CarePermission.VIEW, CarePermission.EDIT) })
+        require(CarePermission.EDIT !in access.permissions || CarePermission.VIEW in access.permissions)
         val reference = grants(access.patientId).document(access.caregiverId)
-        transaction.get(reference)
-        transaction.set(reference, mapOf("patientId" to access.patientId, "caregiverId" to access.caregiverId,
-            "patientName" to patientName.take(200), "permissions" to access.permissions.map { it.name }, "revoked" to access.revoked))
+        val previous = transaction.get(reference)
+        val event = db.collection("users").document(access.patientId).collection("careHistory").document()
+        val action = accessAction(previous.exists(), access.revoked)
+        transaction.set(reference, access.toFirestore() + mapOf("patientName" to patientName.take(200), "historyEventId" to event.id))
+        transaction.set(event, access.toFirestore() + mapOf(
+            "actorId" to access.patientId, "type" to "CAREGIVER_ACCESS", "action" to action,
+            "title" to "Caregiver access ${action.lowercase()}", "occurredAt" to FieldValue.serverTimestamp()
+        ))
+    }
+
+    override fun save(access: CaregiverAccess, patientName: String, completed: (Result<Unit>) -> Unit) {
+        saveAccess(access, patientName).addOnSuccessListener { completed(Result.success(Unit)) }
+            .addOnFailureListener { completed(Result.failure(it)) }
+    }
+
+    override fun watchGrants(patientId: String, changed: (List<CaregiverAccess>, Boolean) -> Unit): () -> Unit {
+        var active = true
+        val listener = grants(patientId).addSnapshotListener(MetadataChanges.INCLUDE) { snapshot, failure ->
+            if (active) changed(snapshot?.documents?.mapNotNull { access(patientId, it.id, it.data.orEmpty()) }.orEmpty(),
+                failure == null && snapshot != null && !snapshot.metadata.isFromCache)
+        }
+        return { active = false; listener.remove() }
     }
 
     override fun watchAccess(patientId: String, caregiverId: String, changed: (CaregiverAccess?, String, Boolean) -> Unit): () -> Unit {
@@ -60,6 +87,7 @@ class MedicationCaregiverStore(private val db: FirebaseFirestore) : CaregiverMed
     }
 
     companion object {
+        internal fun accessAction(exists: Boolean, revoked: Boolean) = if (revoked) "REVOKED" else if (exists) "UPDATED" else "GRANTED"
         internal fun editFields(original: Medication, current: Medication?, edited: Medication): Map<String, Any> {
             require(original.id == edited.id && original.patientId == edited.patientId)
             require(edited.validate().isEmpty())
@@ -69,10 +97,7 @@ class MedicationCaregiverStore(private val db: FirebaseFirestore) : CaregiverMed
         fun validId(id: String) = id.isNotBlank() && id.length <= 128 && '/' !in id && id != "." && id != ".."
         fun access(patientId: String, caregiverId: String, data: Map<String, Any?>): CaregiverAccess? {
             if (data["patientId"] != patientId || data["caregiverId"] != caregiverId) return null
-            val permissions = (data["permissions"] as? List<*>)?.mapNotNull { value ->
-                CarePermission.entries.find { it.name == value }
-            }?.toSet() ?: return null
-            return CaregiverAccess(caregiverId, patientId, caregiverId, permissions, data["revoked"] != false)
+            return CaregiverAccess.fromFirestore(caregiverId, data)
         }
         fun editableFields(medication: Medication): Map<String, Any> = medication.toFirestore().filterKeys {
             it in setOf("name", "strength", "dose", "frequency", "reminderTimes", "instructions")

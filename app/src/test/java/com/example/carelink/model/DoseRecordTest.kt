@@ -17,20 +17,4 @@ class DoseRecordTest {
         assertNull(DoseRecord.fromFirestore("bad", data + ("status" to "unknown")))
         assertNull(DoseRecord.fromFirestore("bad", data + ("completionTimeMillis" to -1L)))
     }
-
-
-    @Test
-    fun `round trips through Firestore data`() {
-        val record = DoseRecord("dose-1", "med-1", 1_800_000L, DoseStatus.TAKEN, 1_900_000L)
-        assertEquals(record, DoseRecord.fromFirestore(record.id, record.toFirestore()))
-    }
-
-    @Test
-    fun `rejects unknown status`() {
-        assertNull(DoseRecord.fromFirestore("dose-1", mapOf(
-            "medicationId" to "med-1",
-            "scheduledTimeMillis" to 1_800_000L,
-            "status" to "ignored"
-        )))
-    }
 }

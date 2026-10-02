@@ -1,43 +1,81 @@
 package com.example.carelink.notifications
 
+import android.app.AlarmManager
+import android.app.PendingIntent
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
 import com.example.carelink.model.Appointment
 import com.example.carelink.model.AppointmentStatus
+import java.text.SimpleDateFormat
+import java.util.Locale
 
-/** The caller supplies an absolute reminder time after applying the agreed lead-time/time-zone policy. */
-enum class AppointmentReminderResult { SCHEDULED, PERMISSION_DENIED, NOT_ELIGIBLE }
+class AppointmentReminderScheduler(private val context: Context) {
+    private val alarmManager =
+        context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
 
-/** Small platform boundary so scheduling behavior can be tested without Firebase or a device. */
-interface AppointmentReminderAlarms {
-    fun notificationsAllowed(): Boolean
-    fun schedule(patientId: String, appointmentId: String, triggerAtMillis: Long)
-    fun cancel(patientId: String, appointmentId: String)
-}
-
-/**
- * Owns one reminder per patient/appointment. Call after a successful save, and call cancel after
- * cancellation/removal. Storage and permission prompts remain the owning features' responsibility.
- */
-class AppointmentReminderScheduler(
-    private val alarms: AppointmentReminderAlarms,
-    private val nowMillis: () -> Long = System::currentTimeMillis
-) {
-    fun schedule(appointment: Appointment, triggerAtMillis: Long): AppointmentReminderResult {
-        if (appointment.id.isBlank() || appointment.patientId.isBlank()) {
-            return AppointmentReminderResult.NOT_ELIGIBLE
-        }
-        // Clear stale alarms even when an edit makes an appointment ineligible or permission was revoked.
+    fun schedule(appointment: Appointment) {
         cancel(appointment)
-        if (appointment.status != AppointmentStatus.SCHEDULED || triggerAtMillis <= nowMillis()) {
-            return AppointmentReminderResult.NOT_ELIGIBLE
-        }
-        if (!alarms.notificationsAllowed()) return AppointmentReminderResult.PERMISSION_DENIED
-        alarms.schedule(appointment.patientId, appointment.id, triggerAtMillis)
-        return AppointmentReminderResult.SCHEDULED
+
+        if (appointment.status != AppointmentStatus.SCHEDULED) return
+
+        val appointmentTime = runCatching {
+            SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US).apply {
+                isLenient = false
+            }.parse("${appointment.date} ${appointment.time}")?.time
+        }.getOrNull() ?: return
+
+        // Show one reminder an hour before the appointment.
+        val reminderTime = appointmentTime - 60 * 60 * 1000L
+        if (reminderTime <= System.currentTimeMillis()) return
+
+        val pendingIntent = pendingIntent(
+            appointment,
+            PendingIntent.FLAG_UPDATE_CURRENT
+        ) ?: return
+
+        alarmManager.setAndAllowWhileIdle(
+            AlarmManager.RTC_WAKEUP,
+            reminderTime,
+            pendingIntent
+        )
     }
 
     fun cancel(appointment: Appointment) {
-        if (appointment.id.isNotBlank() && appointment.patientId.isNotBlank()) {
-            alarms.cancel(appointment.patientId, appointment.id)
+        val pendingIntent = pendingIntent(
+            appointment,
+            PendingIntent.FLAG_NO_CREATE
+        ) ?: return
+
+        alarmManager.cancel(pendingIntent)
+        pendingIntent.cancel()
+    }
+
+    private fun pendingIntent(
+        appointment: Appointment,
+        lookupFlag: Int
+    ): PendingIntent? {
+        if (appointment.patientId.isBlank() || appointment.id.isBlank()) return null
+
+        val intent = Intent(
+            context,
+            AppointmentReminderReceiver::class.java
+        ).apply {
+            data = Uri.Builder()
+                .scheme("carelink")
+                .authority("appointment-reminder")
+                .appendPath(appointment.patientId)
+                .appendPath(appointment.id)
+                .build()
+            putExtra(AppointmentReminderReceiver.EXTRA_PATIENT_ID, appointment.patientId)
+            putExtra(AppointmentReminderReceiver.EXTRA_APPOINTMENT_ID, appointment.id)
         }
+
+        return PendingIntent.getBroadcast(
+            context,
+            0,
+            intent,
+            lookupFlag or PendingIntent.FLAG_IMMUTABLE
+        )
     }
 }

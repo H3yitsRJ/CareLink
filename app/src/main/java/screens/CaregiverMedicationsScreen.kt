@@ -12,6 +12,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.example.carelink.data.MedicationCaregiverStore
 import com.example.carelink.data.CaregiverMedicationData
+import com.example.carelink.data.CaregiverAccessData
 import com.example.carelink.model.CarePermission
 import com.example.carelink.model.CaregiverAccess
 import com.example.carelink.model.Medication
@@ -19,10 +20,10 @@ import com.google.firebase.firestore.FirebaseFirestore
 
 /** The same medication form is used for patient and caregiver edits. */
 @Composable
-fun CaregiverMedicationsScreen(actorId: String, onBack: () -> Unit, data: CaregiverMedicationData? = null) {
+fun CaregiverMedicationsScreen(actorId: String, onBack: () -> Unit, data: CaregiverMedicationData? = null, initialPatientId: String? = null) {
     val store = data ?: remember { MedicationCaregiverStore(FirebaseFirestore.getInstance()) }
     var patientInput by rememberSaveable { mutableStateOf("") }
-    var patientId by remember { mutableStateOf<String?>(null) }
+    var patientId by remember { mutableStateOf(initialPatientId) }
     var patientName by remember { mutableStateOf("") }
     var access by remember { mutableStateOf<CaregiverAccess?>(null) }
     var medications by remember { mutableStateOf<List<Medication>>(emptyList()) }
@@ -47,7 +48,9 @@ fun CaregiverMedicationsScreen(actorId: String, onBack: () -> Unit, data: Caregi
         val patient = patientId
         if (patient == null) return@DisposableEffect onDispose { }
         loading = true
+        var active = true
         val stop = store.watchAccess(patient, actorId) { latest, name, online ->
+            if (!active) return@watchAccess
             connected = online
             access = if (connected) latest else null
             patientName = if (connected && latest?.allows(CarePermission.VIEW) == true) name else ""
@@ -62,13 +65,15 @@ fun CaregiverMedicationsScreen(actorId: String, onBack: () -> Unit, data: Caregi
                     else "Medication access is unavailable or has been revoked. Ask the patient to grant access."
             }
         }
-        onDispose { stop() }
+        onDispose { active = false; stop() }
     }
     DisposableEffect(patientId, access?.allows(CarePermission.VIEW), retry) {
         val patient = patientId
         if (patient == null || access?.allows(CarePermission.VIEW) != true) return@DisposableEffect onDispose { }
         loading = true
+        var active = true
         val stop = store.watchMedications(patient) { latest, failure ->
+            if (!active) return@watchMedications
             loading = false
             if (failure != null || latest == null) {
                 medications = emptyList()
@@ -82,7 +87,7 @@ fun CaregiverMedicationsScreen(actorId: String, onBack: () -> Unit, data: Caregi
                 error = null
             }
         }
-        onDispose { stop() }
+        onDispose { active = false; stop() }
     }
 
     Column(Modifier.fillMaxSize().safeDrawingPadding()) {
@@ -120,6 +125,7 @@ fun CaregiverMedicationsScreen(actorId: String, onBack: () -> Unit, data: Caregi
             }
             else -> Column(Modifier.verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text("Caregiver medications", style = MaterialTheme.typography.headlineMedium)
+                if (initialPatientId == null) {
                 OutlinedTextField(patientInput, { patientInput = it }, label = { Text("Patient CareLink ID") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
                 Button(onClick = {
                     val candidate = patientInput.trim()
@@ -130,6 +136,7 @@ fun CaregiverMedicationsScreen(actorId: String, onBack: () -> Unit, data: Caregi
                         patientId = candidate; retry++
                     }
                 }, enabled = !loading && !saving, modifier = Modifier.fillMaxWidth()) { Text("Open patient medications") }
+                }
                 if (loading) Text("Loading medications")
                 if (error != null) StateMessage(error!!, true)
                 if (access?.allows(CarePermission.VIEW) == true && !loading) {
@@ -144,8 +151,8 @@ fun CaregiverMedicationsScreen(actorId: String, onBack: () -> Unit, data: Caregi
 }
 
 @Composable
-fun MedicationCaregiverAccessScreen(patientId: String, patientName: String, onBack: () -> Unit) {
-    val store = remember { MedicationCaregiverStore(FirebaseFirestore.getInstance()) }
+fun MedicationCaregiverAccessScreen(patientId: String, patientName: String, onBack: () -> Unit, data: CaregiverAccessData? = null) {
+    val store = data ?: remember { MedicationCaregiverStore(FirebaseFirestore.getInstance()) }
     var grants by remember { mutableStateOf<List<CaregiverAccess>>(emptyList()) }
     var caregiverId by rememberSaveable { mutableStateOf("") }
     var selected by remember { mutableStateOf<CaregiverAccess?>(null) }
@@ -155,27 +162,35 @@ fun MedicationCaregiverAccessScreen(patientId: String, patientName: String, onBa
     var error by remember { mutableStateOf<String?>(null) }
     var success by remember { mutableStateOf<String?>(null) }
     var retry by remember { mutableIntStateOf(0) }
+    var connected by remember { mutableStateOf(false) }
+    BackHandler(enabled = !saving) {
+        when { revoke != null -> revoke = null; selected != null -> { selected = null; error = null }; else -> onBack() }
+    }
+
     DisposableEffect(patientId, retry) {
         loading = true
         var active = true
-        val listener = store.grants(patientId).addSnapshotListener { snapshot, failure ->
-            if (!active) return@addSnapshotListener
+        val stop = store.watchGrants(patientId) { latest, online ->
+            if (!active) return@watchGrants
             loading = false
-            error = if (failure != null) "Couldn't load caregiver access. Try again." else null
-            grants = snapshot?.documents?.mapNotNull { MedicationCaregiverStore.access(patientId, it.id, it.data.orEmpty()) }.orEmpty()
+            connected = online
+            error = if (!online) "Connect to the internet to manage caregiver access." else null
+            grants = if (online) latest else emptyList()
         }
-        onDispose { active = false; listener.remove() }
+        onDispose { active = false; stop() }
     }
     fun save(value: CaregiverAccess) {
         saving = true; error = null; success = null
-        store.saveAccess(value, patientName)
-            .addOnSuccessListener { saving = false; selected = null; success = if (value.revoked) "Access revoked." else "Medication access saved." }
-            .addOnFailureListener { saving = false; error = "Couldn't save access. Check your connection and the caregiver's CareLink ID. They need a completed profile." }
+        store.save(value, patientName) { result ->
+            saving = false
+            result.onSuccess { selected = null; success = if (value.revoked) "Access revoked." else "Medication access saved." }
+                .onFailure { error = "Couldn't save access. Check your connection and the caregiver's CareLink ID. They need a completed profile." }
+        }
     }
     if (selected != null) {
         CaregiverAccessScreen(selected, "Medication access for ${selected!!.caregiverId}", true,
             onSave = { save(it.copy(revoked = false)) }, onCancel = { selected = null; error = null },
-            availablePermissions = setOf(CarePermission.VIEW, CarePermission.EDIT), isSaving = saving, error = error)
+            availablePermissions = setOf(CarePermission.VIEW, CarePermission.EDIT), isSaving = saving || !connected, error = error)
     } else Column(Modifier.fillMaxSize().safeDrawingPadding().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text("Medication caregiver access", style = MaterialTheme.typography.headlineMedium)
         Text("Your CareLink ID")
@@ -185,8 +200,8 @@ fun MedicationCaregiverAccessScreen(patientId: String, patientName: String, onBa
         Button(onClick = {
             val id = caregiverId.trim()
             if (!MedicationCaregiverStore.validId(id) || id == patientId) error = "Enter a different person's CareLink ID."
-            else { error = null; selected = grants.find { it.caregiverId == id } ?: CaregiverAccess(id, patientId, id, setOf(CarePermission.VIEW)) }
-        }, enabled = !saving, modifier = Modifier.fillMaxWidth()) { Text("Choose medication access") }
+            else { error = null; selected = grants.find { it.caregiverId == id }?.copy(revoked = false) ?: CaregiverAccess(id, patientId, id, setOf(CarePermission.VIEW)) }
+        }, enabled = !saving && connected && !loading, modifier = Modifier.fillMaxWidth()) { Text("Choose medication access") }
         if (loading) Text("Loading caregiver access")
         if (error != null) { StateMessage(error!!, true); TextButton(onClick = { retry++ }) { Text("Retry") } }
         if (success != null) Text(success!!)
@@ -194,8 +209,8 @@ fun MedicationCaregiverAccessScreen(patientId: String, patientName: String, onBa
             Card(Modifier.fillMaxWidth()) { Column(Modifier.padding(16.dp)) {
                 Text(grant.caregiverId)
                 Text(if (grant.allows(CarePermission.EDIT)) "View and edit medications" else if (grant.allows(CarePermission.VIEW)) "View medications" else "No medication access")
-                TextButton(onClick = { selected = grant }, enabled = !saving) { Text("Edit access") }
-                TextButton(onClick = { revoke = grant }, enabled = !saving) { Text("Revoke access") }
+                TextButton(onClick = { selected = grant }, enabled = !saving && connected) { Text("Edit access") }
+                TextButton(onClick = { revoke = grant }, enabled = !saving && connected) { Text("Revoke access") }
             } }
         }
         OutlinedButton(onClick = onBack, enabled = !saving, modifier = Modifier.fillMaxWidth()) { Text("Back") }
