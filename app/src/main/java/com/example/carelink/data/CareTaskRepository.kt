@@ -10,6 +10,7 @@ interface CareTaskRepository {
     fun update(task: CareTask, completed: (Result<CareTask>) -> Unit)
     fun list(patientId: String, completed: (Result<List<CareTask>>) -> Unit)
     fun setCompleted(patientId: String, id: String, completed: Boolean, result: (Result<Unit>) -> Unit)
+    fun delete(patientId: String, id: String, result: (Result<Unit>) -> Unit)
 }
 
 class FirestoreCareTaskRepository(private val db: FirebaseFirestore) : CareTaskRepository {
@@ -53,6 +54,36 @@ class FirestoreCareTaskRepository(private val db: FirebaseFirestore) : CareTaskR
         }.addOnSuccessListener { completed(Result.success(it)) }
             .addOnFailureListener { completed(Result.failure(it)) }
     }
+
+    override fun delete(
+        patientId: String,
+        id: String,
+        result: (Result<Unit>) -> Unit
+    ) {
+        if (!validDocumentId(patientId) || !validDocumentId(id)) {
+            result(Result.failure(IllegalArgumentException("Invalid task identity")))
+            return
+        }
+
+        val reference = tasks(patientId).document(id)
+
+        db.runTransaction { transaction ->
+            val snapshot = transaction.get(reference)
+            check(
+                snapshot.exists() &&
+                        snapshot.getString("patientId") == patientId
+            ) {
+                "Care task not found"
+            }
+            transaction.delete(reference)
+            Unit
+        }.addOnSuccessListener {
+            result(Result.success(Unit))
+        }.addOnFailureListener {
+            result(Result.failure(it))
+        }
+    }
+
 }
 
 class InMemoryCareTaskRepository : CareTaskRepository {
@@ -82,6 +113,22 @@ class InMemoryCareTaskRepository : CareTaskRepository {
         if (task == null) result(Result.failure(NoSuchElementException("Care task not found")))
         else { tasks[id] = task.copy(completed = completed); result(Result.success(Unit)) }
     }
+    override fun delete(patientId: String, id: String, result: (Result<Unit>) -> Unit) {
+        if (!validDocumentId(patientId) || !validDocumentId(id)) {
+            result(Result.failure(IllegalArgumentException("Invalid task identity")))
+            return
+        }
+
+        val task = tasks[id]?.takeIf { it.patientId == patientId }
+
+        if (task == null) {
+            result(Result.failure(NoSuchElementException("Care task not found")))
+        } else {
+            tasks.remove(id)
+            result(Result.success(Unit))
+        }
+    }
+
 }
 
 private fun creationError(task: CareTask) = taskError(task, creating = true)
