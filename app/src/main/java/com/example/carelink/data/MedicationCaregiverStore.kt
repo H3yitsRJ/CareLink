@@ -75,7 +75,7 @@ class MedicationCaregiverStore(private val db: FirebaseFirestore) : CaregiverMed
             )
         )
 
-        if (access.revoked) {
+        if (access.revoked || !access.allows(CarePermission.VIEW)) {
             transaction.delete(caregiverRef)
         } else {
             transaction.set(

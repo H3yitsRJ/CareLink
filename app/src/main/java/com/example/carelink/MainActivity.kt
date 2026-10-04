@@ -380,7 +380,7 @@ class MainActivity : ComponentActivity() {
 
                                 if (actorId != null) {
                                     var caregiverMode by rememberSaveable(actorId) {
-                                        mutableStateOf(false)
+                                        mutableStateOf(selectedCareRecipient != null)
                                     }
 
                                     if (caregiverMode) {
