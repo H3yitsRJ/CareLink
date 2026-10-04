@@ -14,13 +14,83 @@ enum class CareActivityType(val label: String) {
     CAREGIVER_ACCESS("Caregiver access")
 }
 
+/**
+ * Shared history event.
+ * actorId identifies the user who performed the action.
+ * relatedRecordId identifies the affected record, when available.
+ * Older display entries may have an unknown actor.
+ */
 data class CareHistoryEntry(
     val id: String,
     val patientId: String,
     val occurredAtMillis: Long,
     val type: CareActivityType,
-    val summary: String
-)
+    val summary: String,
+    val actorId: String? = null,
+    val relatedRecordId: String? = null
+) {
+    /** The event ID is stored as the Firestore document ID. */
+    fun toFirestore(): Map<String, Any> {
+        require(id.isNotBlank()) { "Event ID is required." }
+        require(patientId.isNotBlank()) { "Patient ID is required." }
+        require(!actorId.isNullOrBlank()) { "Acting user ID is required." }
+        require(summary.isNotBlank()) { "Event description is required." }
+        require(relatedRecordId == null || relatedRecordId.isNotBlank()) {
+            "Related record ID must not be blank."
+        }
+
+        return mutableMapOf<String, Any>(
+            "patientId" to patientId,
+            "actorId" to requireNotNull(actorId),
+            "occurredAtMillis" to occurredAtMillis,
+            "type" to type.name,
+            "summary" to summary
+        ).apply {
+            relatedRecordId?.let { put("relatedRecordId", it) }
+        }
+    }
+
+    companion object {
+        fun fromFirestore(
+            id: String,
+            data: Map<String, Any?>
+        ): CareHistoryEntry? {
+            fun text(key: String): String? =
+                (data[key] as? String)?.takeIf { it.isNotBlank() }
+
+            if (id.isBlank()) return null
+            val patientId = text("patientId") ?: return null
+            val actorId = text("actorId") ?: return null
+            val summary = text("summary") ?: return null
+            val time = data["occurredAtMillis"] as? Long ?: return null
+            val type = CareActivityType.entries.firstOrNull {
+                it.name == data["type"]
+            } ?: return null
+
+            val relatedId = data["relatedRecordId"]
+            if (relatedId != null &&
+                (relatedId !is String || relatedId.isBlank())
+            ) return null
+
+            return CareHistoryEntry(
+                id = id,
+                patientId = patientId,
+                occurredAtMillis = time,
+                type = type,
+                summary = summary,
+                actorId = actorId,
+                relatedRecordId = relatedId as? String
+            )
+        }
+
+        /** Newest first; event ID provides consistent ordering for ties. */
+        fun newestFirst(entries: List<CareHistoryEntry>): List<CareHistoryEntry> =
+            entries.sortedWith(
+                compareByDescending<CareHistoryEntry> { it.occurredAtMillis }
+                    .thenBy { it.id }
+            )
+    }
+}
 
 data class CareHistoryFilter(
     val startMillis: Long? = null,
