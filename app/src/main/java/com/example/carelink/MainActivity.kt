@@ -69,6 +69,7 @@ import com.google.firebase.auth.FirebaseAuthInvalidUserException
 import com.google.firebase.firestore.FirebaseFirestore
 import navigation.BottomNavDestination
 import com.example.carelink.notifications.AppointmentReminderScheduler
+import com.example.carelink.repositories.AppointmentRepository
 
 private enum class AuthScreen {
     SignIn,
@@ -125,6 +126,7 @@ class MainActivity : ComponentActivity() {
                 }
 
                 val firestore = remember { FirebaseFirestore.getInstance() }
+                val appointmentRepository = remember { AppointmentRepository(firestore) }
                 val doseHistoryStore = remember { DoseHistoryStore(firestore) }
                 val careHistoryStore = remember { CareHistoryStore(firestore) }
                 var isSavingDose by remember { mutableStateOf(false) }
@@ -204,21 +206,13 @@ class MainActivity : ComponentActivity() {
                     appointmentsLoading = true
                     appointmentLoadError = null
 
-                    firestore
-                        .collection("users")
-                        .document(user.uid)
-                        .collection("appointments")
-                        .get()
-                        .addOnSuccessListener { snapshot ->
-                            appointments = snapshot.documents.map { document ->
-                                Appointment.fromFirestore(
-                                    id = document.id,
-                                    data = document.data.orEmpty()
-                                )
-                            }
+                    appointmentRepository.getAppointments(
+                        userId = user.uid,
+                        onSuccess = { loadedAppointments ->
+                            appointments = loadedAppointments
 
-                            appointments.forEach { appointment ->
-                                if (appointment.status == AppointmentStatus.SCHEDULED) {
+                            loadedAppointments.forEach { appointment ->
+                                if(appointment.status == AppointmentStatus.SCHEDULED) {
                                     appointmentReminderScheduler.schedule(appointment)
                                 } else {
                                     appointmentReminderScheduler.cancel(appointment)
@@ -226,12 +220,13 @@ class MainActivity : ComponentActivity() {
                             }
 
                             appointmentsLoading = false
-                        }
-                        .addOnFailureListener {
+                        },
+                        onError = { error->
                             appointmentsLoading = false
-                            appointmentLoadError =
-                                "We couldn't load your appointments. Please try again."
+                            appointmentLoadError = error
                         }
+                    )
+
                 }
 
                 LaunchedEffect(
@@ -737,27 +732,28 @@ class MainActivity : ComponentActivity() {
                                         val user = auth.currentUser
 
                                         if (user != null) {
-                                            val cancelledAppointment = appointment.copy(
-                                                status = AppointmentStatus.CANCELLED
-                                            )
+                                            appointmentRepository.cancelAppointment(
+                                                userId = user.uid,
+                                                appointment = appointment,
+                                                onSuccess = {
+                                                    val cancelledAppointment = appointment.copy(
+                                                        status = AppointmentStatus.CANCELLED
+                                                    )
 
-                                            firestore
-                                                .collection("users")
-                                                .document(user.uid)
-                                                .collection("appointments")
-                                                .document(appointment.id)
-                                                .set(cancelledAppointment.toFirestore())
-                                                .addOnSuccessListener {
-                                                    appointmentReminderScheduler.cancel(cancelledAppointment)
+                                                    appointmentReminderScheduler.cancel(
+                                                        cancelledAppointment
+                                                    )
+
                                                     selectedAppointment = cancelledAppointment
-                                                    appointmentSuccessMessage =
-                                                        "Appointment cancelled successfully."
+
+                                                    appointmentSuccessMessage = "Appointment cancelled successfully."
+
                                                     loadAppointments()
+                                                },
+                                                onError = {
+                                                    appointmentSuccessMessage = "Sorry, we couldn't cancel the appointment. Please try again later."
                                                 }
-                                                .addOnFailureListener {
-                                                    appointmentSuccessMessage =
-                                                        "We couldn't cancel the appointment."
-                                                }
+                                            )
                                         }
                                     },
                                     onBack = {
@@ -780,39 +776,27 @@ class MainActivity : ComponentActivity() {
                                             isSavingAppointment = true
                                             appointmentSaveError = null
 
-                                            val appointmentCollection = firestore
-                                                .collection("users")
-                                                .document(user.uid)
-                                                .collection("appointments")
+                                            appointmentRepository.saveAppointment(
+                                                userId = user.uid,
+                                                appointment = appointment,
+                                                onSuccess = {
+                                                    appointmentReminderScheduler.schedule(appointment)
 
-                                            val appointmentId = appointment.id.ifBlank {
-                                                appointmentCollection.document().id
-                                            }
-
-                                            val appointmentToSave = appointment.copy(
-                                                id = appointmentId,
-                                                patientId = user.uid
-                                            )
-
-                                            appointmentCollection
-                                                .document(appointmentId)
-                                                .set(appointmentToSave.toFirestore())
-                                                .addOnSuccessListener {
-                                                    appointmentReminderScheduler.schedule(appointmentToSave)
                                                     isSavingAppointment = false
                                                     selectedAppointment = null
                                                     appointmentSaveError = null
-                                                    appointmentSuccessMessage =
-                                                        "Appointment saved successfully."
+
+                                                    appointmentSuccessMessage = "Appointment saved successfully."
 
                                                     loadAppointments()
+
                                                     appScreen = AppScreen.Appointments
-                                                }
-                                                .addOnFailureListener {
+                                                },
+                                                onError = {
                                                     isSavingAppointment = false
-                                                    appointmentSaveError =
-                                                        "We couldn't save the appointment. Please try again."
+                                                    appointmentSaveError = "Could not save appointment. Please try again."
                                                 }
+                                            )
                                         } else {
                                             appointmentSaveError =
                                                 "You must be signed in to save an appointment."
