@@ -11,6 +11,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.example.carelink.data.*
 
+
 @Composable
 fun CareRecipientSelector(
     actorId: String,
@@ -87,7 +88,17 @@ fun CareRecipientSelector(
 
                 when {
                     loading -> Text("Loading care recipients...")
-                    error != null -> { Text(error!!); Button(onClick = { retry++ }) { Text("Retry") } }
+                    error != null -> {
+                        Text(error!!)
+                        Button(
+                            onClick = {
+                                error = null
+                                retry++
+                            }
+                        ) {
+                            Text("Retry")
+                        }
+                    }
                     recipients.isEmpty() -> Text("You don't have access to any care recipients yet.")
                     else -> recipients.forEach { recipient ->
                         OutlinedButton(onClick = { onSelect(recipient.patientId); choosing = false }, modifier = Modifier.fillMaxWidth()) {

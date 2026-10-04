@@ -1,6 +1,6 @@
 # Care-recipient selector (SAD-54)
 
-The caregiver medication entry point now lists recipients from the signed-in caregiver's existing medication grants. A grant must match its `users/{patientId}/medicationCaregivers/{caregiverId}` path, name the signed-in caregiver, explicitly be unrevoked, and include VIEW. The selector does not grant access to appointments, concerns, or tasks.
+The caregiver medication entry point now lists recipients from the signed-in caregiver's existing medication grants. A grant must match its `users/{patientId}/medicationCaregivers/{caregiverId}` path, name the signed-in caregiver, explicitly be unrevoked, and include VIEW. A matching VIEW grant also authorizes reading the patient's health concerns for the selected caregiver.
 
 The current recipient is displayed above their medication screens. The selection is held in MainActivity, scoped to the signed-in account, and survives leaving and returning to the caregiver flow. Switching recipients recreates the medication screen and detaches previous listeners. Revoked recipients disappear; failed or cached-only access verification hides all recipient data until a successful retry.
 

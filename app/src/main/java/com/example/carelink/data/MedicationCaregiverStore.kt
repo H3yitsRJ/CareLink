@@ -23,21 +23,81 @@ class MedicationCaregiverStore(private val db: FirebaseFirestore) : CaregiverMed
     fun grants(patientId: String) = db.collection("users").document(patientId).collection("medicationCaregivers")
     fun medications(patientId: String) = db.collection("users").document(patientId).collection("medications")
 
-    fun saveAccess(access: CaregiverAccess, patientName: String, expected: CaregiverAccess?) = db.runTransaction { transaction ->
-        require(validId(access.patientId) && validId(access.caregiverId) && access.patientId != access.caregiverId)
-        require(access.permissions.all { it in setOf(CarePermission.VIEW, CarePermission.EDIT) })
-        require(CarePermission.EDIT !in access.permissions || CarePermission.VIEW in access.permissions)
+    fun saveAccess(
+        access: CaregiverAccess,
+        patientName: String,
+        expected: CaregiverAccess?
+    ) = db.runTransaction { transaction ->
+        require(
+            validId(access.patientId) &&
+                    validId(access.caregiverId) &&
+                    access.patientId != access.caregiverId
+        )
+        require(access.permissions.all {
+            it in setOf(CarePermission.VIEW, CarePermission.EDIT)
+        })
+        require(
+            CarePermission.EDIT !in access.permissions ||
+                    CarePermission.VIEW in access.permissions
+        )
+
         val reference = grants(access.patientId).document(access.caregiverId)
         val previous = transaction.get(reference)
-        check(expected != null || !previous.exists()) { "Caregiver access changed. Reopen it before saving." }
-        checkAccessUnchanged(expected, if (previous.exists()) access(access.patientId, access.caregiverId, previous.data.orEmpty()) else null)
-        val event = db.collection("users").document(access.patientId).collection("careHistory").document()
+
+        check(expected != null || !previous.exists()) {
+            "Caregiver access changed. Reopen it before saving."
+        }
+        checkAccessUnchanged(
+            expected,
+            if (previous.exists()) {
+                access(access.patientId, access.caregiverId, previous.data.orEmpty())
+            } else {
+                null
+            }
+        )
+
+        val caregiverRef = db.collection("caregiverAccess")
+            .document(access.caregiverId)
+            .collection("recipients")
+            .document(access.patientId)
+
+        val event = db.collection("users")
+            .document(access.patientId)
+            .collection("careHistory")
+            .document()
         val action = accessAction(previous.exists(), access.revoked)
-        transaction.set(reference, access.toFirestore() + mapOf("patientName" to patientName.take(200), "historyEventId" to event.id))
-        transaction.set(event, access.toFirestore() + mapOf(
-            "actorId" to access.patientId, "type" to "CAREGIVER_ACCESS", "action" to action,
-            "title" to "Caregiver access ${action.lowercase()}", "occurredAt" to FieldValue.serverTimestamp()
-        ))
+
+        transaction.set(
+            reference,
+            access.toFirestore() + mapOf(
+                "patientName" to patientName.take(200),
+                "historyEventId" to event.id
+            )
+        )
+
+        if (access.revoked) {
+            transaction.delete(caregiverRef)
+        } else {
+            transaction.set(
+                caregiverRef,
+                mapOf(
+                    "patientId" to access.patientId,
+                    "patientName" to patientName.take(200),
+                    "grantedAt" to FieldValue.serverTimestamp()
+                )
+            )
+        }
+
+        transaction.set(
+            event,
+            access.toFirestore() + mapOf(
+                "actorId" to access.patientId,
+                "type" to "CAREGIVER_ACCESS",
+                "action" to action,
+                "title" to "Caregiver access ${action.lowercase()}",
+                "occurredAt" to FieldValue.serverTimestamp()
+            )
+        )
     }
 
     override fun save(access: CaregiverAccess, patientName: String, expected: CaregiverAccess?, completed: (Result<Unit>) -> Unit) {

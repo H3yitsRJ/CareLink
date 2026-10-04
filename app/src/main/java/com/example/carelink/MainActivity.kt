@@ -11,6 +11,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.TextButton
@@ -405,7 +406,11 @@ class MainActivity : ComponentActivity() {
                                             }
                                         )
                                     } else {
-                                        Column {
+                                        Column(
+                                            modifier = Modifier
+                                                .fillMaxSize()
+                                                .safeDrawingPadding()
+                                        ) {
                                             TextButton(
                                                 onClick = {
                                                     caregiverMode = true

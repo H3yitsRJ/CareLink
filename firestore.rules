@@ -88,11 +88,13 @@ service cloud.firestore {
           && request.resource.data.status in ['taken', 'missed', 'delayed', 'skipped'];
       }
 
-      match /appointments/{appointmentId} {
-        allow read, delete: if isOwner(userId);
-        allow create, update: if isOwner(userId)
-          && request.resource.data.patientId == userId;
-      }
+           match /appointments/{appointmentId} {
+             allow read: if isOwner(userId) || delegated(userId, 'VIEW');
+             allow delete: if isOwner(userId);
+
+             allow create, update: if isOwner(userId)
+               && request.resource.data.patientId == userId;
+           }
 
       match /careTasks/{taskId} {
         allow read, delete: if isOwner(userId);
@@ -101,13 +103,37 @@ service cloud.firestore {
           && resource.data.patientId == userId
           && request.resource.data.patientId == userId;
       }
-      match /healthConcerns/{concernId} {
-        allow read, delete: if isOwner(userId);
-        allow create, update: if isOwner(userId)
-          && request.resource.data.patientId == userId;
+           match /healthConcerns/{concernId} {
+             allow read: if isOwner(userId) || delegated(userId, 'VIEW');
+
+             allow delete: if isOwner(userId) || delegated(userId, 'EDIT');
+
+             allow create, update: if
+               (isOwner(userId) || delegated(userId, 'EDIT'))
+               && request.resource.data.patientId == userId;
+           }
+    }
+    match /caregiverAccess/{caregiverId} {
+      allow read: if isOwner(caregiverId);
+
+      match /recipients/{patientId} {
+        allow read: if isOwner(caregiverId);
+
+        allow create, update: if isOwner(patientId)
+          && request.resource.data.patientId == patientId
+          && getAfter(
+            /databases/$(database)/documents/users/$(patientId)/medicationCaregivers/$(caregiverId)
+          ).data.patientId == patientId
+          && getAfter(
+            /databases/$(database)/documents/users/$(patientId)/medicationCaregivers/$(caregiverId)
+          ).data.caregiverId == caregiverId
+          && getAfter(
+            /databases/$(database)/documents/users/$(patientId)/medicationCaregivers/$(caregiverId)
+          ).data.revoked == false;
+
+        allow delete: if isOwner(patientId);
       }
     }
-
     match /careTasks/{taskId} {
       allow read, delete: if signedIn()
         && resource.data.patientId == request.auth.uid;
