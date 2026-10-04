@@ -13,7 +13,9 @@ fun CareTasksFlow(patientId: String, repository: CareTaskRepository,
     onNavigate: (BottomNavDestination) -> Unit = {}, sourceAppointment: Appointment? = null, onCancelFollowUp: () -> Unit = {}) {
     key(patientId) {
         var adding by rememberSaveable { mutableStateOf(sourceAppointment != null) }
+        var selectedTaskId by rememberSaveable { mutableStateOf<String?>(null) }
         var tasks by remember { mutableStateOf<List<CareTask>>(emptyList()) }
+        val selectedTask = tasks.find { it.id == selectedTaskId }
         var loading by remember { mutableStateOf(true) }
         var saving by remember { mutableStateOf(false) }
         var followingUp by rememberSaveable { mutableStateOf(sourceAppointment != null) }
@@ -44,16 +46,25 @@ fun CareTasksFlow(patientId: String, repository: CareTaskRepository,
         }
         fun cancel() {
             adding = false
+            selectedTaskId = null
             if (followingUp) onCancelFollowUp()
         }
         BackHandler(enabled = adding) { if (!saving) cancel() }
         if (adding) {
-            AddEditCareTaskScreen(patientId = patientId, sourceAppointment = sourceAppointment.takeIf { followingUp }, isSaving = saving, saveError = saveError,
+            AddEditCareTaskScreen(
+                task = selectedTask,
+                patientId = patientId,
+                sourceAppointment = sourceAppointment.takeIf { followingUp },
+                isSaving = saving,
+                saveError = saveError,
                 onSave = { task ->
                     if (!saving) {
                         saving = true
                         saveError = null
-                        repository.create(task) { result ->
+                        val saveTask: (CareTask, (Result<CareTask>) -> Unit) -> Unit =
+                            if (selectedTaskId == null) repository::create else repository::update
+
+                        saveTask(task) { result ->
                             if (active.value) {
                                 saving = false
                                 result.onSuccess { saved ->
@@ -63,6 +74,7 @@ fun CareTasksFlow(patientId: String, repository: CareTaskRepository,
                                         .sortedWith(compareBy(CareTask::dueDate, CareTask::time))
                                     error = null
                                     followingUp = false
+                                    selectedTaskId = null
                                     adding = false
                                 }.onFailure { saveError = "We couldn't save the care task. Please try again." }
                             }
@@ -70,8 +82,23 @@ fun CareTasksFlow(patientId: String, repository: CareTaskRepository,
                     }
                 }, onCancel = { cancel() })
         } else {
-            CareTasksScreen(tasks = tasks, isLoading = loading, error = error,
-                onRetry = { refresh() }, onAdd = { followingUp = false; saveError = null; adding = true },
+            CareTasksScreen(
+                tasks = tasks,
+                isLoading = loading,
+                error = error,
+                onRetry = { refresh() },
+                onAdd = {
+                    selectedTaskId = null
+                    followingUp = false
+                    saveError = null
+                    adding = true
+                },
+                onTaskSelected = { task ->
+                    selectedTaskId = task.id
+                    followingUp = false
+                    saveError = null
+                    adding = true
+                },
                 onCompletedChange = { task, completed ->
                     repository.setCompleted(patientId, task.id, completed) { result ->
                         if (active.value) result.onSuccess {
@@ -80,7 +107,8 @@ fun CareTasksFlow(patientId: String, repository: CareTaskRepository,
                             tasks.find { it.id == task.id }?.let { changes[it.id] = revision to it }
                         }.onFailure { error = "We couldn't update the care task. Please try again." }
                     }
-                }, onNavigate = onNavigate)
+                },
+                onNavigate = onNavigate)
         }
     }
 }

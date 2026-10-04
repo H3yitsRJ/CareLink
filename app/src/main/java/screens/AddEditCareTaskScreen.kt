@@ -27,7 +27,11 @@ fun AddEditCareTaskScreen(task: CareTask? = null, sourceAppointment: Appointment
     var attempted by rememberSaveable(task?.id) { mutableStateOf(false) }
     fun draft() = CareTask(id, task?.patientId ?: patientId, title.trim(), description.trim(),
         dueDate.trim(), time.trim(), task?.completed ?: false, task?.appointmentId ?: sourceAppointment?.id)
-    val errors = if (attempted) draft().validationErrors() else emptyMap()
+    val errors = if (attempted) {
+        draft().validationErrors(requireFuture = task == null)
+    } else {
+        emptyMap()
+    }
     Column(Modifier.fillMaxSize().statusBarsPadding().imePadding().verticalScroll(rememberScrollState()).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text(if (task == null) "Add care task" else "Edit care task")
@@ -47,7 +51,9 @@ fun AddEditCareTaskScreen(task: CareTask? = null, sourceAppointment: Appointment
         Button(onClick = {
             attempted = true
             val candidate = draft()
-            if (candidate.validationErrors().isEmpty()) onSave(candidate)
+            if (candidate.validationErrors(requireFuture = task == null).isEmpty()) {
+                onSave(candidate)
+            }
         }, enabled = !isSaving, modifier = Modifier.fillMaxWidth()) {
             Text(if (isSaving) "Saving..." else "Save care task")
         }
