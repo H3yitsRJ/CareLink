@@ -19,7 +19,10 @@ import com.google.firebase.firestore.FirebaseFirestore
 import java.util.concurrent.atomic.AtomicBoolean
 
 class MedicationReminderReceiver : BroadcastReceiver() {
-    override fun onReceive(context: Context, intent: Intent) {
+    override fun onReceive(
+        context: Context,
+        intent: Intent
+    ) {
         val patientId = FirebaseAuth.getInstance().currentUser?.uid
         val scheduler = AndroidMedicationReminderScheduler(context)
         if (intent.action in setOf(Intent.ACTION_BOOT_COMPLETED, Intent.ACTION_TIME_CHANGED,

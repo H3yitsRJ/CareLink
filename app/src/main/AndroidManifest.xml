@@ -29,6 +29,9 @@
             </intent-filter>
         </receiver>
         <receiver
+            android:name=".notifications.CareTaskReminderReceiver"
+            android:exported="false" />
+        <receiver
             android:name=".notifications.AppointmentReminderReceiver"
             android:exported="false" />
         <activity
