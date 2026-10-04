@@ -19,9 +19,24 @@ class MedicationCaregiverStore(private val db: FirebaseFirestore) : CaregiverMed
     fun medications(patientId: String) = db.collection("users").document(patientId).collection("medications")
 
     fun saveAccess(access: CaregiverAccess, patientName: String) = db.runTransaction { transaction ->
-        val reference = grants(access.patientId).document(access.caregiverId)
-        transaction.get(reference)
-        transaction.set(reference, access.toFirestore() + ("patientName" to patientName.take(200)))
+        val patientRef = grants(access.patientId).document(access.caregiverId)
+        val caregiverRef = db.collection("caregiverAccess")
+            .document(access.caregiverId)
+            .collection("recipients")
+            .document(access.patientId)
+
+        val accessData = access.toFirestore() + ("patientName" to patientName.take(200))
+
+        transaction.set(patientRef, accessData)
+        if (access.revoked) {
+            transaction.delete(caregiverRef)
+        } else {
+            transaction.set(caregiverRef, mapOf(
+                "patientId" to access.patientId,
+                "patientName" to patientName.take(200),
+                "grantedAt" to FieldValue.serverTimestamp()
+            ))
+        }
     }
 
     override fun watchAccess(patientId: String, caregiverId: String, changed: (CaregiverAccess?, String, Boolean) -> Unit): () -> Unit {

@@ -27,7 +27,9 @@ class FirestoreCareTaskRepository(private val db: FirebaseFirestore) : CareTaskR
 
     override fun list(patientId: String, completed: (Result<List<CareTask>>) -> Unit) {
         tasks(patientId).get().addOnSuccessListener { snapshot ->
-            completed(Result.success(snapshot.documents.mapNotNull { CareTask.fromFirestore(it.id, it.data.orEmpty()) }))
+            completed(Result.success(snapshot.documents.mapNotNull {
+                CareTask.fromFirestore(it.id, it.data.orEmpty() + ("patientId" to patientId))
+            }))
         }.addOnFailureListener { completed(Result.failure(it)) }
     }
 

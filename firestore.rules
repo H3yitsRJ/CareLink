@@ -2,6 +2,8 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
+
+    // -- Helper Functions --
     function signedIn() {
       return request.auth != null;
     }
@@ -10,38 +12,129 @@ service cloud.firestore {
       return signedIn() && request.auth.uid == userId;
     }
 
+    // Helper to check if the current user is an authorized caregiver
+function isCaregiver(patientId, permission) {
+    let oldPath = /databases/$(database)/documents/users/$(patientId)/medicationCaregivers/$(request.auth.uid);
+    let newPath = /databases/$(database)/documents/caregiverAccess/$(request.auth.uid)/recipients/$(patientId);
+
+    return signedIn() && (
+        (
+            exists(oldPath)
+            && get(oldPath).data.caregiverId == request.auth.uid
+            && get(oldPath).data.patientId == patientId
+            && get(oldPath).data.revoked == false
+            && get(oldPath).data.permissions.hasAny([permission])
+        )
+        ||
+        (
+            exists(newPath)
+            && get(newPath).data.caregiverId == request.auth.uid
+            && get(newPath).data.patientId == patientId
+            && get(newPath).data.permissions.hasAny([permission])
+        )
+    );
+}
+
+
+    // -- User Data & Sub-collections --
     match /users/{userId} {
-      allow read, create, update: if isOwner(userId);
 
+      allow read: if isOwner(userId) || isCaregiver(userId, 'VIEW');
+      allow create, update: if isOwner(userId);
+
+      // Medications
       match /medications/{medicationId} {
-        allow read, delete: if isOwner(userId);
-        allow create, update: if isOwner(userId)
-          && request.resource.data.patientId == userId;
+        allow read: if isOwner(userId) || isCaregiver(userId, 'VIEW');
+
+        allow create, delete: if isOwner(userId);
+
+        allow update: if isOwner(userId)
+          || isCaregiver(userId, 'EDIT');
       }
 
+      // Dose Records
+      match /doseRecords/{doseId} {
+        allow read: if isOwner(userId) || isCaregiver(userId, 'VIEW');
+
+        allow create, update: if isOwner(userId)
+          || isCaregiver(userId, 'EDIT');
+
+        allow delete: if isOwner(userId);
+      }
+
+      // Appointments
       match /appointments/{appointmentId} {
-        allow read, delete: if isOwner(userId);
-        allow create, update: if isOwner(userId)
-          && request.resource.data.patientId == userId;
+        allow read: if isOwner(userId) || isCaregiver(userId, 'VIEW');
+
+        allow create, update, delete: if isOwner(userId)
+          || isCaregiver(userId, 'EDIT');
       }
 
-      match /healthConcerns/{concernId} {
-        allow read, delete: if isOwner(userId);
-        allow create, update: if isOwner(userId)
-          && request.resource.data.patientId == userId;
+     // Health Concerns
+match /healthConcerns/{concernId} {
+   allow read: if isOwner(userId) || isCaregiver(userId, 'VIEW');
+
+    allow create, update, delete: if isOwner(userId)
+        || isCaregiver(userId, 'EDIT');
+}
+
+      // Care Tasks
+      match /careTasks/{taskId} {
+        allow read: if isOwner(userId) || isCaregiver(userId, 'VIEW');
+
+        allow create, update, delete: if isOwner(userId)
+          || isCaregiver(userId, 'EDIT');
+      }
+
+      // Caregiver relationship management
+      match /medicationCaregivers/{caregiverId} {
+        allow read: if isOwner(userId)
+          || (signedIn() && request.auth.uid == caregiverId);
+
+        allow write: if isOwner(userId);
       }
     }
 
+
+    // -- Top-level Collections (Legacy/Shared) --
     match /careTasks/{taskId} {
-      allow read, delete: if signedIn()
-        && resource.data.patientId == request.auth.uid;
+      allow read, write: if signedIn() && (
+        resource.data.patientId == request.auth.uid ||
+        request.resource.data.patientId == request.auth.uid
+      );
+    }
 
-      allow create: if signedIn()
-        && request.resource.data.patientId == request.auth.uid;
 
-      allow update: if signedIn()
-        && resource.data.patientId == request.auth.uid
-        && request.resource.data.patientId == resource.data.patientId;
+    // Allow caregivers to discover their own caregiver relationship
+    match /{path=**}/medicationCaregivers/{caregiverId} {
+      allow read: if signedIn()
+        && resource.data.caregiverId == request.auth.uid;
+    }
+
+
+    // -- Caregiver Access Lookup --
+    match /caregiverAccess/{caregiverId} {
+
+      allow read: if signedIn()
+        && request.auth.uid == caregiverId;
+
+     match /recipients/{patientId} {
+  allow read: if isOwner(caregiverId);
+
+  allow create, update: if isOwner(patientId)
+    && request.resource.data.patientId == patientId
+    && getAfter(
+      /databases/$(database)/documents/users/$(patientId)/medicationCaregivers/$(caregiverId)
+    ).data.patientId == patientId
+    && getAfter(
+      /databases/$(database)/documents/users/$(patientId)/medicationCaregivers/$(caregiverId)
+    ).data.caregiverId == caregiverId
+    && getAfter(
+      /databases/$(database)/documents/users/$(patientId)/medicationCaregivers/$(caregiverId)
+    ).data.revoked == false;
+
+  allow delete: if isOwner(patientId);
+}
     }
   }
 }

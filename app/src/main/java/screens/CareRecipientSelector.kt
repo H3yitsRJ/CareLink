@@ -11,10 +11,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.example.carelink.data.*
 
+
 @Composable
 fun CareRecipientSelector(
-    actorId: String, selectedPatientId: String?, onSelect: (String?) -> Unit,
-    directory: CareRecipientDirectory, medicationData: CaregiverMedicationData, onBack: () -> Unit
+    actorId: String,
+    selectedPatientId: String?,
+    onSelect: (String?) -> Unit,
+    directory: CareRecipientDirectory,
+    medicationData: CaregiverMedicationData,
+    onBack: () -> Unit,
+    content: (@Composable (String) -> Unit)? = null
 ) {
     key(actorId) {
         var recipients by remember { mutableStateOf<List<CareRecipient>>(emptyList()) }
@@ -53,7 +59,16 @@ fun CareRecipientSelector(
                 }
                 Box(Modifier.weight(1f)) {
                     key(actorId, selected.patientId) {
-                        CaregiverMedicationsScreen(actorId, onBack, medicationData, selected.patientId)
+                        if (content != null) {
+                            content(selected.patientId)
+                        } else {
+                            CaregiverMedicationsScreen(
+                                actorId,
+                                onBack,
+                                medicationData,
+                                selected.patientId
+                            )
+                        }
                     }
                 }
             }
@@ -63,7 +78,17 @@ fun CareRecipientSelector(
                 Text("Choose a care recipient", style = MaterialTheme.typography.headlineMedium)
                 when {
                     loading -> Text("Loading care recipients...")
-                    error != null -> { Text(error!!); Button(onClick = { retry++ }) { Text("Retry") } }
+                    error != null -> {
+                        Text(error!!)
+                        Button(
+                            onClick = {
+                                error = null
+                                retry++
+                            }
+                        ) {
+                            Text("Retry")
+                        }
+                    }
                     recipients.isEmpty() -> Text("You don't have access to any care recipients yet.")
                     else -> recipients.forEach { recipient ->
                         OutlinedButton(onClick = { onSelect(recipient.patientId); choosing = false }, modifier = Modifier.fillMaxWidth()) {
