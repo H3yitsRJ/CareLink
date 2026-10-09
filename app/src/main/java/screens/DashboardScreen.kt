@@ -16,6 +16,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import navigation.BottomNavBar
 import navigation.BottomNavDestination
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.ui.Alignment
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Notifications
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
+import androidx.compose.runtime.LaunchedEffect
 
 // The dashboard accepts prepared summaries and stays independent of Firebase queries.
 data class DashboardSummary(val medication: String, val appointment: String, val healthConcern: String, val careTask: String)
@@ -26,17 +36,60 @@ fun DashboardScreen(
     summary: DashboardSummary? = null,
     isLoading: Boolean = false,
     error: String? = null,
+    unreadNotificationCount: Int = 0,
     onOpen: (String) -> Unit = {},
     onNavigate: (BottomNavDestination) -> Unit = {}
 ) {
+    val scrollState = rememberScrollState()
+
+
+    LaunchedEffect(Unit) {
+        scrollState.scrollTo(0)
+    }
+
     // Keep the team's bottom navigation while using data-driven summary cards.
     Scaffold(bottomBar = { BottomNavBar(BottomNavDestination.Home, onNavigate) }) { innerPadding ->
         Column(
             Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)
-                .verticalScroll(rememberScrollState()).padding(innerPadding).padding(16.dp),
+                .verticalScroll(scrollState).padding(innerPadding).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Text(if (fullName.isBlank()) "Today" else "Good morning, $fullName", style = MaterialTheme.typography.headlineLarge)
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = if (fullName.isBlank()) "Today"
+                    else "Good morning, $fullName",
+                    style = MaterialTheme.typography.headlineLarge,
+                    modifier = Modifier.weight(1f)
+                )
+                BadgedBox(
+                    badge = {
+                        if (unreadNotificationCount > 0) {
+                            Badge {
+                                Text(
+                                    text = unreadNotificationCount.toString()
+                                )
+                            }
+                        }
+                    }
+                ) {
+                    IconButton(
+                        onClick = { onOpen("notifications") }
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.Notifications,
+                            contentDescription = "Open notifications"
+                        )
+                    }
+                }
+
+
+            }
+
             when {
                 isLoading -> StateMessage("Loading your care summary")
                 error != null -> StateMessage(error, true)

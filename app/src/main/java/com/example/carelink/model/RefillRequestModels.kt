@@ -13,5 +13,6 @@ data class RefillRequest(
     val medicationId: String,
     val requestedById: String,
     val note: String = "",
-    val status: RefillRequestStatus = RefillRequestStatus.REQUESTED
+    val status: RefillRequestStatus = RefillRequestStatus.REQUESTED,
+    val requestedAt: Long = System.currentTimeMillis()
 )

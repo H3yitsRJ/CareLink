@@ -56,7 +56,8 @@ fun MedicationsScreen(
     successMessage: String? = null,
     onNavigate: (BottomNavDestination) -> Unit = {},
     onCaregiverMedications: () -> Unit = {},
-    onOpenCareHistory: () -> Unit = {}
+    onOpenCareHistory: () -> Unit = {},
+    onOpenRefills: () -> Unit = {}
 ) {
 
     var medications by remember {
@@ -138,6 +139,12 @@ fun MedicationsScreen(
             TextButton(onClick = onCaregiverMedications) { Text("Caregiver medications") }
 
             TextButton(onClick = onOpenCareHistory) { Text("Care history") }
+
+            TextButton(
+                onClick = onOpenRefills
+            ) {
+                Text("Medication refills")
+            }
 
             Spacer(modifier = Modifier.height(50.dp))
 

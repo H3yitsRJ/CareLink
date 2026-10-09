@@ -20,6 +20,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -48,6 +49,8 @@ import com.example.carelink.screens.CareTasksFlow
 import com.example.carelink.screens.CareRecipientSelector
 import com.example.carelink.data.FirestoreCareTaskRepository
 import com.example.carelink.data.MedicationCaregiverStore
+import com.example.carelink.data.RefillRequestRepository
+import com.example.carelink.model.RefillRequest
 import com.example.carelink.notifications.MedicationReminderScheduler
 import com.example.carelink.screens.CreateAccountScreen
 import com.example.carelink.screens.CreateProfileScreen
@@ -71,6 +74,11 @@ import com.google.firebase.firestore.FirebaseFirestore
 import navigation.BottomNavDestination
 import com.example.carelink.notifications.AppointmentReminderScheduler
 import com.example.carelink.repositories.AppointmentRepository
+import com.example.carelink.screens.MedicationRefillsScreen
+import com.example.carelink.screens.NotificationsScreen
+import com.example.carelink.screens.RefillRequestScreen
+import com.example.carelink.screens.RefillRequestTrackingScreen
+
 
 private enum class AuthScreen {
     SignIn,
@@ -80,9 +88,15 @@ private enum class AuthScreen {
 
 private enum class AppScreen {
     Home,
+    Notifications,
     HealthConcerns,
     Medications,
     MedicationDetails,
+
+    RefillRequestTracking,
+    MedicationRefills,
+
+    RefillRequest,
     CareHistory,
     Appointments,
     AppointmentDetails,
@@ -127,6 +141,74 @@ class MainActivity : ComponentActivity() {
                 }
 
                 val firestore = remember { FirebaseFirestore.getInstance() }
+
+                val refillRequestRepository = remember {
+                    RefillRequestRepository(firestore)
+                }
+                var refillRequests by remember {
+                    mutableStateOf<List<RefillRequest>>(emptyList())
+                }
+
+                var refillLoading by remember {
+                    mutableStateOf(false)
+                }
+
+                var refillError by remember {
+                    mutableStateOf<String?>(null)
+                }
+
+                fun loadRefillRequests(patientId: String) {
+                    if (patientId.isBlank()) return
+
+                    refillLoading = true
+                    refillError = null
+
+                    refillRequestRepository.load(patientId) { result ->
+                        refillLoading = false
+
+                        result.onSuccess { requests ->
+                            refillRequests = requests
+                        }
+
+                        result.onFailure { exception ->
+                            refillError = exception.message
+                                ?: "Unable to load refill requests."
+                        }
+                    }
+                }
+
+                var unreadNotificationCount by remember {
+                    mutableIntStateOf(0)
+                }
+
+                val notificationUserId = auth.currentUser?.uid
+
+                DisposableEffect(notificationUserId, firestore) {
+                    if (notificationUserId == null) {
+                        unreadNotificationCount = 0
+                        onDispose { }
+                    } else {
+                        val listener = firestore
+                            .collection("users")
+                            .document(notificationUserId)
+                            .collection("notifications")
+                            .addSnapshotListener { snapshot, error ->
+                                if (error == null && snapshot != null) {
+                                    unreadNotificationCount = snapshot.documents.count {
+                                        it.getBoolean("isRead") == false
+                                    }
+                                } else {
+                                    unreadNotificationCount = 0
+                                }
+                            }
+
+                        onDispose {
+                            listener.remove()
+                        }
+                    }
+                }
+
+
                 val appointmentRepository = remember { AppointmentRepository(firestore) }
                 val doseHistoryStore = remember { DoseHistoryStore(firestore) }
                 val careHistoryStore = remember { CareHistoryStore(firestore) }
@@ -351,11 +433,115 @@ class MainActivity : ComponentActivity() {
                             }
                         }
 
-                        when (appScreen) {
 
+
+                        when (appScreen) {
+                            AppScreen.RefillRequest -> {
+                                val refillRepository = remember {
+                                    RefillRequestRepository()
+                                }
+
+                                var refillMedications by remember {
+                                    mutableStateOf<List<Medication>>(emptyList())
+                                }
+                                LaunchedEffect(Unit) {
+                                    val user = auth.currentUser
+
+                                    if (user != null) {
+                                        FirebaseFirestore.getInstance()
+                                            .collection("users")
+                                            .document(user.uid)
+                                            .collection("medications")
+                                            .get()
+                                            .addOnSuccessListener { result ->
+                                                refillMedications = result.documents.mapNotNull { document ->
+                                                    Medication.fromFirestore(
+                                                        document.id,
+                                                        document.data.orEmpty() + ("patientId" to user.uid)
+                                                    )
+                                                }
+                                            }
+                                    }
+                                }
+                                RefillRequestScreen(
+                                    eligibleMedications = refillMedications,
+                                    patientId = auth.currentUser?.uid.orEmpty(),
+                                    requestedById = auth.currentUser?.uid.orEmpty(),
+                                    onSave = { request ->
+                                        refillRepository.save(request) { result ->
+                                            result.onSuccess {
+                                                appScreen = AppScreen.RefillRequestTracking
+                                            }
+
+                                            result.onFailure { error ->
+                                                android.util.Log.e(
+                                                    "CareLink",
+                                                    "Failed to save refill request",
+                                                    error
+                                                )
+                                            }
+                                        }
+                                    }
+                                )
+                            }
+                            AppScreen.MedicationRefills -> {
+                                MedicationRefillsScreen(
+                                    onRequestRefill = {
+                                        appScreen = AppScreen.RefillRequest
+                                    },
+                                    onTrackRefills = {
+                                        appScreen = AppScreen.RefillRequestTracking
+                                    }
+                                )
+                            }
+                            AppScreen.RefillRequestTracking -> {
+                                val patientId = auth.currentUser?.uid.orEmpty()
+                                var trackingMedications by remember {
+                                    mutableStateOf<List<Medication>>(emptyList())
+                                }
+                                LaunchedEffect(patientId) {
+                                    if (patientId.isNotBlank()) {
+                                        FirebaseFirestore.getInstance()
+                                            .collection("users")
+                                            .document(patientId)
+                                            .collection("medications")
+                                            .get()
+                                            .addOnSuccessListener { result ->
+                                                trackingMedications = result.documents.mapNotNull { document ->
+                                                    Medication.fromFirestore(
+                                                        document.id,
+                                                        document.data.orEmpty() + ("patientId" to patientId)
+                                                    )
+                                                }
+                                            }
+                                    }
+                                }
+
+                                LaunchedEffect(patientId) {
+                                    if (patientId.isNotBlank()) {
+                                        loadRefillRequests(patientId)
+                                    }
+                                }
+
+                                RefillRequestTrackingScreen(
+                                    requests = refillRequests,
+                                    medicationNames = trackingMedications.associate {
+                                        it.id to it.name
+                                    },
+                                    isLoading = refillLoading,
+                                    error = refillError,
+                                    onRefresh = {
+                                        loadRefillRequests(patientId)
+                                    }
+                                )
+                            }
+                            AppScreen.Notifications -> {
+                                NotificationsScreen()
+                            }
                             AppScreen.Home -> {
                                 DashboardScreen(
                                     fullName = fullName,
+                                    unreadNotificationCount = unreadNotificationCount,
                                     summary = DashboardSummary(
                                         medication = "Review today's medication schedule",
                                         appointment = "View upcoming appointments",
@@ -368,6 +554,7 @@ class MainActivity : ComponentActivity() {
                                             "appointments" -> AppScreen.Appointments
                                             "health-concerns" -> AppScreen.HealthConcerns
                                             "care-tasks" -> AppScreen.CareTasks
+                                            "notifications" -> AppScreen.Notifications
                                             else -> AppScreen.Home
                                         }
                                     },
@@ -441,6 +628,9 @@ class MainActivity : ComponentActivity() {
                                         appScreen = AppScreen.CaregiverMedications },
                                     onOpenCareHistory = {
                                         appScreen = AppScreen.CareHistory
+                                    },
+                                    onOpenRefills = {
+                                        appScreen = AppScreen.MedicationRefills
                                     },
                                     onAddMedication = {
                                         selectedMedication = null
