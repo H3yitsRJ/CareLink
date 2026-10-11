@@ -18,21 +18,53 @@ users of different ages and technical experience levels can use the
 application.
 
 
+
 ## Features
 
-CareLink includes or is planned to include the following features:
+CareLink includes the following healthcare management features:
 
-- User account creation and login
-- User dashboard with important health information
-- Add, edit, and view medications
-- Track medication schedules and dosage information
-- Add, edit, and view appointments
+### User Accounts
+- User registration and login with Firebase Authentication
+- User profile creation and management
+- Personalized dashboard with live user information
+- Secure account logout
+
+### Medication Management
+- Add, edit, view, and delete medications
+- Track medication names, dosages, and schedules
+- Schedule medication reminders and notifications
+- Record medication dose history
+- Track medication refills and remaining quantities
+
+### Appointment Management
+- Add, edit, and view healthcare appointments
 - View appointment details
-- Add and manage care tasks
-- Track health concerns
-- View upcoming healthcare activities
-- Simple navigation between major sections of the application
-- Accessible and easy-to-read user interface
+- Track upcoming appointments
+
+### Care Tasks and Health Concerns
+- Create and manage care tasks
+- Assign low, medium, or high task priorities
+- Record and manage health concerns
+- View important healthcare information
+
+### Caregiver Access
+- Connect caregivers with care recipients
+- Manage caregiver access permissions
+- Allow authorized caregivers to view patient information
+- Support access to medications and health concerns
+
+### Care History
+- View recorded healthcare activities
+- Track medication dose history
+- View caregiver access activity
+- Filter care history by activity type
+
+### User Interface
+- Navigation between major application screens
+- Consistent CareLink colors and styling
+- Readable text and accessible screen layouts
+- User-friendly interface for patients and caregivers
+
 
 
 ## Technologies
@@ -129,53 +161,114 @@ CareLink is being developed as a collaborative capstone project.
 Additional contributors will be added as development continues.
 
 
+
 ## Project Status
 
 **Current Status: Alpha / Active Development**
 
-CareLink is currently in active development. The initial planning, application
-design, Figma wireframes, project setup, GitHub repository, and Firebase
-integration have been started.
+CareLink is an Android healthcare coordination application
+currently in the Alpha development stage.
 
-Current development is focused on converting the approved CareLink interface
-designs into functional Android application screens and connecting those
-screens to the application's backend services.
+The project has progressed beyond initial planning and design.
+Core application screens have been implemented, and several
+features are connected to Firebase services.
 
-Because CareLink is still in the Alpha stage, some features may be incomplete,
-changed, or unavailable.
+### Completed Development
+
+- Created application wireframes and interface designs in Figma
+- Established the Android Studio project and GitHub repository
+- Integrated Firebase Authentication and Cloud Firestore
+- Implemented user registration, login, and profile management
+- Connected the dashboard to live user information
+- Implemented medication management and reminders
+- Added medication refill tracking
+- Implemented appointment and care task management
+- Added health concern tracking
+- Implemented caregiver access and permission controls
+- Added Care History records and filtering
+- Improved application colors and interface consistency
+
+### Current Development Focus
+
+Development is focused on improving application reliability,
+refining the user interface, and testing existing features.
+
+The team continues to review Firebase permissions, improve
+caregiver functionality, and resolve issues found during testing.
+
+CareLink is not yet available as a public release.
+
 
 
 ## Known Issues
 
-CareLink is still under development, so some functionality is not yet
-complete.
+CareLink is currently in Alpha development. Although many
+core features are functional, additional testing is required
+before the application is ready for public release.
 
-Current limitations may include:
+### Current Limitations
 
-- Some screens are still being implemented.
-- Some buttons and navigation may not yet be functional.
-- Firebase functionality is still being integrated.
-- User data functionality is still under development.
-- Additional testing is required before release.
+- Some application features require further testing.
+- Caregiver permissions need additional security testing.
+- Medication reminders require testing across Android versions.
+- User interface consistency is still being refined.
+- Application performance needs further evaluation.
+- Some workflows may require additional error handling.
+
+### Resolved Issues
+
+- Resolved Firebase Firestore permission errors affecting
+  caregiver access to patient information.
+- Fixed medication saving and deletion issues.
+- Corrected medication reminder scheduling problems.
+- Improved caregiver selection and patient data access.
+- Resolved issues with Care History data retrieval.
+- Fixed several application build and navigation errors.
+
+Additional issues discovered during development will be
+documented and addressed before the final release.
+
+
 
 
 ## Roadmap
 
-Planned development for CareLink includes:
+CareLink development is focused on completing testing,
+improving existing features, and preparing the application
+for its final release.
 
-- Complete all Android application screens
-- Complete navigation between screens
-- Continue testing user authentication
-- Connect application data to Firebase
-- Implement medication management
-- Implement appointment management
-- Implement care task management
-- Implement health concern tracking
-- Improve accessibility
-- Perform application testing
-- Fix bugs discovered during testing
-- Complete Alpha testing
-- Prepare the application for final release
+### Completed Milestones
+
+- [x] Create application wireframes in Figma
+- [x] Set up Android Studio and GitHub repository
+- [x] Integrate Firebase Authentication
+- [x] Connect application data to Cloud Firestore
+- [x] Implement user registration and login
+- [x] Create user profiles and dashboard
+- [x] Implement medication management
+- [x] Add medication reminders and dose tracking
+- [x] Implement medication refill tracking
+- [x] Implement appointment management
+- [x] Implement care task management
+- [x] Add health concern tracking
+- [x] Implement caregiver access permissions
+- [x] Add Care History records and filtering
+
+### Upcoming Milestones
+
+- [ ] Complete application-wide feature testing
+- [ ] Verify caregiver permissions and security rules
+- [ ] Test medication reminders on different devices
+- [ ] Improve accessibility and screen consistency
+- [ ] Add additional automated tests
+- [ ] Improve error handling and user feedback
+- [ ] Perform integration and usability testing
+- [ ] Resolve remaining bugs
+- [ ] Complete final application documentation
+- [ ] Prepare CareLink for final release
+
+The roadmap will be updated as development progresses
+and additional features are completed.
 
 
 ## Support
