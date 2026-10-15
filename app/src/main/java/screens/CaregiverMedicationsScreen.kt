@@ -56,7 +56,14 @@ fun CaregiverMedicationsScreen(actorId: String, onBack: () -> Unit, data: Caregi
             patientName = if (connected && latest?.allows(CarePermission.VIEW) == true) name else ""
             loading = false
             if (connected && latest?.allows(CarePermission.VIEW) == true) {
-                error = if (original != null && !latest.allows(CarePermission.EDIT)) "You now have view-only access. Cancel to return to medication details." else null
+                if (original != null && !latest.allows(CarePermission.EDIT)) {
+                    selected = medications.find { it.id == original?.id }
+                    original = null
+                    success = null
+                    error = "Your access changed to view-only. You can view medications, but you cannot edit them."
+                } else {
+                    error = null
+                }
             } else {
                 medications = emptyList()
                 selected = null
@@ -101,6 +108,19 @@ fun CaregiverMedicationsScreen(actorId: String, onBack: () -> Unit, data: Caregi
                 onCancel = ::cancelEdit,
                 onSave = { edited ->
                     val baseline = original ?: return@AddEditMedicationScreen
+
+                    if (!connected ||
+                        access?.patientId != baseline.patientId ||
+                        access?.caregiverId != actorId ||
+                        access?.allows(CarePermission.VIEW) != true ||
+                        access?.allows(CarePermission.EDIT) != true
+                    ) {
+                        error = "Your editing access could not be verified. Check your connection and permissions."
+                        return@AddEditMedicationScreen
+                    }
+
+                    if (saving) return@AddEditMedicationScreen
+
                     saving = true
                     error = null
                     store.edit(baseline, edited, actorId) { result ->
@@ -121,7 +141,16 @@ fun CaregiverMedicationsScreen(actorId: String, onBack: () -> Unit, data: Caregi
                 if (success != null) Text(success!!, Modifier.padding(horizontal = 16.dp))
                 MedicationDetailsScreen(selected, errorMessage = error,
                     canEdit = connected && access?.allows(CarePermission.EDIT) == true, canRemove = false, showNavigation = false,
-                    onEdit = { original = it; success = null; error = null }, onBack = { selected = null })
+                    onEdit = { medication ->
+                        if (connected && access?.allows(CarePermission.EDIT) == true) {
+                            original = medication
+                            success = null
+                            error = null
+                        } else {
+                            error = "You do not have permission to edit this patient's medications."
+                        }
+                    },
+                    onBack = { selected = null })
             }
             else -> Column(Modifier.verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text("Caregiver medications", style = MaterialTheme.typography.headlineMedium)

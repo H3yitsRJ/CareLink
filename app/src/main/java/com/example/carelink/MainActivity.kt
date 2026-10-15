@@ -131,6 +131,12 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
 
         setContent {
+            android.util.Log.d(
+                // Use "tag:CareLinkUser" in LogCat after opening caregiver features
+                "CareLinkUser",
+                "Signed-in UID: ${com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid}"
+            )
+
             CareLinkTheme {
                 val auth = remember { FirebaseAuth.getInstance() }
 
@@ -141,21 +147,10 @@ class MainActivity : ComponentActivity() {
                 }
 
                 val firestore = remember { FirebaseFirestore.getInstance() }
-
-                val refillRequestRepository = remember {
-                    RefillRequestRepository(firestore)
-                }
-                var refillRequests by remember {
-                    mutableStateOf<List<RefillRequest>>(emptyList())
-                }
-
-                var refillLoading by remember {
-                    mutableStateOf(false)
-                }
-
-                var refillError by remember {
-                    mutableStateOf<String?>(null)
-                }
+                val refillRequestRepository = remember { RefillRequestRepository(firestore) }
+                var refillRequests by remember { mutableStateOf<List<RefillRequest>>(emptyList()) }
+                var refillLoading by remember { mutableStateOf(false) }
+                var refillError by remember { mutableStateOf<String?>(null) }
 
                 fun loadRefillRequests(patientId: String) {
                     if (patientId.isBlank()) return
@@ -177,10 +172,7 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
-                var unreadNotificationCount by remember {
-                    mutableIntStateOf(0)
-                }
-
+                var unreadNotificationCount by remember { mutableIntStateOf(0) }
                 val notificationUserId = auth.currentUser?.uid
 
                 DisposableEffect(notificationUserId, firestore) {
@@ -437,13 +429,9 @@ class MainActivity : ComponentActivity() {
 
                         when (appScreen) {
                             AppScreen.RefillRequest -> {
-                                val refillRepository = remember {
-                                    RefillRequestRepository()
-                                }
+                                val refillRepository = remember { RefillRequestRepository() }
+                                var refillMedications by remember { mutableStateOf<List<Medication>>(emptyList()) }
 
-                                var refillMedications by remember {
-                                    mutableStateOf<List<Medication>>(emptyList())
-                                }
                                 LaunchedEffect(Unit) {
                                     val user = auth.currentUser
 
@@ -561,7 +549,6 @@ class MainActivity : ComponentActivity() {
                                     onNavigate = ::openTopLevel
                                 )
                             }
-
                             AppScreen.HealthConcerns -> {
                                 val actorId = auth.currentUser?.uid
 
@@ -583,9 +570,11 @@ class MainActivity : ComponentActivity() {
                                                 caregiverMode = false
                                             },
                                             content = { patientId ->
-                                                HealthConcernsFlow(
+                                                com.example.carelink.screens.CaregiverHealthConcernsRoute(
                                                     patientId = patientId,
+                                                    actorId = actorId,
                                                     repository = healthConcernRepository,
+                                                    accessData = caregiverMedicationData,
                                                     onBack = {
                                                         caregiverMode = false
                                                     }
@@ -621,7 +610,6 @@ class MainActivity : ComponentActivity() {
                                     }
                                 }
                             }
-
                             AppScreen.Medications -> {
                                 MedicationsScreen(
                                     onCaregiverMedications = {
@@ -653,7 +641,6 @@ class MainActivity : ComponentActivity() {
                                     onNavigate = ::openTopLevel
                                 )
                             }
-
                             AppScreen.MedicationDetails -> {
                                 MedicationDetailsScreen(
                                     medication = selectedMedication,
@@ -730,7 +717,6 @@ class MainActivity : ComponentActivity() {
                                     onNavigate = ::openTopLevel
                                 )
                             }
-
                             AppScreen.CareHistory -> {
                                 val patientId = auth.currentUser?.uid.orEmpty()
 
@@ -783,7 +769,6 @@ class MainActivity : ComponentActivity() {
                                     }
                                 )
                             }
-
                             AppScreen.AddMedication -> {
                                 AddEditMedicationScreen(
                                     medication = selectedMedication,
@@ -878,42 +863,97 @@ class MainActivity : ComponentActivity() {
                                     }
                                 )
                             }
-
                             AppScreen.MedicationScheduler -> {
                                 MedicationScheduleScreen()
                             }
-
                             AppScreen.Appointments -> {
-                                AppointmentsScreen(
-                                    appointments = appointments,
-                                    isLoading = appointmentsLoading,
-                                    errorMessage = appointmentLoadError,
-                                    successMessage = appointmentSuccessMessage,
-                                    onAddAppointment = {
-                                        selectedAppointment = null
-                                        appointmentSaveError = null
-                                        appointmentSuccessMessage = null
-                                        appScreen = AppScreen.AddAppointment
-                                    },
-                                    onAppointmentSelected = { appointment ->
-                                        selectedAppointment = appointment
-                                        appointmentSaveError = null
-                                        appointmentSuccessMessage = null
-                                        appScreen = AppScreen.AppointmentDetails
-                                    },
-                                    onEditAppointment = { appointment ->
-                                        selectedAppointment = appointment
-                                        appointmentSaveError = null
-                                        appointmentSuccessMessage = null
-                                        appScreen = AppScreen.AddAppointment
-                                    },
-                                    onRetry = {
-                                        loadAppointments()
-                                    },
-                                    onNavigate = ::openTopLevel
-                                )
-                            }
+                                val actorId = auth.currentUser?.uid
 
+                                if (actorId != null) {
+                                    var caregiverMode by rememberSaveable(actorId) {
+                                        mutableStateOf(selectedCareRecipient != null)
+                                    }
+
+                                    if (caregiverMode) {
+                                        CareRecipientSelector(
+                                            actorId = actorId,
+                                            selectedPatientId = selectedCareRecipient,
+                                            onSelect = {
+                                                selectedCareRecipient = it
+                                            },
+                                            directory = recipientDirectory,
+                                            medicationData = caregiverMedicationData,
+                                            onBack = {
+                                                caregiverMode = false
+                                            },
+                                            content = { patientId ->
+                                                com.example.carelink.screens.CaregiverAppointmentsRoute(
+                                                    patientId = patientId,
+                                                    actorId = actorId,
+                                                    repository = healthConcernRepository,
+                                                    accessData = caregiverMedicationData,
+                                                    onBack = {
+                                                        caregiverMode = false
+                                                    },
+                                                    onNavigate = { destination ->
+                                                        if (destination != BottomNavDestination.Appointments) {
+                                                            openTopLevel(destination)
+                                                        }
+                                                    }
+                                                )
+                                            }
+                                        )
+                                    } else {
+                                        Column(
+                                            modifier = Modifier
+                                                .fillMaxSize()
+                                                .safeDrawingPadding()
+                                        ) {
+                                            TextButton(
+                                                onClick = {
+                                                    caregiverMode = true
+                                                }
+                                            ) {
+                                                Text("Care recipient appointments")
+                                            }
+
+                                            androidx.compose.foundation.layout.Box(
+                                                modifier = Modifier.weight(1f)
+                                            ) {
+                                                AppointmentsScreen(
+                                                    appointments = appointments,
+                                                    isLoading = appointmentsLoading,
+                                                    errorMessage = appointmentLoadError,
+                                                    successMessage = appointmentSuccessMessage,
+                                                    onAddAppointment = {
+                                                        selectedAppointment = null
+                                                        appointmentSaveError = null
+                                                        appointmentSuccessMessage = null
+                                                        appScreen = AppScreen.AddAppointment
+                                                    },
+                                                    onAppointmentSelected = { appointment ->
+                                                        selectedAppointment = appointment
+                                                        appointmentSaveError = null
+                                                        appointmentSuccessMessage = null
+                                                        appScreen = AppScreen.AppointmentDetails
+                                                    },
+                                                    onEditAppointment = { appointment ->
+                                                        selectedAppointment = appointment
+                                                        appointmentSaveError = null
+                                                        appointmentSuccessMessage = null
+                                                        appScreen = AppScreen.AddAppointment
+                                                    },
+                                                    onRetry = {
+                                                        loadAppointments()
+                                                    },
+                                                    onNavigate = ::openTopLevel,
+                                                    canManage = true
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
                             AppScreen.AppointmentDetails -> {
                                 AppointmentDetailsScreen(
                                     appointment = selectedAppointment,
@@ -958,7 +998,6 @@ class MainActivity : ComponentActivity() {
                                     }
                                 )
                             }
-
                             AppScreen.AddAppointment -> {
                                 AddEditAppointmentScreen(
                                     appointment = selectedAppointment,
@@ -1009,8 +1048,8 @@ class MainActivity : ComponentActivity() {
                                     }
                                 )
                             }
-
-                            AppScreen.CareTasks, AppScreen.FollowUpTask -> {
+                            AppScreen.CareTasks,
+                            AppScreen.FollowUpTask -> {
                                 val patientId = auth.currentUser?.uid
                                 if (patientId != null) {
                                     CareTasksFlow(
@@ -1022,7 +1061,6 @@ class MainActivity : ComponentActivity() {
                                     )
                                 }
                             }
-
                             AppScreen.Profile -> {
                                 ProfileScreen(
                                     fullName = fullName,
@@ -1040,7 +1078,6 @@ class MainActivity : ComponentActivity() {
                                     onNavigate = ::openTopLevel
                                 )
                             }
-
                             AppScreen.EditProfile -> {
                                 CreateProfileScreen(
                                     initialProfile =
@@ -1110,7 +1147,6 @@ class MainActivity : ComponentActivity() {
                                     }
                                 )
                             }
-
                             AppScreen.Settings -> {
                                 SettingsScreen(
                                     onCaregiverAccess = { appScreen = AppScreen.MedicationCaregiverAccess },
@@ -1122,14 +1158,11 @@ class MainActivity : ComponentActivity() {
                                     }
                                 )
                             }
-
                             AppScreen.CaregiverMedications -> CaregiverMedicationsScreen(
                                 actorId = auth.currentUser!!.uid, onBack = { appScreen = AppScreen.Medications })
-
                             AppScreen.MedicationCaregiverAccess -> MedicationCaregiverAccessScreen(
                                 patientId = auth.currentUser!!.uid, patientName = fullName,
                                 onBack = { appScreen = AppScreen.Settings })
-
                             AppScreen.Logout -> {
                                 LogoutScreen(
                                     onBack = {
@@ -1184,7 +1217,6 @@ class MainActivity : ComponentActivity() {
                                     }
                                 )
                             }
-
                             AuthScreen.CreateAccount -> {
                                 CreateAccountScreen(
                                     isSubmitting = isSubmitting,
@@ -1218,7 +1250,6 @@ class MainActivity : ComponentActivity() {
                                     }
                                 )
                             }
-
                             AuthScreen.ResetPassword -> {
                                 PasswordResetEmailScreen(
                                     isSubmitting = isSubmitting,
