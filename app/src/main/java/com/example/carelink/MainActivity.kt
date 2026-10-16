@@ -200,7 +200,6 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
-
                 val appointmentRepository = remember { AppointmentRepository(firestore) }
                 val doseHistoryStore = remember { DoseHistoryStore(firestore) }
                 val careHistoryStore = remember { CareHistoryStore(firestore) }
@@ -241,6 +240,7 @@ class MainActivity : ComponentActivity() {
                 var isSavingMedication by remember { mutableStateOf(false) }
                 var medicationSaveError by remember { mutableStateOf<String?>(null) }
                 var selectedMedication by remember { mutableStateOf< com.example.carelink.model.Medication? >(null) }
+                var medicationOpenedFromHistory by remember { mutableStateOf(false) }
                 var medicationSuccessMessage by remember { mutableStateOf<String?>(null) }
                 var medicationPermissionExplanation by remember { mutableStateOf<Medication?>(null) }
                 var appointments by remember { mutableStateOf<List<Appointment>>(emptyList()) }
@@ -416,6 +416,8 @@ class MainActivity : ComponentActivity() {
                         fun openTopLevel(
                             destination: BottomNavDestination
                         ) {
+                            medicationOpenedFromHistory = false
+
                             appScreen = when (destination) {
                                 BottomNavDestination.Home -> AppScreen.Home
                                 BottomNavDestination.Medications -> AppScreen.Medications
@@ -630,14 +632,14 @@ class MainActivity : ComponentActivity() {
                                     onMedicationSelected = {
                                         medication ->
                                             selectedMedication = medication
+                                            medicationOpenedFromHistory = false
                                             medicationSuccessMessage = null
                                             appScreen = AppScreen.MedicationDetails
                                     },
                                     onMedicationScheduler = {
                                         appScreen = AppScreen.MedicationScheduler
                                     },
-                                    successMessage =
-                                        medicationSuccessMessage,
+                                    successMessage = medicationSuccessMessage,
                                     onNavigate = ::openTopLevel
                                 )
                             }
@@ -712,7 +714,15 @@ class MainActivity : ComponentActivity() {
                                     },
                                     onBack = {
                                         selectedMedication = null
-                                        appScreen = AppScreen.Medications
+                                        medicationSuccessMessage = null
+
+                                        appScreen = if (medicationOpenedFromHistory) {
+                                            AppScreen.CareHistory
+                                        } else {
+                                            AppScreen.Medications
+                                        }
+
+                                        medicationOpenedFromHistory = false
                                     },
                                     onNavigate = ::openTopLevel
                                 )
@@ -720,37 +730,157 @@ class MainActivity : ComponentActivity() {
                             AppScreen.CareHistory -> {
                                 val patientId = auth.currentUser?.uid.orEmpty()
 
-                                var historyEntries by remember(patientId) {
-                                    mutableStateOf<List<CareHistoryEntry>>(emptyList())
+                                var openingMedicationId by remember(patientId) {
+                                    mutableStateOf<String?>(null)
                                 }
-                                var historyLoading by remember(patientId) {
-                                    mutableStateOf(true)
-                                }
-                                var historyError by remember(patientId) {
+                                var medicationLinkError by remember(patientId) {
                                     mutableStateOf<String?>(null)
                                 }
                                 var historyRetry by remember(patientId) {
-                                    mutableStateOf(0)
+                                    mutableIntStateOf(0)
                                 }
 
-                                DisposableEffect(patientId, historyRetry) {
+                                val historyPager = remember(patientId, historyRetry) {
+                                    if (patientId.isNotBlank()) {
+                                        com.example.carelink.data.CareHistoryPager(
+                                            firestore = firestore,
+                                            patientId = patientId
+                                        )
+                                    } else {
+                                        null
+                                    }
+                                }
+
+                                var historyEntries by remember(historyPager) {
+                                    mutableStateOf<List<CareHistoryEntry>>(emptyList())
+                                }
+                                var historyLoading by remember(historyPager) {
+                                    mutableStateOf(true)
+                                }
+                                var historyError by remember(historyPager) {
+                                    mutableStateOf<String?>(null)
+                                }
+                                var historyHasMore by remember(historyPager) {
+                                    mutableStateOf(false)
+                                }
+                                var historyLoadingMore by remember(historyPager) {
+                                    mutableStateOf(false)
+                                }
+                                var historyMoreError by remember(historyPager) {
+                                    mutableStateOf<String?>(null)
+                                }
+                                var historyPageRequest by remember(historyPager) {
+                                    mutableIntStateOf(0)
+                                }
+
+                                DisposableEffect(historyPager, historyPageRequest) {
                                     var active = true
-                                    historyLoading = true
-                                    historyError = null
+                                    val firstPage = historyEntries.isEmpty()
 
-                                    careHistoryStore.load(patientId) { result ->
-                                        if (active) {
-                                            historyLoading = false
+                                    if (
+                                        historyPager == null ||
+                                        auth.currentUser?.uid != patientId
+                                    ) {
+                                        historyEntries = emptyList()
+                                        historyLoading = false
+                                        historyLoadingMore = false
+                                        historyHasMore = false
+                                        historyError = "Sign in to view your care history."
+                                    } else {
+                                        historyLoading = firstPage
+                                        historyLoadingMore = !firstPage
+                                        historyError = null
+                                        historyMoreError = null
 
-                                            result.fold(
-                                                onSuccess = { items ->
-                                                    historyEntries = items
-                                                },
-                                                onFailure = {
-                                                    historyError =
-                                                        "We couldn't load your care history. Please try again."
+                                        historyPager.loadNext { result ->
+                                            if (active && auth.currentUser?.uid == patientId) {
+                                                historyLoading = false
+                                                historyLoadingMore = false
+
+                                                result.onSuccess { page ->
+                                                    historyEntries = CareHistoryEntry.newestFirst(
+                                                        (historyEntries + page.entries)
+                                                            .distinctBy { it.id }
+                                                    )
+
+                                                    historyHasMore = page.hasMore
+                                                }.onFailure { exception ->
+                                                    android.util.Log.e(
+                                                        "CareHistoryPaging",
+                                                        "Failed to load care history",
+                                                        exception
+                                                    )
+
+                                                    if (firstPage) {
+                                                        historyError =
+                                                            "We couldn't load your care history. Please try again."
+                                                    } else {
+                                                        historyMoreError =
+                                                            "We couldn't load older history. Your loaded events are still available."
+                                                    }
                                                 }
-                                            )
+                                            }
+                                        }
+                                    }
+
+                                    onDispose {
+                                        active = false
+                                    }
+                                }
+
+                                DisposableEffect(patientId, openingMedicationId) {
+                                    val medicationId = openingMedicationId
+                                    var active = true
+
+                                    if (medicationId != null) {
+                                        if (
+                                            patientId.isBlank() ||
+                                            auth.currentUser?.uid != patientId
+                                        ) {
+                                            medicationLinkError =
+                                                "Sign in to open this medication."
+
+                                            openingMedicationId = null
+                                        } else {
+                                            firestore.collection("users")
+                                                .document(patientId)
+                                                .collection("medications")
+                                                .document(medicationId)
+                                                .get(com.google.firebase.firestore.Source.SERVER)
+                                                .addOnSuccessListener { document ->
+                                                    if (active && auth.currentUser?.uid == patientId) {
+                                                        val medication = Medication.fromFirestore(
+                                                            document.id,
+                                                            document.data.orEmpty()
+                                                        )
+
+                                                        openingMedicationId = null
+
+                                                        if (
+                                                            medication == null ||
+                                                            medication.patientId != patientId
+                                                        ) {
+                                                            medicationLinkError =
+                                                                "This medication is no longer available."
+                                                        } else {
+                                                            selectedMedication = medication
+                                                            medicationSaveError = null
+                                                            medicationSuccessMessage = null
+                                                            doseMessage = null
+                                                            doseError = null
+                                                            medicationOpenedFromHistory = true
+                                                            appScreen = AppScreen.MedicationDetails
+                                                        }
+                                                    }
+                                                }
+                                                .addOnFailureListener {
+                                                    if (active && auth.currentUser?.uid == patientId) {
+                                                        openingMedicationId = null
+
+                                                        medicationLinkError =
+                                                            "We couldn't open this medication. Check your connection and try again."
+                                                    }
+                                                }
                                         }
                                     }
 
@@ -763,11 +893,76 @@ class MainActivity : ComponentActivity() {
                                     entries = historyEntries,
                                     isLoading = historyLoading,
                                     loadError = historyError,
-                                    onRetry = { historyRetry++ },
+                                    onRetry = {
+                                        historyRetry++
+                                    },
                                     onBack = {
                                         appScreen = AppScreen.Medications
+                                    },
+                                    onOpenMedication = { entry ->
+                                        val medicationId = entry.relatedRecordId
+
+                                        if (
+                                            entry.patientId == patientId &&
+                                            entry.type ==
+                                            com.example.carelink.model.CareActivityType.MEDICATION &&
+                                            !medicationId.isNullOrBlank() &&
+                                            '/' !in medicationId &&
+                                            medicationId != "." &&
+                                            medicationId != ".." &&
+                                            openingMedicationId == null
+                                        ) {
+                                            medicationLinkError = null
+                                            openingMedicationId = medicationId
+                                        }
+                                    },
+                                    onOpenCaregiverAccess = { entry ->
+                                        if (
+                                            entry.patientId == patientId &&
+                                            auth.currentUser?.uid == patientId &&
+                                            entry.type ==
+                                            com.example.carelink.model.CareActivityType.CAREGIVER_ACCESS &&
+                                            !entry.relatedRecordId.isNullOrBlank()
+                                        ) {
+                                            appScreen = AppScreen.MedicationCaregiverAccess
+                                        }
+                                    },
+                                    hasMore = historyHasMore,
+                                    isLoadingMore = historyLoadingMore,
+                                    loadMoreError = historyMoreError,
+                                    onLoadMore = {
+                                        if (
+                                            !historyLoading &&
+                                            !historyLoadingMore &&
+                                            historyHasMore
+                                        ) {
+                                            historyPageRequest++
+                                        }
                                     }
                                 )
+
+                                if (medicationLinkError != null) {
+                                    androidx.compose.material3.AlertDialog(
+                                        onDismissRequest = {
+                                            medicationLinkError = null
+                                        },
+                                        title = {
+                                            Text("Medication unavailable")
+                                        },
+                                        text = {
+                                            Text(medicationLinkError.orEmpty())
+                                        },
+                                        confirmButton = {
+                                            TextButton(
+                                                onClick = {
+                                                    medicationLinkError = null
+                                                }
+                                            ) {
+                                                Text("OK")
+                                            }
+                                        }
+                                    )
+                                }
                             }
                             AppScreen.AddMedication -> {
                                 AddEditMedicationScreen(

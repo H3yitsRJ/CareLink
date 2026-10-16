@@ -9,7 +9,8 @@ import com.google.firebase.firestore.FirebaseFirestore
 data class DoseHistoryItem(
     val record: DoseRecord,
     val medicationName: String,
-    val dosage: String
+    val dosage: String,
+    val actorId: String? = null
 )
 
 class DoseHistoryStore(
@@ -50,7 +51,8 @@ class DoseHistoryStore(
         val item = DoseHistoryItem(
             record = record,
             medicationName = medication.name,
-            dosage = medication.dose
+            dosage = medication.dose,
+            actorId = patientId
         )
 
         collection(patientId)
@@ -58,7 +60,8 @@ class DoseHistoryStore(
             .set(
                 record.toFirestore() + mapOf(
                     "medicationName" to item.medicationName,
-                    "dosage" to item.dosage
+                    "dosage" to item.dosage,
+                    "actorId" to patientId
                 )
             )
             .addOnSuccessListener {
@@ -103,7 +106,9 @@ class DoseHistoryStore(
                             medicationName = data["medicationName"] as? String
                                 ?: "Medication unavailable",
                             dosage = data["dosage"] as? String
-                                ?: "Dosage unavailable"
+                                ?: "Dosage unavailable",
+                            actorId = (data["actorId"] as? String)
+                                ?.takeIf { it.isNotBlank() }
                         )
                     }
                     .sortedWith(
