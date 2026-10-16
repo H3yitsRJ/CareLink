@@ -13,6 +13,9 @@ import androidx.compose.ui.unit.dp
 import com.example.carelink.data.MedicationCaregiverStore
 import com.example.carelink.data.CaregiverMedicationData
 import com.example.carelink.data.CaregiverAccessData
+import com.example.carelink.data.RefillRequestRepository
+import com.example.carelink.data.FirestoreRefillRequestRepository
+import com.example.carelink.data.RefillRequestAlreadyActiveException
 import com.example.carelink.model.CarePermission
 import com.example.carelink.model.CaregiverAccess
 import com.example.carelink.model.Medication
@@ -20,8 +23,12 @@ import com.google.firebase.firestore.FirebaseFirestore
 
 /** The same medication form is used for patient and caregiver edits. */
 @Composable
-fun CaregiverMedicationsScreen(actorId: String, onBack: () -> Unit, data: CaregiverMedicationData? = null, initialPatientId: String? = null) {
+fun CaregiverMedicationsScreen(actorId: String, onBack: () -> Unit, data: CaregiverMedicationData? = null, initialPatientId: String? = null, refillData: RefillRequestRepository? = null) {
     val store = data ?: remember { MedicationCaregiverStore(FirebaseFirestore.getInstance()) }
+    val firestoreRefillStore = remember { lazy { FirestoreRefillRequestRepository(FirebaseFirestore.getInstance()) } }
+    val connectionAvailable = LocalConnectionAvailable.current
+    var requestingRefill by remember { mutableStateOf(false) }
+    var refillSaved by remember { mutableStateOf(false) }
     var patientInput by rememberSaveable { mutableStateOf("") }
     var patientId by remember { mutableStateOf(initialPatientId) }
     var patientName by remember { mutableStateOf("") }
@@ -41,7 +48,7 @@ fun CaregiverMedicationsScreen(actorId: String, onBack: () -> Unit, data: Caregi
         error = null
     }
     BackHandler(enabled = !saving) {
-        when { original != null -> cancelEdit(); selected != null -> selected = null; else -> onBack() }
+        when { requestingRefill -> { requestingRefill = false; error = null }; original != null -> cancelEdit(); selected != null -> selected = null; else -> onBack() }
     }
 
     DisposableEffect(patientId, actorId, retry) {
@@ -68,6 +75,7 @@ fun CaregiverMedicationsScreen(actorId: String, onBack: () -> Unit, data: Caregi
                 medications = emptyList()
                 selected = null
                 original = null
+                if (online) requestingRefill = false
                 error = if (!online) "Connect to the internet to verify caregiver access."
                     else "Medication access is unavailable or has been revoked. Ask the patient to grant access."
             }
@@ -102,11 +110,31 @@ fun CaregiverMedicationsScreen(actorId: String, onBack: () -> Unit, data: Caregi
             Text("Medications for ${patientName.ifBlank { patientId.orEmpty() }}", Modifier.padding(16.dp), style = MaterialTheme.typography.titleMedium)
         }
         when {
+            requestingRefill && (access?.allows(CarePermission.VIEW) == true || !connected) -> RefillRequestScreen(
+                eligibleMedications = medications, patientId = patientId.orEmpty(), requestedById = actorId,
+                initialMedicationId = selected?.id.orEmpty(), isSaving = saving, saveError = error, saved = refillSaved,
+                canSave = connected && access?.allows(CarePermission.EDIT) == true,
+                onCancel = { requestingRefill = false; error = null },
+                onSave = { request ->
+                    if (!connected || access?.allows(CarePermission.EDIT) != true || !connectionAvailable) return@RefillRequestScreen
+                    saving = true; error = null
+                    (refillData ?: firestoreRefillStore.value).create(request) { result ->
+                        saving = false
+                        result.onSuccess { refillSaved = true }.onFailure {
+                            error = if (generateSequence(it) { cause -> cause.cause }.any { cause -> cause is RefillRequestAlreadyActiveException })
+                                "A refill request is already active for this medication."
+                            else "Couldn't submit the refill request. Check your connection and medication access, then retry."
+                        }
+                    }
+                }
+            )
             original != null && access?.allows(CarePermission.VIEW) == true -> AddEditMedicationScreen(
-                medication = original, isSaving = saving, saveError = error,
-                canSave = connected && access?.allows(CarePermission.EDIT) == true, canDelete = false,
+                medication = original, isSaving = saving, saveError = if (!connectionAvailable) OFFLINE_ACTION_MESSAGE else error,
+                canSave = connected && connectionAvailable && access?.allows(CarePermission.EDIT) == true, canDelete = false,
                 onCancel = ::cancelEdit,
                 onSave = { edited ->
+                    if (!connectionAvailable) { error = OFFLINE_ACTION_MESSAGE; return@AddEditMedicationScreen }
+                    if (!connected || access?.allows(CarePermission.EDIT) != true || saving) return@AddEditMedicationScreen
                     val baseline = original ?: return@AddEditMedicationScreen
 
                     if (!connected ||
@@ -139,18 +167,66 @@ fun CaregiverMedicationsScreen(actorId: String, onBack: () -> Unit, data: Caregi
             )
             selected != null && access?.allows(CarePermission.VIEW) == true -> Column {
                 if (success != null) Text(success!!, Modifier.padding(horizontal = 16.dp))
-                MedicationDetailsScreen(selected, errorMessage = error,
-                    canEdit = connected && access?.allows(CarePermission.EDIT) == true, canRemove = false, showNavigation = false,
+
+                if (
+                    selected!!.active &&
+                    access?.allows(CarePermission.EDIT) == true
+                ) {
+                    Button(
+                        onClick = {
+                            if (
+                                connected &&
+                                connectionAvailable &&
+                                access?.allows(CarePermission.EDIT) == true
+                            ) {
+                                requestingRefill = true
+                                refillSaved = false
+                                error = null
+                            }
+                        },
+                        enabled = connected && connectionAvailable,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp)
+                    ) {
+                        Text("Request refill")
+                    }
+                }
+
+                MedicationDetailsScreen(
+                    medication = selected,
+                    errorMessage = if (!connectionAvailable) {
+                        OFFLINE_ACTION_MESSAGE
+                    } else {
+                        error
+                    },
+                    canEdit = connected &&
+                        connectionAvailable &&
+                        access?.allows(CarePermission.EDIT) == true,
+                    canRemove = false,
+                    showNavigation = false,
+                    canRecordDose = false,
                     onEdit = { medication ->
-                        if (connected && access?.allows(CarePermission.EDIT) == true) {
+                        if (!connectionAvailable) {
+                            error = OFFLINE_ACTION_MESSAGE
+                        } else if (
+                            connected &&
+                            access?.allows(CarePermission.VIEW) == true &&
+                            access?.allows(CarePermission.EDIT) == true
+                        ) {
                             original = medication
                             success = null
                             error = null
                         } else {
-                            error = "You do not have permission to edit this patient's medications."
+                            error =
+                                "You do not have permission to edit this patient's medications."
                         }
                     },
-                    onBack = { selected = null })
+                    onBack = {
+                        selected = null
+                    }
+                )
+
             }
             else -> Column(Modifier.verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text("Caregiver medications", style = MaterialTheme.typography.headlineMedium)
@@ -182,6 +258,7 @@ fun CaregiverMedicationsScreen(actorId: String, onBack: () -> Unit, data: Caregi
 @Composable
 fun MedicationCaregiverAccessScreen(patientId: String, patientName: String, onBack: () -> Unit, data: CaregiverAccessData? = null) {
     val store = data ?: remember { MedicationCaregiverStore(FirebaseFirestore.getInstance()) }
+    val connectionAvailable = LocalConnectionAvailable.current
     var grants by remember { mutableStateOf<List<CaregiverAccess>>(emptyList()) }
     var caregiverId by rememberSaveable { mutableStateOf("") }
     var selected by remember { mutableStateOf<CaregiverAccess?>(null) }
@@ -210,6 +287,8 @@ fun MedicationCaregiverAccessScreen(patientId: String, patientName: String, onBa
         onDispose { active = false; stop() }
     }
     fun save(value: CaregiverAccess, expected: CaregiverAccess?) {
+        if (!connectionAvailable) { error = OFFLINE_ACTION_MESSAGE; return }
+        if (!connected || saving) { error = "Connect to the internet to manage caregiver access."; return }
         saving = true; error = null; success = null
         store.save(value, patientName, expected) { result ->
             saving = false
@@ -220,7 +299,8 @@ fun MedicationCaregiverAccessScreen(patientId: String, patientName: String, onBa
     if (selected != null) {
         CaregiverAccessScreen(selected, "Medication access for ${selected!!.caregiverId}", true,
             onSave = { save(it.copy(revoked = false), baseline) }, onCancel = { selected = null; error = null },
-            availablePermissions = setOf(CarePermission.VIEW, CarePermission.EDIT), isSaving = saving || !connected, error = error)
+            availablePermissions = setOf(CarePermission.VIEW, CarePermission.EDIT), isSaving = saving,
+            canSave = connected && connectionAvailable, error = if (!connectionAvailable) OFFLINE_ACTION_MESSAGE else error)
     } else Column(Modifier.fillMaxSize().safeDrawingPadding().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text("Medication caregiver access", style = MaterialTheme.typography.headlineMedium)
         Text("Your CareLink ID")
@@ -231,22 +311,23 @@ fun MedicationCaregiverAccessScreen(patientId: String, patientName: String, onBa
             val id = caregiverId.trim()
             if (!MedicationCaregiverStore.validId(id) || id == patientId) error = "Enter a different person's CareLink ID."
             else { error = null; baseline = grants.find { it.caregiverId == id }; selected = baseline?.copy(revoked = false) ?: CaregiverAccess(id, patientId, id, setOf(CarePermission.VIEW)) }
-        }, enabled = !saving && connected && !loading, modifier = Modifier.fillMaxWidth()) { Text("Choose medication access") }
+        }, enabled = !saving && connected && connectionAvailable && !loading, modifier = Modifier.fillMaxWidth()) { Text("Choose medication access") }
         if (loading) Text("Loading caregiver access")
+        if (!connectionAvailable) StateMessage(OFFLINE_ACTION_MESSAGE, true)
         if (error != null) { StateMessage(error!!, true); TextButton(onClick = { retry++ }) { Text("Retry") } }
         if (success != null) Text(success!!)
         grants.filter { !it.revoked }.forEach { grant ->
             Card(Modifier.fillMaxWidth()) { Column(Modifier.padding(16.dp)) {
                 Text(grant.caregiverId)
                 Text(if (grant.allows(CarePermission.EDIT)) "View and edit medications" else if (grant.allows(CarePermission.VIEW)) "View medications" else "No medication access")
-                TextButton(onClick = { baseline = grant; selected = grant }, enabled = !saving && connected) { Text("Edit access") }
-                TextButton(onClick = { revoke = grant }, enabled = !saving && connected) { Text("Revoke access") }
+                TextButton(onClick = { baseline = grant; selected = grant }, enabled = !saving && connected && connectionAvailable) { Text("Edit access") }
+                TextButton(onClick = { revoke = grant }, enabled = !saving && connected && connectionAvailable) { Text("Revoke access") }
             } }
         }
         OutlinedButton(onClick = onBack, enabled = !saving, modifier = Modifier.fillMaxWidth()) { Text("Back") }
     }
     revoke?.let { grant -> AlertDialog(onDismissRequest = { revoke = null }, title = { Text("Revoke medication access?") },
-        text = { Text("This caregiver will no longer be able to view or edit your medications.") },
-        confirmButton = { Button(onClick = { revoke = null; save(grant.copy(revoked = true), grant) }) { Text("Revoke") } },
+        text = { Text(if (!connectionAvailable) OFFLINE_ACTION_MESSAGE else "This caregiver will no longer be able to view or edit your medications.") },
+        confirmButton = { Button(onClick = { revoke = null; save(grant.copy(revoked = true), grant) }, enabled = !saving && connected && connectionAvailable) { Text("Revoke") } },
         dismissButton = { TextButton(onClick = { revoke = null }) { Text("Cancel") } }) }
 }

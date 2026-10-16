@@ -1,4 +1,5 @@
 package com.example.carelink.screens
+import androidx.activity.compose.BackHandler
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -37,6 +38,7 @@ fun CareHistoryScreen(
     var appliedTypes by rememberSaveable { mutableStateOf(emptyList<String>()) }
     var error by rememberSaveable { mutableStateOf<String?>(null) }
     var dateField by remember { mutableStateOf<String?>(null) }
+    BackHandler { if (dateField != null) dateField = null else onBack() }
     val applied = remember(appliedStart, appliedEnd, appliedTypes) {
         CareHistoryFilter(appliedStart, appliedEnd, CareActivityType.entries.filter { it.name in appliedTypes }.toSet())
     }

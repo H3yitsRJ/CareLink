@@ -14,6 +14,7 @@ service cloud.firestore {
       let path = /databases/$(database)/documents/users/$(userId)/medicationCaregivers/$(request.auth.uid);
       return signedIn() && exists(path) && get(path).data.revoked == false
         && get(path).data.patientId == userId && get(path).data.caregiverId == request.auth.uid
+        && get(path).data.permissions is list && get(path).data.permissions.hasOnly(['VIEW', 'EDIT'])
         && get(path).data.permissions.hasAny(['VIEW']) && get(path).data.permissions.hasAny([permission]);
     }
 
@@ -55,6 +56,14 @@ service cloud.firestore {
     match /users/{userId} {
       allow read, create, update: if isOwner(userId);
 
+      // Notification content is supplied by a trusted service, never by a client.
+      match /notifications/{notificationId} {
+        allow read: if isOwner(userId);
+        allow update: if isOwner(userId)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isRead'])
+          && request.resource.data.isRead == true;
+      }
+
       match /medications/{medicationId} {
         allow read: if isOwner(userId) || delegated(userId, 'VIEW');
         allow delete: if isOwner(userId);
@@ -86,6 +95,26 @@ service cloud.firestore {
           && request.resource.data.medicationId is string && request.resource.data.medicationId.size() > 0
           && request.resource.data.scheduledTimeMillis is int && request.resource.data.completionTimeMillis is int
           && request.resource.data.status in ['taken', 'missed', 'delayed', 'skipped'];
+      }
+
+      match /refillRequests/{medicationId} {
+        allow read: if isOwner(userId) || delegated(userId, 'VIEW');
+        allow create, update: if (isOwner(userId) || delegated(userId, 'EDIT'))
+          && (!exists(/databases/$(database)/documents/users/$(userId)/refillRequests/$(medicationId))
+            || (resource.data.patientId == userId && resource.data.medicationId == medicationId
+              && resource.data.status in ['COMPLETED', 'CANCELLED']))
+          && request.resource.data.keys().hasAll(['patientId', 'medicationId', 'requestedById', 'note', 'status', 'requestedAt'])
+          && request.resource.data.keys().hasOnly(['patientId', 'medicationId', 'medicationName', 'requestedById', 'note', 'status', 'requestedAt'])
+          && request.resource.data.patientId == userId
+          && request.resource.data.medicationId == medicationId
+          && request.resource.data.requestedById == request.auth.uid
+          && request.resource.data.note is string && request.resource.data.note.size() <= 1000
+          && request.resource.data.status == 'REQUESTED' && request.resource.data.requestedAt == request.time
+          && exists(/databases/$(database)/documents/users/$(userId)/medications/$(medicationId))
+          && get(/databases/$(database)/documents/users/$(userId)/medications/$(medicationId)).data.patientId == userId
+          && get(/databases/$(database)/documents/users/$(userId)/medications/$(medicationId)).data.active == true
+          && (!('medicationName' in request.resource.data)
+            || request.resource.data.medicationName == get(/databases/$(database)/documents/users/$(userId)/medications/$(medicationId)).data.name);
       }
 
            match /appointments/{appointmentId} {
@@ -129,7 +158,10 @@ service cloud.firestore {
           ).data.caregiverId == caregiverId
           && getAfter(
             /databases/$(database)/documents/users/$(patientId)/medicationCaregivers/$(caregiverId)
-          ).data.revoked == false;
+          ).data.revoked == false
+          && getAfter(
+            /databases/$(database)/documents/users/$(patientId)/medicationCaregivers/$(caregiverId)
+          ).data.permissions.hasAny(['VIEW']);
 
         allow delete: if isOwner(patientId);
       }

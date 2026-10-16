@@ -1,4 +1,5 @@
 package com.example.carelink.screens
+import androidx.activity.compose.BackHandler
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -59,12 +60,12 @@ internal fun validateMedicationEditor(name: String, strength: String, dose: Stri
     strength = if (strength.isBlank()) "Enter the medication strength" else null,
     dose = if (dose.isBlank()) "Enter the dose" else null,
     frequency = when {
-        MedicationSchedule.days(frequency) == null -> "Use Daily or weekdays such as Mon, Wed, Fri"
+        MedicationSchedule.days(frequency) == null -> "Select a frequency"
         MedicationSchedule.requiredTimes(frequency)?.let { it != reminderTime.split(',').map(String::trim).distinct().size } == true ->
             "Add ${MedicationSchedule.requiredTimes(frequency)} different reminder times for this frequency"
         else -> null
     },
-    reminderTime = if (reminderTime.split(',').any { !MedicationSchedule.validTime(it.trim()) }) "Use 24-hour times separated by commas, such as 08:30, 20:30" else null
+    reminderTime = if (reminderTime.split(',').any { !MedicationSchedule.validTime(it.trim()) }) "Select a reminder time" else null
 )
 
 @Composable
@@ -95,6 +96,7 @@ fun AddEditMedicationScreen(
     var instructions by rememberSaveable(medication?.id) { mutableStateOf(medication?.instructions.orEmpty()) }
     var attemptedSave by rememberSaveable { mutableStateOf(false) }
     var showDeleteDialog by rememberSaveable { mutableStateOf(false) }
+    BackHandler { if (!isSaving) { if (showDeleteDialog) showDeleteDialog = false else onCancel() } }
     fun showFrequencyPicker() {
         android.app.AlertDialog.Builder(context)
             .setTitle("Select frequency")

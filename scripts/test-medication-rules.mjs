@@ -1,6 +1,9 @@
 // Requires the Firestore emulator on localhost:8180, project demo-carelink-review.
 import assert from 'node:assert/strict';
 const base = 'http://127.0.0.1:8180/v1/projects/demo-carelink-review/databases/(default)/documents';
+// Clear only this suite's disposable local emulator database so grant creation is repeatable.
+assert.equal((await fetch('http://127.0.0.1:8180/emulator/v1/projects/demo-carelink-review/databases/(default)/documents',
+  {method:'DELETE'})).status,200,'reset local medication rules fixtures');
 const encode = value => Buffer.from(JSON.stringify(value)).toString('base64url');
 const token = uid => `${encode({alg:'none',typ:'JWT'})}.${encode({sub:uid,user_id:uid,
   aud:'demo-carelink-review',iss:'https://securetoken.google.com/demo-carelink-review',

@@ -4,6 +4,7 @@ import com.example.carelink.model.CareTask
 import com.example.carelink.model.validationErrors
 import com.example.carelink.model.validCareDocumentId as validDocumentId
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.Source
 
 interface CareTaskRepository {
     fun create(task: CareTask, completed: (Result<CareTask>) -> Unit)
@@ -13,7 +14,10 @@ interface CareTaskRepository {
     fun delete(patientId: String, id: String, result: (Result<Unit>) -> Unit)
 }
 
-class FirestoreCareTaskRepository(private val db: FirebaseFirestore) : CareTaskRepository {
+class FirestoreCareTaskRepository(
+    private val db: FirebaseFirestore,
+    private val readSource: () -> Source = { Source.DEFAULT }
+) : CareTaskRepository {
     private fun tasks(patientId: String) = db.collection("users").document(patientId).collection("careTasks")
 
     override fun create(task: CareTask, completed: (Result<CareTask>) -> Unit) {
@@ -30,7 +34,7 @@ class FirestoreCareTaskRepository(private val db: FirebaseFirestore) : CareTaskR
 
     override fun list(patientId: String, completed: (Result<List<CareTask>>) -> Unit) {
         if (!validDocumentId(patientId)) { completed(Result.failure(IllegalArgumentException("Invalid patient ID"))); return }
-        tasks(patientId).get().addOnSuccessListener { snapshot ->
+        tasks(patientId).get(readSource()).addOnSuccessListener { snapshot ->
             completed(Result.success(snapshot.documents.mapNotNull {
                 CareTask.fromFirestore(it.id, it.data.orEmpty() + ("patientId" to patientId))
             }))

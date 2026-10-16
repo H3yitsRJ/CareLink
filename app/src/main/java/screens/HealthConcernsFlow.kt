@@ -122,6 +122,7 @@ private fun ConcernDetailRoute(
     onBack: () -> Unit,
     canEdit: Boolean
 ) {
+    val connectionAvailable = LocalConnectionAvailable.current
     var concern by remember { mutableStateOf<HealthConcern?>(null) }
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -162,6 +163,10 @@ private fun ConcernDetailRoute(
             return
         }
 
+        if (!connectionAvailable) {
+            saveError = OFFLINE_ACTION_MESSAGE
+            return
+        }
         if (saving) return
 
         saving = true

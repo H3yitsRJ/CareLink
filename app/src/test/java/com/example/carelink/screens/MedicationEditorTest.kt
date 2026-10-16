@@ -5,6 +5,11 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class MedicationEditorTest {
+    @Test fun missingSchedulePromptsSelectionInsteadOfTyping() {
+        val errors = validateMedicationEditor("Medicine", "5 mg", "1 tablet", "", "")
+        org.junit.Assert.assertEquals("Select a frequency", errors.frequency)
+        org.junit.Assert.assertEquals("Select a reminder time", errors.reminderTime)
+    }
     @Test fun frequencyMustMatchTheNumberOfReminderTimes() {
         assertTrue(validateMedicationEditor("Test", "5 mg", "1 tablet", "Twice daily", "08:00").hasErrors)
         assertFalse(validateMedicationEditor("Test", "5 mg", "1 tablet", "Twice daily", "08:00, 20:00").hasErrors)

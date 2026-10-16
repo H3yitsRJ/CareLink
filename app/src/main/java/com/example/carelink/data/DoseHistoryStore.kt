@@ -4,6 +4,7 @@ import com.example.carelink.model.DoseRecord
 import com.example.carelink.model.DoseStatus
 import com.example.carelink.model.Medication
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.Source
 
 /** A dose and the medication details as they were when the outcome was recorded. */
 data class DoseHistoryItem(
@@ -14,7 +15,8 @@ data class DoseHistoryItem(
 )
 
 class DoseHistoryStore(
-    private val firestore: FirebaseFirestore = FirebaseFirestore.getInstance()
+    private val firestore: FirebaseFirestore = FirebaseFirestore.getInstance(),
+    private val readSource: () -> Source = { Source.DEFAULT }
 ) {
     private fun collection(patientId: String) = firestore
         .collection("users")
@@ -87,7 +89,7 @@ class DoseHistoryStore(
         }
 
         collection(patientId)
-            .get()
+            .get(readSource())
             .addOnSuccessListener { snapshot ->
                 val items = snapshot.documents
                     .mapNotNull { document ->

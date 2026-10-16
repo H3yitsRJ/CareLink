@@ -1,172 +1,93 @@
-
 package com.example.carelink.screens
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.tooling.preview.Preview
-import com.example.carelink.ui.theme.CareLinkTheme
-
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import com.example.carelink.data.NotificationData
 import com.example.carelink.data.NotificationRepository
 import com.example.carelink.model.CareNotification
 import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.firestore.ListenerRegistration
-
+import java.text.SimpleDateFormat
+import java.util.Locale
 
 @Composable
-fun NotificationsScreen() {
-
-    val userId = FirebaseAuth.getInstance().currentUser?.uid
-
-    val repository = remember {
-        NotificationRepository()
-    }
-
-    var notifications by remember {
-        mutableStateOf<List<CareNotification>>(emptyList())
-    }
-
-    var isLoading by remember {
-        mutableStateOf(true)
-    }
-
-    var errorMessage by remember {
-        mutableStateOf<String?>(null)
-    }
-
-    DisposableEffect(userId) {
+fun NotificationsScreen(
+    onBack: () -> Unit = {},
+    userId: String? = FirebaseAuth.getInstance().currentUser?.uid,
+    data: NotificationData? = null
+) {
+    BackHandler(onBack = onBack)
+    val connected = LocalConnectionAvailable.current
+    val repository = data ?: remember { NotificationRepository() }
+    var notifications by remember(userId) { mutableStateOf<List<CareNotification>>(emptyList()) }
+    var loading by remember(userId) { mutableStateOf(true) }
+    var loadError by remember(userId) { mutableStateOf<String?>(null) }
+    var saveError by remember(userId) { mutableStateOf<String?>(null) }
+    var pending by remember(userId) { mutableStateOf(emptySet<String>()) }
+    var retry by remember { mutableIntStateOf(0) }
+    val alive = remember(userId) { mutableStateOf(true) }
+    DisposableEffect(userId) { alive.value = true; onDispose { alive.value = false } }
+    DisposableEffect(userId, repository, retry, connected) {
+        var active = true
+        loading = true
+        loadError = null
         if (userId == null) {
-            isLoading = false
-            errorMessage = "Please sign in to view notifications."
-            onDispose { }
+            loading = false
+            loadError = "Sign in to view notifications."
+            onDispose { active = false }
         } else {
-            isLoading = true
-            errorMessage = null
-
-            val listener = repository.observeNotifications(userId) { result ->
-                isLoading = false
-
-                result.onSuccess {
-                    notifications = it
-                    errorMessage = null
-                }
-
-                result.onFailure {
-                    errorMessage = it.message ?: "Unable to load notifications."
+            val stop = repository.observeNotifications(userId) { result ->
+                if (active) {
+                    loading = false
+                    result.onSuccess { notifications = it; loadError = null }
+                        .onFailure { loadError = "We couldn't load notifications. Please try again." }
                 }
             }
-
-            onDispose {
-                listener.remove()
-            }
+            onDispose { active = false; stop() }
         }
     }
-
-
-
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .statusBarsPadding()
-            .padding(20.dp)
-    ) {
-
-        Text(
-            text = "Notifications",
-            style = MaterialTheme.typography.headlineMedium
-        )
-
-        Spacer(modifier = Modifier.height(24.dp))
-
+    Column(Modifier.fillMaxSize().safeDrawingPadding().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") }
+        Text("Notifications", style = MaterialTheme.typography.headlineMedium)
+        if (saveError != null) StateMessage(saveError!!, true)
+        if (loadError != null) {
+            StateMessage(loadError!!, true)
+            TextButton(onClick = { retry++ }, enabled = userId != null) { Text("Retry") }
+        }
         when {
-            isLoading -> {
-                CircularProgressIndicator()
-            }
-
-            errorMessage != null -> {
-                Text(
-                    text = errorMessage ?: "Unknown error",
-                    color = MaterialTheme.colorScheme.error
-                )
-            }
-
-            notifications.isEmpty() -> {
-                Text(
-                    text = "No notifications yet.",
-                    style = MaterialTheme.typography.bodyLarge
-                )
-            }
-
-            else -> {
-                LazyColumn(
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    items(
-                        items = notifications.sortedByDescending {
-                            it.timestamp.seconds
-                        },
-                        key = { it.id }
-                    ) { notification ->
-                        Card(
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = CardDefaults.cardColors(
-                                containerColor = if (!notification.isRead) {
-                                    MaterialTheme.colorScheme.primaryContainer
-                                } else {
-                                    MaterialTheme.colorScheme.surfaceVariant
-                                }
-                            )
-                        ) {
-
-                            Column(
-                                modifier = Modifier.padding(16.dp)
-                            ) {
-                                if (!notification.isRead && userId != null) {
-                                    TextButton(
-                                        onClick = {
-                                            repository.markAsRead(
-                                                userId,
-                                                notification.id
-                                            ) { result ->
-                                                result.onFailure {
-                                                    errorMessage =
-                                                        it.message
-                                                            ?: "Unable to mark notification as read."
-                                                }
-                                            }
+            loading -> StateMessage("Loading notifications")
+            notifications.isEmpty() && loadError == null -> StateMessage("No notifications yet.")
+            else -> LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                items(notifications.sortedByDescending { it.timestamp }, key = { it.id }) { notification ->
+                    Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(
+                        containerColor = if (notification.isRead) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.primaryContainer
+                    )) {
+                        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text(notification.title, style = MaterialTheme.typography.titleMedium)
+                            Text(notification.message)
+                            Text(if (notification.isRead) "Read" else "Unread", style = MaterialTheme.typography.labelLarge)
+                            Text(SimpleDateFormat("MMM d, yyyy • h:mm a", Locale.getDefault()).format(notification.timestamp.toDate()), style = MaterialTheme.typography.bodySmall)
+                            if (!notification.isRead && userId != null) {
+                                TextButton(enabled = connected && notification.id !in pending, onClick = {
+                                    if (!connected || notification.id in pending) return@TextButton
+                                    pending = pending + notification.id
+                                    saveError = null
+                                    repository.markAsRead(userId, notification.id) { result ->
+                                        if (alive.value) {
+                                            pending = pending - notification.id
+                                            result.onSuccess {
+                                                notifications = notifications.map { if (it.id == notification.id) it.copy(isRead = true) else it }
+                                            }.onFailure { saveError = "We couldn't mark the notification as read. Please try again." }
                                         }
-                                    ) {
-                                        Text("Mark as read")
                                     }
-                                }
-
-                                Text(
-                                    text = notification.title,
-                                    style = MaterialTheme.typography.titleMedium
-                                )
-
-                                Spacer(modifier = Modifier.height(4.dp))
-
-                                Text(
-                                    text = notification.message,
-                                    style = MaterialTheme.typography.bodyMedium
-                                )
-
-                                Spacer(modifier = Modifier.height(8.dp))
-
-                                Text(
-                                    text = java.text.SimpleDateFormat(
-                                        "MMM d, yyyy • h:mm a",
-                                        java.util.Locale.getDefault()
-                                    ).format(notification.timestamp.toDate()),
-                                    style = MaterialTheme.typography.bodySmall
-                                )
+                                }) { Text(if (notification.id in pending) "Marking as read" else "Mark as read") }
                             }
                         }
                     }
@@ -174,13 +95,4 @@ fun NotificationsScreen() {
             }
         }
     }
-
-
 }
-    @Preview(showBackground = true)
-    @Composable
-    fun NotificationsScreenPreview() {
-        CareLinkTheme {
-            NotificationsScreen()
-        }
-    }

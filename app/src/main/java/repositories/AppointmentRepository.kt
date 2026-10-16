@@ -3,9 +3,11 @@ package com.example.carelink.repositories
 import com.example.carelink.model.Appointment
 import com.example.carelink.model.AppointmentStatus
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.Source
 
 class AppointmentRepository (
-    private val firestore: FirebaseFirestore
+    private val firestore: FirebaseFirestore,
+    private val readSource: () -> Source = { Source.DEFAULT }
 ){
     fun getAppointments(
         userId: String,
@@ -16,7 +18,7 @@ class AppointmentRepository (
             .collection("users")
             .document(userId)
             .collection("appointments")
-            .get()
+            .get(readSource())
             .addOnSuccessListener { snapshot ->
                 val appointments =
                     snapshot.documents.map { document ->

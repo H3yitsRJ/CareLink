@@ -4,22 +4,24 @@ import com.example.carelink.model.CareActivityType
 import com.example.carelink.model.CareHistoryEntry
 import com.google.firebase.Timestamp
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.Source
 
 /** Combines dose records, shared events, and legacy caregiver events. */
 class CareHistoryStore(
-    private val firestore: FirebaseFirestore = FirebaseFirestore.getInstance()
+    private val firestore: FirebaseFirestore = FirebaseFirestore.getInstance(),
+    private val readSource: () -> Source = { Source.DEFAULT }
 ) {
     fun load(
         patientId: String,
         completed: (Result<List<CareHistoryEntry>>) -> Unit
     ) {
-        DoseHistoryStore(firestore).load(patientId) { doses ->
+        DoseHistoryStore(firestore, readSource).load(patientId) { doses ->
             doses.fold(
                 onSuccess = { items ->
                     firestore.collection("users")
                         .document(patientId)
                         .collection("careHistory")
-                        .get()
+                        .get(readSource())
                         .addOnSuccessListener { snapshot ->
                             val entries = items.map { item ->
                                 CareHistoryEntry(

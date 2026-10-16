@@ -4,6 +4,7 @@ import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import com.example.carelink.data.CaregiverMedicationData
 import com.example.carelink.data.MedicationCaregiverStore
+import com.example.carelink.data.RefillRequestRepository
 import com.example.carelink.model.*
 import com.example.carelink.screens.CaregiverMedicationsScreen
 import com.example.carelink.screens.CaregiverAccessScreen
@@ -15,10 +16,11 @@ import org.junit.Test
 class CaregiverMedicationWorkflowTest {
     @get:Rule val compose = createComposeRule()
     private val data = FakeCaregiverData()
+    private val refill = FakeRefillRepository()
 
     private fun open(edit: Boolean = true) {
         if (!edit) data.grant = data.grant.copy(permissions = setOf(CarePermission.VIEW))
-        compose.setContent { CareLinkTheme { CaregiverMedicationsScreen("caregiver", {}, data) } }
+        compose.setContent { CareLinkTheme { CaregiverMedicationsScreen("caregiver", {}, data, refillData = refill) } }
         compose.onNodeWithText("Patient CareLink ID").performTextInput("patient")
         compose.onNodeWithText("Open patient medications").performClick()
         compose.onNodeWithText("Medications for Test patient").assertExists()
@@ -28,6 +30,38 @@ class CaregiverMedicationWorkflowTest {
         open()
         compose.onNodeWithText("Edit medication").performScrollTo().performClick()
         compose.onNodeWithText("Remove medication").assertDoesNotExist()
+        compose.onNodeWithText("Request refill").assertDoesNotExist()
+    }
+
+    @Test fun caregiverRefillEntryPersistsPatientMedicationActorAndConfirmsCallback() {
+        open()
+        compose.onNodeWithText("Request refill").performClick()
+        compose.onNodeWithText("Selected: Example medication").assertExists()
+        compose.onNodeWithText("Request note (optional)").performTextInput("Please refill")
+        compose.onNodeWithText("Submit refill request").performScrollTo().performClick()
+        compose.onNodeWithText("Submitting refill request").assertIsNotEnabled()
+        compose.onNodeWithText("Refill request submitted.").assertDoesNotExist()
+        compose.runOnIdle {
+            val request = requireNotNull(refill.request)
+            assertEquals("patient", request.patientId)
+            assertEquals("med", request.medicationId)
+            assertEquals("caregiver", request.requestedById)
+            assertEquals("Please refill", request.note)
+            assertEquals(RefillRequestStatus.REQUESTED, request.status)
+            requireNotNull(refill.complete).invoke(Result.success(request))
+        }
+        compose.onNodeWithText("Refill request submitted.").assertExists()
+        compose.onNodeWithText("Done").performScrollTo().performClick()
+        compose.onNodeWithText("Example medication").assertExists()
+    }
+
+    private class FakeRefillRepository : RefillRequestRepository {
+        var request: RefillRequest? = null
+        var complete: ((Result<RefillRequest>) -> Unit)? = null
+        override fun create(request: RefillRequest, completed: (Result<RefillRequest>) -> Unit) {
+            this.request = request
+            complete = completed
+        }
     }
 
     @Test fun caregiverSaveTargetsPatientAndRefreshesDetailsAndList() {
@@ -57,6 +91,7 @@ class CaregiverMedicationWorkflowTest {
         open(false)
         compose.onNodeWithText("Edit medication").assertDoesNotExist()
         compose.onNodeWithText("Remove medication").assertDoesNotExist()
+        compose.onNodeWithText("Request refill").assertDoesNotExist()
     }
     @Test fun revocationClosesAnOpenEditAndClearsMedicationDetails() {
         edit()

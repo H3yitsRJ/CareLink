@@ -68,7 +68,8 @@ fun MedicationsScreen(
     var loadError by remember { mutableStateOf<String?>(null) }
     var retry by remember { mutableStateOf(0) }
 
-    LaunchedEffect(retry) {
+    val connectionAvailable = LocalConnectionAvailable.current
+    LaunchedEffect(retry, connectionAvailable) {
         loading = true
         loadError = null
         val user = FirebaseAuth.getInstance().currentUser
@@ -78,7 +79,7 @@ fun MedicationsScreen(
                 .collection("users")
                 .document(user.uid)
                 .collection("medications")
-                .get()
+                .get(if (connectionAvailable) com.google.firebase.firestore.Source.DEFAULT else com.google.firebase.firestore.Source.CACHE)
                 .addOnSuccessListener { result ->
 
                     medications = result.documents.mapNotNull { document ->
@@ -96,145 +97,48 @@ fun MedicationsScreen(
         }
     }
 
-    val formattedDate = SimpleDateFormat(
-        "EEEE, MMMM d",
-        Locale.getDefault()
-    ).format(Date())
-    Scaffold(
-        bottomBar = {
-            BottomNavBar(selectedDestination =
-                BottomNavDestination.Medications,
-                onNavigate
-            )
-        }
-    ){ paddingValues ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(MaterialTheme.colorScheme.background)
-                .padding(paddingValues)
-                .padding(32.dp)
-        ){
-            Text(
-                text = "Medications",
-                fontSize = 43.sp,
-                fontWeight = FontWeight.SemiBold
-            )
+    MedicationsContent(medications, loading, loadError, { retry++ }, onAddMedication,
+        onMedicationSelected, onMedicationScheduler, successMessage, onCaregiverMedications,
+        onOpenCareHistory, onOpenRefills, onNavigate)
+}
 
-            if (successMessage != null) {
-                Text(
-                    text = successMessage,
-                    color = MaterialTheme.colorScheme.primary,
-                    fontWeight = FontWeight.Medium
-                )
-
-                Spacer(modifier = Modifier.height(8.dp))
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            Text(
-                text = "Manage and schedule your medications"
-            )
-            TextButton(onClick = onCaregiverMedications) { Text("Caregiver medications") }
-
-            TextButton(onClick = onOpenCareHistory) { Text("Care history") }
-
-            TextButton(
-                onClick = onOpenRefills
-            ) {
-                Text("Medication refills")
-            }
-
-            Spacer(modifier = Modifier.height(50.dp))
-
-            Row(){
-                Button(
-                    onClick = onAddMedication,
-                    shape = RoundedCornerShape(6.dp),
-                    modifier = Modifier
-                        .height(63.dp)
-                        .width(197.dp)
-                ){
-                    Text(
-                        text = "Add Medication",
-                        fontSize = 20.sp
-                    )
-                }
-
-                Spacer(modifier = Modifier.width(50.dp))
-
-                Button(
-                    onClick = onMedicationScheduler,
-                    shape = RoundedCornerShape(6.dp),
-                    modifier = Modifier
-                        .size(63.dp),
-                    contentPadding = PaddingValues(0.dp)
-                ){
-                    Icon(
-                        imageVector = Icons.Default.CalendarMonth,
-                        contentDescription = "Medication Scheduler",
-                        modifier = Modifier.size(35.dp)
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(43.dp))
-
-            Text(
-                text = formattedDate,
-                fontSize = 28.sp
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            HorizontalDivider()
-
-            Spacer(modifier = Modifier.height(18.dp))
-
-
-            if (loading) {
-                Text("Loading medications")
-            } else if (loadError != null) {
-                Text(loadError!!, color = MaterialTheme.colorScheme.error)
-                Button(onClick = { retry++ }) { Text("Retry") }
-            } else if(medications.isEmpty()){
-
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 64.dp),
-                    contentAlignment = Alignment.Center
-                ){
-                    Text(
-                        text = "No medications to display. \n\nAdd a medication to start tracking doses and schedules.",
-                        fontSize = 18.sp,
-                        textAlign = TextAlign.Center
-                    )
-                }
-
-            }else{
-
-                LazyColumn(
-                    modifier = Modifier.weight(1f)
-                ) {
-
-                    items(count = medications.size) { index ->
-
-                        MedicationCard(
-                            medication = medications[index],
-                            onClick = {
-                                onMedicationSelected(medications[index])
-                            }
-                        )
-
-                        Spacer(
-                            modifier = Modifier.height(18.dp)
-                        )
+@Composable
+internal fun MedicationsContent(
+    medications: List<Medication>, loading: Boolean = false, loadError: String? = null,
+    onRetry: () -> Unit = {}, onAddMedication: () -> Unit = {},
+    onMedicationSelected: (Medication) -> Unit = {}, onMedicationScheduler: () -> Unit = {},
+    successMessage: String? = null, onCaregiverMedications: () -> Unit = {},
+    onOpenCareHistory: () -> Unit = {}, onOpenRefills: () -> Unit = {},
+    onNavigate: (BottomNavDestination) -> Unit = {}
+) {
+    Scaffold(bottomBar = { BottomNavBar(BottomNavDestination.Medications, onNavigate) }) { padding ->
+        LazyColumn(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)
+            .padding(padding).padding(horizontal = 16.dp),
+            contentPadding = PaddingValues(vertical = 16.dp),
+            verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(12.dp)) {
+            item {
+                Text("Medications", style = MaterialTheme.typography.headlineLarge)
+                successMessage?.let { Text(it, color = MaterialTheme.colorScheme.primary) }
+                TextButton(onClick = onCaregiverMedications) { Text("Caregiver medications") }
+                TextButton(onClick = onOpenCareHistory) { Text("Care history") }
+                TextButton(onClick = onOpenRefills) { Text("Medication refills") }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(12.dp)) {
+                    Button(onClick = onAddMedication, modifier = Modifier.weight(1f).height(63.dp)) { Text("Add Medication") }
+                    Button(onClick = onMedicationScheduler, modifier = Modifier.size(63.dp), contentPadding = PaddingValues(0.dp)) {
+                        Icon(Icons.Default.CalendarMonth, "Medication Scheduler", Modifier.size(35.dp))
                     }
                 }
+                Text(SimpleDateFormat("EEEE, MMMM d", Locale.getDefault()).format(Date()), style = MaterialTheme.typography.titleLarge)
+                HorizontalDivider()
             }
-
+            when {
+                loading -> item { StateMessage("Loading medications") }
+                loadError != null -> item { StateMessage(loadError, true); Button(onClick = onRetry) { Text("Retry") } }
+                medications.isEmpty() -> item { StateMessage("No medications to display. Add a medication to start tracking doses and schedules.") }
+                else -> items(count = medications.size, key = { medications[it].id }) { index ->
+                    MedicationCard(medications[index], onClick = { onMedicationSelected(medications[index]) })
+                }
+            }
         }
     }
 }
