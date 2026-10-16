@@ -1,6 +1,6 @@
 package com.example.carelink.screens
-import androidx.activity.compose.BackHandler
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -17,6 +17,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -33,19 +34,41 @@ fun AppointmentDetailsScreen(
     onEdit: () -> Unit = {},
     onCancelAppointment: (Appointment) -> Unit = {},
     onGenerateFollowUp: (Appointment) -> Unit = {},
-    onBack: () -> Unit = {}
+    onBack: () -> Unit = {},
+    canManage: Boolean = true
 ) {
     // Cancellation needs its own saved state so rotation does not bypass the confirmation step.
     var confirmingCancellation by rememberSaveable { mutableStateOf(false) }
-    BackHandler { if (confirmingCancellation) confirmingCancellation = false else onBack() }
+
+    LaunchedEffect(canManage) {
+        if (!canManage) {
+            confirmingCancellation = false
+        }
+    }
+
+    BackHandler {
+        if (confirmingCancellation) {
+            confirmingCancellation = false
+        } else {
+            onBack()
+        }
+    }
+
     Column(
-        Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).verticalScroll(rememberScrollState()).padding(16.dp),
+        Modifier.fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+            .verticalScroll(rememberScrollState())
+            .padding(16.dp),
+
         verticalArrangement = Arrangement.spacedBy(12.dp)
+
     ) {
         Text("Appointment details", style = MaterialTheme.typography.headlineLarge)
+
         when {
             isLoading -> StateMessage("Loading appointment")
             appointment == null -> StateMessage("This appointment could not be found.", true)
+
             else -> {
                 CareCard(appointment.title) {
                     Text("${appointment.date} at ${appointment.time}")
@@ -54,22 +77,78 @@ fun AppointmentDetailsScreen(
                     if (appointment.notes.isNotBlank()) Text(appointment.notes)
                     Text("Status: ${appointment.status.name.lowercase().replaceFirstChar(Char::uppercase)}")
                 }
-                if (appointment.status != AppointmentStatus.CANCELLED) {
-                    Button(onClick = onEdit, modifier = Modifier.fillMaxWidth()) { Text("Edit appointment") }
-                    OutlinedButton(onClick = { onGenerateFollowUp(appointment) }, modifier = Modifier.fillMaxWidth()) { Text("Generate follow-up task") }
-                    TextButton(onClick = { confirmingCancellation = true }, modifier = Modifier.fillMaxWidth()) { Text("Cancel appointment") }
+
+                if (!canManage) {
+                    Text("View-only access. You cannot change this appointment.")
+                } else if (appointment.status != AppointmentStatus.CANCELLED) {
+                    Button(
+                        onClick = {
+                            if (canManage) onEdit()
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Edit appointment")
+                    }
+                    OutlinedButton(
+                        onClick = {
+                            if (canManage) onGenerateFollowUp(appointment)
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Generate follow-up task")
+                    }
+                    TextButton(
+                        onClick = {
+                            if (canManage) confirmingCancellation = true
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Cancel appointment")
+                    }
                 }
             }
         }
+
         if (successMessage != null) Text(successMessage, color = MaterialTheme.colorScheme.tertiary)
-        OutlinedButton(onClick = onBack, modifier = Modifier.fillMaxWidth()) { Text("Back to appointments") }
+
+        OutlinedButton(
+            onClick = onBack,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Back to appointments")
+        }
     }
     // The parent callback performs storage and reminder cleanup after confirmation.
-    if (confirmingCancellation && appointment != null) AlertDialog(
+    if (
+        confirmingCancellation &&
+        appointment != null &&
+        canManage &&
+        appointment.status != AppointmentStatus.CANCELLED
+    ) AlertDialog(
         onDismissRequest = { confirmingCancellation = false },
         title = { Text("Cancel appointment?") },
         text = { Text("The appointment will remain in CareLink with a Cancelled status. Future reminders will stop.") },
-        confirmButton = { TextButton(onClick = { confirmingCancellation = false; onCancelAppointment(appointment) }) { Text("Cancel appointment") } },
-        dismissButton = { TextButton(onClick = { confirmingCancellation = false }) { Text("Keep appointment") } }
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    confirmingCancellation = false
+                    if (canManage &&
+                        appointment.status != AppointmentStatus.CANCELLED
+                    ) {
+                        onCancelAppointment(appointment)
+                    }
+                }
+            ) {
+                Text("Cancel appointment")
+            }
+        },
+        dismissButton = {
+            TextButton(
+                onClick = {
+                    confirmingCancellation = false }
+            ) {
+                Text("Keep appointment")
+            }
+        }
     )
 }

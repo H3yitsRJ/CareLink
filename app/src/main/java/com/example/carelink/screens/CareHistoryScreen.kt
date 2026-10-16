@@ -22,7 +22,13 @@ fun CareHistoryScreen(
     isLoading: Boolean = false,
     loadError: String? = null,
     onRetry: () -> Unit = {},
-    onBack: () -> Unit = {}
+    onBack: () -> Unit = {},
+    onOpenMedication: ((CareHistoryEntry) -> Unit)? = null,
+    onOpenCaregiverAccess: ((CareHistoryEntry) -> Unit)? = null,
+    hasMore: Boolean = false,
+    isLoadingMore: Boolean = false,
+    loadMoreError: String? = null,
+    onLoadMore: () -> Unit = {}
 ) {
     var start by rememberSaveable { mutableStateOf("") }
     var end by rememberSaveable { mutableStateOf("") }
@@ -36,7 +42,10 @@ fun CareHistoryScreen(
     val applied = remember(appliedStart, appliedEnd, appliedTypes) {
         CareHistoryFilter(appliedStart, appliedEnd, CareActivityType.entries.filter { it.name in appliedTypes }.toSet())
     }
-    val visible = remember(entries, applied) { applied.apply(entries) }
+    val visible = remember(entries, applied) {
+        CareHistoryEntry.newestFirst(applied.apply(entries))
+    }
+
     if (dateField != null) {
         val picker = rememberDatePickerState()
         DatePickerDialog(
@@ -54,8 +63,11 @@ fun CareHistoryScreen(
                 }, enabled = picker.selectedDateMillis != null) { Text("Select") }
             },
             dismissButton = { TextButton(onClick = { dateField = null }) { Text("Cancel") } }
-        ) { DatePicker(state = picker) }
+        ) {
+            DatePicker(state = picker)
+        }
     }
+
     Scaffold { padding ->
         LazyColumn(
             Modifier.fillMaxSize().padding(padding).padding(16.dp),
@@ -65,6 +77,7 @@ fun CareHistoryScreen(
                 TextButton(onClick = onBack) { Text("‹ Back to medications") }
                 Text("Care history", style = MaterialTheme.typography.headlineMedium)
             }
+
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedTextField(
@@ -81,6 +94,7 @@ fun CareHistoryScreen(
                     )
                 }
             }
+
             item {
                 Column {
                     CareActivityType.entries.forEach { type ->
@@ -94,6 +108,7 @@ fun CareHistoryScreen(
                     }
                 }
             }
+
             item {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button(onClick = {
@@ -114,7 +129,9 @@ fun CareHistoryScreen(
                     }) { Text("Clear") }
                 }
             }
+
             error?.let { item { Text(it, color = MaterialTheme.colorScheme.error) } }
+
             if (applied.isActive) {
                 item {
                     val dateFormat = SimpleDateFormat("MMM d, yyyy", Locale.getDefault())
@@ -125,6 +142,7 @@ fun CareHistoryScreen(
                     ).joinToString(" • "), style = MaterialTheme.typography.bodyMedium)
                 }
             }
+
             when {
                 isLoading -> item { CircularProgressIndicator(); Text("Loading care history...") }
                 loadError != null -> item {
@@ -132,24 +150,149 @@ fun CareHistoryScreen(
                     Button(onClick = onRetry) { Text("Retry") }
                 }
                 visible.isEmpty() -> item {
-                    Text(if (applied.isActive) "No history matches these filters. Clear filters or choose other dates or activity types."
-                        else "No care history yet.")
+                    Text(
+                        when {
+                            hasMore || isLoadingMore ->
+                                "No matching events in the history loaded so far. Load more to check older events."
+
+                            applied.isActive ->
+                                "No history matches these filters. Clear filters or choose other dates or activity types."
+
+                            else ->
+                                "No care history yet."
+                        }
+                    )
                 }
-                else -> items(visible, key = { it.id }) { entry -> CareHistoryCard(entry) }
+                else -> items(visible, key = { it.id }) { entry ->
+                    CareHistoryCard(
+                        entry = entry,
+                        onOpenMedication = onOpenMedication,
+                        onOpenCaregiverAccess = onOpenCaregiverAccess
+                    )
+                }
             }
+
+            if (!isLoading && loadError == null) {
+                item {
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        loadMoreError?.let { message ->
+                            Text(
+                                text = message,
+                                color = MaterialTheme.colorScheme.error
+                            )
+                        }
+
+                        when {
+                            isLoadingMore -> {
+                                CircularProgressIndicator()
+                                Text("Loading older history...")
+                            }
+
+                            hasMore -> {
+                                OutlinedButton(
+                                    onClick = onLoadMore,
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text(
+                                        if (loadMoreError != null) {
+                                            "Retry loading older history"
+                                        } else {
+                                            "Load more"
+                                        }
+                                    )
+                                }
+                            }
+
+                            entries.isNotEmpty() -> {
+                                Text(
+                                    "All history loaded.",
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
         }
     }
 }
 
 @Composable
-private fun CareHistoryCard(entry: CareHistoryEntry) {
+private fun CareHistoryCard(
+    entry: CareHistoryEntry,
+    onOpenMedication: ((CareHistoryEntry) -> Unit)? = null,
+    onOpenCaregiverAccess: ((CareHistoryEntry) -> Unit)? = null
+) {
     val date = remember(entry.occurredAtMillis) {
-        SimpleDateFormat("MMM d, yyyy • h:mm a", Locale.getDefault()).format(Date(entry.occurredAtMillis))
+        SimpleDateFormat(
+            "MMM d, yyyy • h:mm a",
+            Locale.getDefault()
+        ).format(Date(entry.occurredAtMillis))
     }
+
     Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text(entry.summary, style = MaterialTheme.typography.titleMedium)
-            Text(if (entry.type == CareActivityType.MEDICATION) "Scheduled dose: $date" else date)
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Text(
+                text = entry.type.label,
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary
+            )
+
+            Text(
+                text = entry.summary,
+                style = MaterialTheme.typography.titleMedium
+            )
+
+            Text(
+                text = entry.actorId
+                    ?.takeIf { it.isNotBlank() }
+                    ?.let { "User: $it" }
+                    ?: "User: Unavailable for this older record",
+                style = MaterialTheme.typography.bodyMedium
+            )
+
+            Text(
+                text = "Date: $date",
+                style = MaterialTheme.typography.bodyMedium
+            )
+
+            if (
+                entry.type == CareActivityType.MEDICATION &&
+                !entry.relatedRecordId.isNullOrBlank() &&
+                onOpenMedication != null
+            ) {
+                TextButton(
+                    onClick = {
+                        onOpenMedication(entry)
+                    }
+                ) {
+                    Text("Open medication")
+                }
+
+
+            }
+
+            if (
+                entry.type == CareActivityType.CAREGIVER_ACCESS &&
+                !entry.relatedRecordId.isNullOrBlank() &&
+                onOpenCaregiverAccess != null
+            ) {
+                TextButton(
+                    onClick = {
+                        onOpenCaregiverAccess(entry)
+                    }
+                ) {
+                    Text("Open caregiver access")
+                }
+            }
+
         }
     }
 }

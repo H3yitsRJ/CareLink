@@ -63,7 +63,14 @@ fun CaregiverMedicationsScreen(actorId: String, onBack: () -> Unit, data: Caregi
             patientName = if (connected && latest?.allows(CarePermission.VIEW) == true) name else ""
             loading = false
             if (connected && latest?.allows(CarePermission.VIEW) == true) {
-                error = if (original != null && !latest.allows(CarePermission.EDIT)) "You now have view-only access. Cancel to return to medication details." else null
+                if (original != null && !latest.allows(CarePermission.EDIT)) {
+                    selected = medications.find { it.id == original?.id }
+                    original = null
+                    success = null
+                    error = "Your access changed to view-only. You can view medications, but you cannot edit them."
+                } else {
+                    error = null
+                }
             } else {
                 medications = emptyList()
                 selected = null
@@ -129,6 +136,19 @@ fun CaregiverMedicationsScreen(actorId: String, onBack: () -> Unit, data: Caregi
                     if (!connectionAvailable) { error = OFFLINE_ACTION_MESSAGE; return@AddEditMedicationScreen }
                     if (!connected || access?.allows(CarePermission.EDIT) != true || saving) return@AddEditMedicationScreen
                     val baseline = original ?: return@AddEditMedicationScreen
+
+                    if (!connected ||
+                        access?.patientId != baseline.patientId ||
+                        access?.caregiverId != actorId ||
+                        access?.allows(CarePermission.VIEW) != true ||
+                        access?.allows(CarePermission.EDIT) != true
+                    ) {
+                        error = "Your editing access could not be verified. Check your connection and permissions."
+                        return@AddEditMedicationScreen
+                    }
+
+                    if (saving) return@AddEditMedicationScreen
+
                     saving = true
                     error = null
                     store.edit(baseline, edited, actorId) { result ->
@@ -147,12 +167,66 @@ fun CaregiverMedicationsScreen(actorId: String, onBack: () -> Unit, data: Caregi
             )
             selected != null && access?.allows(CarePermission.VIEW) == true -> Column {
                 if (success != null) Text(success!!, Modifier.padding(horizontal = 16.dp))
-                if (selected!!.active && access?.allows(CarePermission.EDIT) == true) {
-                    Button(onClick = { requestingRefill = true; refillSaved = false; error = null }, enabled = connected && connectionAvailable, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) { Text("Request refill") }
+
+                if (
+                    selected!!.active &&
+                    access?.allows(CarePermission.EDIT) == true
+                ) {
+                    Button(
+                        onClick = {
+                            if (
+                                connected &&
+                                connectionAvailable &&
+                                access?.allows(CarePermission.EDIT) == true
+                            ) {
+                                requestingRefill = true
+                                refillSaved = false
+                                error = null
+                            }
+                        },
+                        enabled = connected && connectionAvailable,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp)
+                    ) {
+                        Text("Request refill")
+                    }
                 }
-                MedicationDetailsScreen(selected, errorMessage = if (!connectionAvailable) OFFLINE_ACTION_MESSAGE else error,
-                    canEdit = connected && connectionAvailable && access?.allows(CarePermission.EDIT) == true, canRemove = false, showNavigation = false, canRecordDose = false,
-                    onEdit = { original = it; success = null; error = null }, onBack = { selected = null })
+
+                MedicationDetailsScreen(
+                    medication = selected,
+                    errorMessage = if (!connectionAvailable) {
+                        OFFLINE_ACTION_MESSAGE
+                    } else {
+                        error
+                    },
+                    canEdit = connected &&
+                        connectionAvailable &&
+                        access?.allows(CarePermission.EDIT) == true,
+                    canRemove = false,
+                    showNavigation = false,
+                    canRecordDose = false,
+                    onEdit = { medication ->
+                        if (!connectionAvailable) {
+                            error = OFFLINE_ACTION_MESSAGE
+                        } else if (
+                            connected &&
+                            access?.allows(CarePermission.VIEW) == true &&
+                            access?.allows(CarePermission.EDIT) == true
+                        ) {
+                            original = medication
+                            success = null
+                            error = null
+                        } else {
+                            error =
+                                "You do not have permission to edit this patient's medications."
+                        }
+                    },
+                    onBack = {
+                        selected = null
+                    }
+                )
+
             }
             else -> Column(Modifier.verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text("Caregiver medications", style = MaterialTheme.typography.headlineMedium)
