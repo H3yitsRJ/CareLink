@@ -6,15 +6,20 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
 import com.google.firebase.firestore.Query
 
+interface NotificationData {
+    fun observeNotifications(userId: String, onResult: (Result<List<CareNotification>>) -> Unit): () -> Unit
+    fun markAsRead(userId: String, notificationId: String, onResult: (Result<Unit>) -> Unit)
+}
+
 class NotificationRepository(
     private val firestore: FirebaseFirestore =
         FirebaseFirestore.getInstance()
-) {
-    fun observeNotifications(
+) : NotificationData {
+    override fun observeNotifications(
         userId: String,
         onResult: (Result<List<CareNotification>>) -> Unit
-    ): ListenerRegistration {
-        return firestore
+    ): () -> Unit {
+        val listener = firestore
             .collection("users")
             .document(userId)
             .collection("notifications")
@@ -43,9 +48,10 @@ class NotificationRepository(
 
                 onResult(Result.success(notifications))
             }
+        return { listener.remove() }
     }
 
-    fun markAsRead(
+    override fun markAsRead(
         userId: String,
         notificationId: String,
         onResult: (Result<Unit>) -> Unit

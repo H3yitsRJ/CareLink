@@ -105,4 +105,19 @@ class CaregiverPermissionEditorTest {
         compose.onNodeWithText("Back").performScrollTo().performClick()
         compose.runOnIdle { assertEquals(1, backs) }
     }
+
+    @Test fun offlineSaveIsDisabledWithoutBusyLabelAndCancelRemainsAvailable() {
+        var saves = 0
+        var cancels = 0
+        compose.setContent { CareLinkTheme {
+            CaregiverAccessScreen(grant, "Caregiver", true, onSave = { saves++ }, onCancel = { cancels++ },
+                canSave = false, error = "Connect to the internet before saving changes.")
+        } }
+        compose.onNodeWithText("Save access").performScrollTo().assertIsNotEnabled()
+        compose.onNodeWithText("Saving access").assertDoesNotExist()
+        compose.onNodeWithContentDescription("edit access").assertIsNotEnabled()
+        compose.onNodeWithText("Connect to the internet before saving changes.").assertExists()
+        compose.onNodeWithText("Cancel").performScrollTo().assertIsEnabled().performClick()
+        compose.runOnIdle { assertEquals(0, saves); assertEquals(1, cancels) }
+    }
 }

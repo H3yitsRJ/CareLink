@@ -1,4 +1,5 @@
 package com.example.carelink.screens
+import androidx.activity.compose.BackHandler
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -54,12 +55,14 @@ fun MedicationDetailsScreen(
     canRemove: Boolean = true,
     showNavigation: Boolean = true,
     isSavingDose: Boolean = false,
+    canRecordDose: Boolean = true,
     doseMessage: String? = null,
     doseError: String? = null,
     onRecordDose: (Medication, Long, DoseStatus) -> Unit = { _, _, _ -> }
 
 ) {
     var showRemoveDialog by remember(medication?.id) { mutableStateOf(false) }
+    BackHandler { if (showRemoveDialog) showRemoveDialog = false else onBack() }
     var selectedReminder by remember(medication?.id) { mutableStateOf(medication?.reminderTimes?.firstOrNull().orEmpty()) }
 
     Scaffold(
@@ -97,7 +100,7 @@ fun MedicationDetailsScreen(
 
             if (errorMessage != null) { Text(errorMessage, color = MaterialTheme.colorScheme.error) }
             if (doseError != null) { Text(doseError, color = MaterialTheme.colorScheme.error) }
-            if (doseMessage != null) { Text(doseMessage, color = MaterialTheme.colorScheme.primary) }
+            if (doseMessage != null && doseError == null) { Text(doseMessage, color = MaterialTheme.colorScheme.primary) }
 
             when {
                 isLoading -> MedicationLoadingState()
@@ -113,6 +116,7 @@ fun MedicationDetailsScreen(
                     selectedReminder = selectedReminder,
                     onSelectReminder = { selectedReminder = it },
                     isSavingDose = isSavingDose,
+                    canRecordDose = canRecordDose,
                     onRecordDose = { status ->
                         val scheduledTime = todayAt(selectedReminder)
                         if (scheduledTime != null) {
@@ -160,6 +164,7 @@ private fun MedicationDetailsContent(
     selectedReminder: String,
     onSelectReminder: (String) -> Unit,
     isSavingDose: Boolean,
+    canRecordDose: Boolean,
     onRecordDose: (DoseStatus) -> Unit
 ) {
     Column(
@@ -232,48 +237,50 @@ private fun MedicationDetailsContent(
 
         Spacer(modifier = Modifier.height(28.dp))
 
-        Text(
-            text = "Record today's dose",
-            style = MaterialTheme.typography.titleMedium
-        )
-        Text("Choose the scheduled time, then record what happened.")
+        if (canRecordDose) {
+            Text(
+                text = "Record today's dose",
+                style = MaterialTheme.typography.titleMedium
+            )
+            Text("Choose the scheduled time, then record what happened.")
 
-        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            medication.reminderTimes.forEach { time ->
-                FilterChip(
-                    selected = selectedReminder == time,
-                    onClick = { onSelectReminder(time) },
-                    label = { Text(formatReminderTime(time)) }
-                )
-            }
-        }
-
-        if (medication.reminderTimes.isNotEmpty()) {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                listOf(
-                    DoseStatus.TAKEN,
-                    DoseStatus.MISSED,
-                    DoseStatus.DELAYED
-                ).forEach { status ->
-                    OutlinedButton(
-                        onClick = { onRecordDose(status) },
-                        enabled = !isSavingDose &&
-                                selectedReminder.isNotBlank(),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text(
-                            status.name.lowercase()
-                                .replaceFirstChar(Char::uppercase)
-                        )
-                    }
+                medication.reminderTimes.forEach { time ->
+                    FilterChip(
+                        selected = selectedReminder == time,
+                        onClick = { onSelectReminder(time) },
+                        label = { Text(formatReminderTime(time)) }
+                    )
                 }
             }
 
-            if (isSavingDose) {
-                CircularProgressIndicator()
-            }
-        }
+            if (medication.reminderTimes.isNotEmpty()) {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    listOf(
+                        DoseStatus.TAKEN,
+                        DoseStatus.MISSED,
+                        DoseStatus.DELAYED
+                    ).forEach { status ->
+                        OutlinedButton(
+                            onClick = { onRecordDose(status) },
+                            enabled = !isSavingDose &&
+                                    selectedReminder.isNotBlank(),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                status.name.lowercase()
+                                    .replaceFirstChar(Char::uppercase)
+                            )
+                        }
+                    }
+                }
 
+                if (isSavingDose) {
+                    CircularProgressIndicator()
+                }
+            }
+
+        }
         Spacer(modifier = Modifier.height(28.dp))
 
         if (canEdit) Button(

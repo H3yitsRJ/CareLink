@@ -1,4 +1,5 @@
 package com.example.carelink.screens
+import androidx.activity.compose.BackHandler
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.rememberScrollState
@@ -36,6 +37,7 @@ fun AppointmentDetailsScreen(
 ) {
     // Cancellation needs its own saved state so rotation does not bypass the confirmation step.
     var confirmingCancellation by rememberSaveable { mutableStateOf(false) }
+    BackHandler { if (confirmingCancellation) confirmingCancellation = false else onBack() }
     Column(
         Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).verticalScroll(rememberScrollState()).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)

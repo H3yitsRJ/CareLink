@@ -28,6 +28,7 @@ fun AddHealthConcernScreen(
     onCancel: () -> Unit = {}
 ) {
     val context = LocalContext.current
+    val connectionAvailable = LocalConnectionAvailable.current
 
     var title by rememberSaveable(patientId) { mutableStateOf("") }
     var notes by rememberSaveable(patientId) { mutableStateOf("") }
@@ -230,6 +231,10 @@ fun AddHealthConcernScreen(
                 onClick = {
                     attemptedSave = true
                     saveError = null
+                    if (!connectionAvailable) {
+                        saveError = OFFLINE_ACTION_MESSAGE
+                        return@Button
+                    }
 
                     if (title.isNotBlank()) {
                         if (patientId.isBlank()) {

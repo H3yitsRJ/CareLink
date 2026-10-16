@@ -12,12 +12,20 @@ import androidx.compose.runtime.setValue
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import android.content.ActivityNotFoundException
+import androidx.activity.compose.BackHandler
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 
 @Composable
 fun MedicationRefillsScreen(
     onRequestRefill: () -> Unit = {},
-    onTrackRefills: () -> Unit = {}
+    onTrackRefills: () -> Unit = {},
+    onBack: () -> Unit = {}
 ) {
+    BackHandler(onBack = onBack)
     var showPharmacyDialog by remember {
         mutableStateOf(false)
     }
@@ -25,19 +33,25 @@ fun MedicationRefillsScreen(
         mutableStateOf<String?>(null)
     }
     val context = LocalContext.current
+    var pharmacyError by remember { mutableStateOf<String?>(null) }
     Column(
         modifier = Modifier
             .fillMaxSize()
             .statusBarsPadding()
+            .verticalScroll(rememberScrollState())
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
+        IconButton(onClick = onBack) {
+            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+        }
         Text(
             text = "Medication Refills",
             style = MaterialTheme.typography.headlineMedium
         )
 
         Text("Manage and track your medication refill requests.")
+        pharmacyError?.let { StateMessage(it, true) }
 
         Button(
             onClick = { showPharmacyDialog = true },
@@ -90,7 +104,7 @@ fun MedicationRefillsScreen(
                         },
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text("Other / Enter Manually")
+                        Text("Request in CareLink")
                     }
                 }
             },
@@ -131,7 +145,12 @@ fun MedicationRefillsScreen(
                                 Intent.ACTION_VIEW,
                                 Uri.parse(url)
                             )
-                            context.startActivity(intent)
+                            try {
+                                context.startActivity(intent)
+                                pharmacyError = null
+                            } catch (_: ActivityNotFoundException) {
+                                pharmacyError = "No browser is available. Choose Request in CareLink or try another device."
+                            }
                         }
 
                         selectedPharmacy = null

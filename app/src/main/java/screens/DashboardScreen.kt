@@ -62,7 +62,7 @@ fun DashboardScreen(
             ) {
                 Text(
                     text = if (fullName.isBlank()) "Today"
-                    else "Good morning, $fullName",
+                    else "Hello, $fullName",
                     style = MaterialTheme.typography.headlineLarge,
                     modifier = Modifier.weight(1f)
                 )
