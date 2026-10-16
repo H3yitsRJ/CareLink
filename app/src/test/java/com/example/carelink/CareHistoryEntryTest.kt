@@ -89,9 +89,17 @@ class CareHistoryEntryTest {
             event("a", 200L)
         )
 
+        // Equal timestamps use descending IDs to match pagination.
+        val expected = listOf("new", "b", "a", "old")
+
         assertEquals(
-            listOf("new", "a", "b", "old"),
+            expected,
             CareHistoryEntry.newestFirst(entries).map { it.id }
+        )
+
+        assertEquals(
+            expected,
+            CareHistoryEntry.newestFirst(entries.reversed()).map { it.id }
         )
     }
 }
