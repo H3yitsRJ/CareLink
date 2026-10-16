@@ -1,4 +1,6 @@
 package com.example.carelink.screens
+import androidx.activity.compose.BackHandler
+import androidx.compose.material3.TextButton
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -40,6 +42,7 @@ fun AddEditAppointmentScreen(
     onSave: (Appointment) -> Unit = {},
     onCancel: () -> Unit = {}
 ) {
+    BackHandler { if (!isSaving) onCancel() }
     var title by rememberSaveable(appointment?.id) { mutableStateOf(appointment?.title.orEmpty()) }
     var provider by rememberSaveable(appointment?.id) { mutableStateOf(appointment?.provider.orEmpty()) }
     var date by rememberSaveable(appointment?.id) { mutableStateOf(appointment?.date.orEmpty()) }
@@ -133,57 +136,41 @@ fun AddEditAppointmentScreen(
             shape = RoundedCornerShape(12.dp)
         )
 
-        Box(
+        OutlinedTextField(
+            value = date,
+            onValueChange = { date = it },
+            label = { Text("Date") },
+            placeholder = { Text("YYYY-MM-DD") },
             modifier = Modifier
-                .fillMaxWidth()
-                .clickable {
-                    showDatePicker()
+                .fillMaxWidth(),
+            singleLine = true,
+            enabled = !isSaving,
+            trailingIcon = { TextButton(onClick = { showDatePicker() }, enabled = !isSaving) { Text("Choose date") } },
+            isError = dateError != null,
+            supportingText = {
+                if (dateError != null) {
+                    Text(dateError)
                 }
-        ) {
-            OutlinedTextField(
-                value = date,
-                onValueChange = {},
-                label = { Text("Date") },
-                placeholder = { Text("YYYY-MM-DD") },
-                modifier = Modifier
-                    .fillMaxWidth(),
-                singleLine = true,
-                readOnly = true,
-                enabled = false,
-                isError = dateError != null,
-                supportingText = {
-                    if (dateError != null) {
-                        Text(dateError)
-                    }
-                },
-                shape = RoundedCornerShape(12.dp)
-            )
-        }
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable {
-                    showTimePicker()
+            },
+            shape = RoundedCornerShape(12.dp)
+        )
+        OutlinedTextField(
+            value = time,
+            onValueChange = { time = it },
+            label = { Text("Time") },
+            placeholder = { Text("HH:MM") },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+            enabled = !isSaving,
+            trailingIcon = { TextButton(onClick = { showTimePicker() }, enabled = !isSaving) { Text("Choose time") } },
+            isError = timeError,
+            supportingText = {
+                if (timeError) {
+                    Text("Enter a valid time (HH:MM)")
                 }
-        ) {
-            OutlinedTextField(
-                value = time,
-                onValueChange = {},
-                label = { Text("Time") },
-                placeholder = { Text("HH:MM") },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
-                readOnly = true,
-                enabled = false,
-                isError = timeError,
-                supportingText = {
-                    if (timeError) {
-                        Text("Enter a valid time (HH:MM)")
-                    }
-                },
-                shape = RoundedCornerShape(12.dp)
-            )
-        }
+            },
+            shape = RoundedCornerShape(12.dp)
+        )
 
         OutlinedTextField(
             value = location,

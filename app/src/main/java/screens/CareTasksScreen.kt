@@ -1,6 +1,8 @@
 package com.example.carelink.screens
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -92,10 +94,12 @@ fun CareTasksScreen(
                 }
             }
 
+            if (error != null && tasks.isNotEmpty()) StateMessage(error, true)
+
             when {
                 isLoading -> StateMessage("Loading care tasks")
 
-                error != null -> {
+                error != null && tasks.isEmpty() -> {
                     StateMessage(error, true)
                     Button(onClick = onRetry) {
                             Text("Retry")
@@ -156,14 +160,17 @@ fun CareTasksScreen(
                                 }
 
                                 Row(
+                                    modifier = Modifier.toggleable(
+                                        value = task.completed,
+                                        role = Role.Checkbox,
+                                        onValueChange = { onCompletedChange(task, it) }
+                                    ),
                                     verticalAlignment =
                                         androidx.compose.ui.Alignment.CenterVertically
                                 ) {
                                     Checkbox(
                                         checked = task.completed,
-                                        onCheckedChange = {
-                                            onCompletedChange(task, it)
-                                        }
+                                        onCheckedChange = null
                                     )
                                     Text("Completed")
                                 }

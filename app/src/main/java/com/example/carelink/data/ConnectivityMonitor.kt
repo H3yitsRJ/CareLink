@@ -12,10 +12,10 @@ class ConnectivityMonitor(
 ) {
     private val manager = context.getSystemService(ConnectivityManager::class.java)
     private val callback = object : ConnectivityManager.NetworkCallback() {
-        override fun onAvailable(network: Network) = onConnectivityChanged(true)
+        override fun onAvailable(network: Network) = onConnectivityChanged(isOnline())
         override fun onLost(network: Network) = onConnectivityChanged(isOnline())
         override fun onCapabilitiesChanged(network: Network, capabilities: NetworkCapabilities) {
-            onConnectivityChanged(capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED))
+            onConnectivityChanged(isOnline())
         }
     }
 

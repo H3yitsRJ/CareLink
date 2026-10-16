@@ -1,6 +1,8 @@
 package com.example.carelink.screens
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -13,6 +15,9 @@ import com.example.carelink.model.RefillRequestStatus
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import androidx.activity.compose.BackHandler
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 
 @Composable
 fun RefillRequestTrackingScreen(
@@ -20,11 +25,13 @@ fun RefillRequestTrackingScreen(
     medicationNames: Map<String, String> = emptyMap(),
     isLoading: Boolean = false,
     error: String? = null,
-    onRefresh: () -> Unit = {}
+    onRefresh: () -> Unit = {},
+    onBack: () -> Unit = {}
 ) {
     var selectedRequest by remember {
         mutableStateOf<RefillRequest?>(null)
     }
+    BackHandler { if (selectedRequest != null) selectedRequest = null else onBack() }
 
     val sortedRequests = requests.sortedByDescending {
         it.requestedAt
@@ -36,6 +43,9 @@ fun RefillRequestTrackingScreen(
             .statusBarsPadding()
             .padding(16.dp)
     ) {
+        IconButton(onClick = onBack) {
+            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+        }
         Text(
             text = "Refill Request Tracking",
             style = MaterialTheme.typography.headlineMedium
@@ -81,8 +91,9 @@ fun RefillRequestTrackingScreen(
                     ) {
                         Column(Modifier.padding(16.dp)) {
                             Text(
-                                medicationNames[request.medicationId]
-                                    ?: request.medicationId,
+                                request.medicationName.ifBlank {
+                                    medicationNames[request.medicationId] ?: "Medication no longer available"
+                                },
                                 style = MaterialTheme.typography.titleMedium
                             )
                             Text(
@@ -104,8 +115,8 @@ fun RefillRequestTrackingScreen(
             onDismissRequest = { selectedRequest = null },
             title = { Text("Refill Request Details") },
             text = {
-                Column {
-                    Text("Medication: ${medicationNames[request.medicationId] ?: request.medicationId}")
+                Column(Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState())) {
+                    Text("Medication: ${request.medicationName.ifBlank { medicationNames[request.medicationId] ?: "Medication no longer available" }}")
                     Text("Status: ${request.status.name}")
                     Text("Request ID: ${request.id}")
                     Text("Requested by: ${request.requestedById}")

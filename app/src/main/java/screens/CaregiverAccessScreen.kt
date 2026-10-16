@@ -34,10 +34,10 @@ import com.example.carelink.model.CaregiverAccess
 
 @Composable
 fun CaregiverAccessScreen(access: CaregiverAccess? = null, caregiverName: String = "Caregiver", canEdit: Boolean = false, onSave: (CaregiverAccess) -> Unit = {}, onCancel: () -> Unit = {},
-    availablePermissions: Set<CarePermission> = setOf(CarePermission.VIEW, CarePermission.EDIT), isSaving: Boolean = false, error: String? = null) {
+    availablePermissions: Set<CarePermission> = setOf(CarePermission.VIEW, CarePermission.EDIT), isSaving: Boolean = false, error: String? = null, canSave: Boolean = true) {
     // Edit a local copy so Cancel can leave the stored permission set untouched.
     var selected by remember(access) { mutableStateOf(access?.permissions.orEmpty()) }
-    val editable = canEdit && !isSaving && access?.revoked == false
+    val editable = canEdit && canSave && !isSaving && access?.revoked == false
     Column(Modifier.fillMaxSize().safeDrawingPadding().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text("Caregiver access", style = MaterialTheme.typography.headlineMedium)
         Text(caregiverName)

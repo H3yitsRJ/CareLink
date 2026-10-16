@@ -1,4 +1,5 @@
 package com.example.carelink.screens
+import androidx.activity.compose.BackHandler
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -22,6 +23,7 @@ import androidx.compose.ui.unit.dp
 
 @Composable
 fun SettingsScreen(onBack: () -> Unit, onOpenLogout: () -> Unit, onCaregiverAccess: () -> Unit = {}) {
+    BackHandler(onBack = onBack)
     Column(
         Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)
             .padding(horizontal = 16.dp, vertical = 24.dp)

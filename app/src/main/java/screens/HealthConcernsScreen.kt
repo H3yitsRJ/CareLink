@@ -2,6 +2,8 @@ package com.example.carelink.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -38,12 +40,12 @@ fun HealthConcernsScreen(
     Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text("Health concerns", style = MaterialTheme.typography.headlineLarge)
         if (onAdd != null) Button(onClick = onAdd, modifier = Modifier.fillMaxWidth()) { Text("Add concern") }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             FilterChip(selected = status == null, onClick = { status = null }, label = { Text("All") })
             FilterChip(selected = status == ConcernStatus.ACTIVE, onClick = { status = ConcernStatus.ACTIVE }, label = { Text("Active") })
             FilterChip(selected = status == ConcernStatus.DISCUSSED, onClick = { status = ConcernStatus.DISCUSSED }, label = { Text("Discussed") })
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             ConcernSeverity.entries.forEach { item ->
                 FilterChip(selected = severity == item, onClick = { severity = if (severity == item) null else item }, label = { Text(item.name.lowercase().replaceFirstChar(Char::uppercase)) })
             }

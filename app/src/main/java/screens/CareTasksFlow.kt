@@ -19,6 +19,7 @@ fun CareTasksFlow(
     onCancelFollowUp: () -> Unit = {}
 ) {
     val context = LocalContext.current.applicationContext
+    val connectionAvailable = LocalConnectionAvailable.current
     val reminderScheduler = remember(context) { CareTaskReminderScheduler(context) }
     key(patientId) {
         var adding by rememberSaveable { mutableStateOf(sourceAppointment != null) }
@@ -59,7 +60,7 @@ fun CareTasksFlow(
             }
         }
 
-        DisposableEffect(repository, patientId) {
+        DisposableEffect(repository, patientId, connectionAvailable) {
             active.value = true
             refresh()
             onDispose { active.value = false }
@@ -109,6 +110,10 @@ fun CareTasksFlow(
                 isSaving = saving,
                 saveError = saveError,
                 onSave = { task ->
+                    if (!connectionAvailable) {
+                        saveError = OFFLINE_ACTION_MESSAGE
+                        return@AddEditCareTaskScreen
+                    }
                     if (!saving) {
                         saving = true
                         saveError = null
@@ -145,7 +150,9 @@ fun CareTasksFlow(
                 onCancel = { cancel() },
                 onDelete = selectedTask?.let { task ->
                     {
-                        if (!saving) {
+                        if (!connectionAvailable) {
+                            saveError = OFFLINE_ACTION_MESSAGE
+                        } else if (!saving) {
                             saving = true
                             saveError = null
 
@@ -208,6 +215,10 @@ fun CareTasksFlow(
                     }
                 },
                 onCompletedChange = { task, completed ->
+                    if (!connectionAvailable) {
+                        error = OFFLINE_ACTION_MESSAGE
+                        return@CareTasksScreen
+                    }
                     if (task.id !in updatingIds) {
                         updatingIds = updatingIds + task.id
 
