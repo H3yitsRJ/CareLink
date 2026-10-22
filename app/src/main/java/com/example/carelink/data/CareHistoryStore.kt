@@ -27,13 +27,15 @@ class CareHistoryStore(
                                 CareHistoryEntry(
                                     id = "dose:${item.record.id}",
                                     patientId = patientId,
-                                    occurredAtMillis = item.record.scheduledTimeMillis,
+                                    occurredAtMillis = item.record.completionTimeMillis
+                                        ?: item.record.scheduledTimeMillis,
                                     type = CareActivityType.MEDICATION,
                                     summary =
                                         "${item.medicationName} • ${item.dosage} • " +
                                                 item.record.status.name.lowercase()
                                                     .replaceFirstChar(Char::uppercase),
-                                    relatedRecordId = item.record.id
+                                    actorId = item.actorId,
+                                    relatedRecordId = item.record.medicationId
                                 )
                             } + snapshot.documents.mapNotNull { document ->
                                 val data = document.data.orEmpty()

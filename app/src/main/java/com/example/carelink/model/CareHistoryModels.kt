@@ -87,7 +87,7 @@ data class CareHistoryEntry(
         fun newestFirst(entries: List<CareHistoryEntry>): List<CareHistoryEntry> =
             entries.sortedWith(
                 compareByDescending<CareHistoryEntry> { it.occurredAtMillis }
-                    .thenBy { it.id }
+                    .thenByDescending { it.id }
             )
     }
 }

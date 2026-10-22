@@ -12,20 +12,37 @@ import com.example.carelink.model.*
 
 @Composable
 fun HealthConcernDetailsScreen(
-    concern: HealthConcern? = null, isLoading: Boolean = false, error: String? = null,
-    appointments: List<Appointment> = emptyList(), appointmentsLoading: Boolean = false,
-    appointmentsError: String? = null, isSaving: Boolean = false, saveError: String? = null,
-    onStatusChange: (ConcernStatus) -> Unit = {}, onLinkAppointment: (String?) -> Unit = {},
-    onRetry: () -> Unit = {}, onBack: () -> Unit = {}
+    concern: HealthConcern? = null,
+    isLoading: Boolean = false,
+    error: String? = null,
+    appointments: List<Appointment> = emptyList(),
+    appointmentsLoading: Boolean = false,
+    appointmentsError: String? = null,
+    isSaving: Boolean = false, saveError: String? = null,
+    onStatusChange: (ConcernStatus) -> Unit = {},
+    onLinkAppointment: (String?) -> Unit = {},
+    onRetry: () -> Unit = {},
+    onBack: () -> Unit = {},
+    canEdit: Boolean = true
 ) {
     var choosingAppointment by rememberSaveable(concern?.id) { mutableStateOf(false) }
+
+    LaunchedEffect(canEdit) {
+        if (!canEdit) {
+            choosingAppointment = false
+        }
+    }
+
     Column(Modifier.fillMaxSize().safeDrawingPadding().verticalScroll(rememberScrollState()).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)) {
+
         Text("Health concern details", style = MaterialTheme.typography.headlineLarge)
+
         when {
             isLoading -> Text("Loading health concern...")
             error != null -> { Text(error); Button(onClick = onRetry) { Text("Retry") } }
             concern == null -> Text("This health concern could not be found.")
+
             else -> {
                 Text(concern.title, style = MaterialTheme.typography.titleLarge)
                 Text("Description: ${concern.description}")
@@ -33,6 +50,7 @@ fun HealthConcernDetailsScreen(
                 Text("Date: ${concern.recordedDate}")
                 Text("Status: ${concern.status.name.lowercase().replaceFirstChar(Char::uppercase)}")
                 val linked = appointments.find { it.id == concern.appointmentId }
+
                 Text(when {
                     concern.appointmentId == null -> "Linked appointment: None"
                     appointmentsLoading -> "Loading linked appointment..."
@@ -40,11 +58,49 @@ fun HealthConcernDetailsScreen(
                     linked == null -> "Linked appointment: ${concern.appointmentId} (no longer available)"
                     else -> "Linked appointment: ${linked.title} — ${linked.date} at ${linked.time}"
                 })
-                if (appointmentsError != null) { Text(appointmentsError); TextButton(onClick = onRetry) { Text("Retry appointments") } }
-                Button(enabled = !isSaving, onClick = {
-                    onStatusChange(if (concern.status == ConcernStatus.ACTIVE) ConcernStatus.DISCUSSED else ConcernStatus.ACTIVE)
-                }) { Text(if (concern.status == ConcernStatus.ACTIVE) "Mark as discussed" else "Mark as active") }
-                OutlinedButton(enabled = !isSaving, onClick = { choosingAppointment = true }) { Text("Link to Appointment") }
+
+                if (appointmentsError != null) { Text(appointmentsError);
+                    TextButton(onClick = onRetry) { Text("Retry appointments") }
+                }
+
+                if (canEdit) {
+                    Button(
+                        enabled = !isSaving,
+                        onClick = {
+                            if (canEdit && !isSaving) {
+                                onStatusChange(
+                                    if (concern.status == ConcernStatus.ACTIVE) {
+                                        ConcernStatus.DISCUSSED
+                                    } else {
+                                        ConcernStatus.ACTIVE
+                                    }
+                                )
+                            }
+                        }
+                    ) {
+                        Text(
+                            if (concern.status == ConcernStatus.ACTIVE) {
+                                "Mark as discussed"
+                            } else {
+                                "Mark as active"
+                            }
+                        )
+                    }
+
+                    OutlinedButton(
+                        enabled = !isSaving,
+                        onClick = {
+                            if (canEdit && !isSaving) {
+                                choosingAppointment = true
+                            }
+                        }
+                    ) {
+                        Text("Link to Appointment")
+                    }
+                } else {
+                    Text("View-only access. You cannot change this health concern.")
+                }
+
                 if (isSaving) Text("Saving changes...")
                 saveError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             }
@@ -61,16 +117,18 @@ fun HealthConcernDetailsScreen(
                     appointmentsError != null -> Text(appointmentsError)
                     appointments.isEmpty() -> Text("No appointments available. Create an appointment first.")
                     else -> appointments.forEach { appointment ->
-                        TextButton(enabled = !isSaving, onClick = {
+                        TextButton(enabled = !isSaving && canEdit, onClick = {
                             choosingAppointment = false; onLinkAppointment(appointment.id)
                         }) { Text("${appointment.title} — ${appointment.date} at ${appointment.time}") }
                     }
                 }
-                if (concern.appointmentId != null) TextButton(enabled = !isSaving, onClick = {
+                if (concern.appointmentId != null) TextButton(enabled = !isSaving && canEdit, onClick = {
                     choosingAppointment = false; onLinkAppointment(null)
                 }) { Text("Remove appointment link") }
             }
         },
-        confirmButton = { TextButton(onClick = { choosingAppointment = false }) { Text("Cancel") } }
+        confirmButton = {
+            TextButton(
+                onClick = { choosingAppointment = false }) { Text("Cancel") } }
     )
 }

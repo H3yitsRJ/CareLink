@@ -1,5 +1,6 @@
 package com.example.carelink.screens
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -41,8 +42,13 @@ fun AppointmentsScreen(
     onAppointmentSelected: (Appointment) -> Unit = {},
     onEditAppointment: (Appointment) -> Unit = {},
     onRetry: () -> Unit = {},
-    onNavigate: (BottomNavDestination) -> Unit = {}
+    onNavigate: (BottomNavDestination) -> Unit = {},
+    canManage: Boolean = true
 ) {
+    BackHandler {
+        onNavigate(BottomNavDestination.Home)
+    }
+
     val upcomingAppointments = appointments
         .filter { it.status == AppointmentStatus.SCHEDULED }
         .sortedWith(compareBy<Appointment> { it.date }.thenBy { it.time })
@@ -82,13 +88,22 @@ fun AppointmentsScreen(
                 modifier = Modifier.padding(top = 4.dp)
             )
 
-            Button(
-                onClick = onAddAppointment,
-                modifier = Modifier
-                    .align(Alignment.CenterHorizontally)
-                    .padding(vertical = 16.dp)
-            ) {
-                Text("Add appointment")
+            if (canManage) {
+                Button(
+                    onClick = {
+                        if (canManage) onAddAppointment()
+                    },
+                    modifier = Modifier
+                        .align(Alignment.CenterHorizontally)
+                        .padding(vertical = 16.dp)
+                ) {
+                    Text("Add appointment")
+                }
+            } else {
+                Text(
+                    text = "View-only access.",
+                    modifier = Modifier.padding(vertical = 16.dp)
+                )
             }
 
             if (successMessage != null) {
@@ -118,7 +133,8 @@ fun AppointmentsScreen(
 
                 appointments.isEmpty() -> {
                     AppointmentEmptyState(
-                        onAddAppointment = onAddAppointment
+                        onAddAppointment = onAddAppointment,
+                        canManage = canManage
                     )
                 }
 
@@ -135,12 +151,12 @@ fun AppointmentsScreen(
                             items(upcomingAppointments) { appointment ->
                                 AppointmentCard(
                                     appointment = appointment,
-                                    showEditButton = true,
+                                    showEditButton = canManage,
                                     onSelect = {
                                         onAppointmentSelected(appointment)
                                     },
                                     onEdit = {
-                                        onEditAppointment(appointment)
+                                        if (canManage) onEditAppointment(appointment)
                                     }
                                 )
                             }
@@ -266,7 +282,8 @@ private fun AppointmentCard(
 
 @Composable
 private fun AppointmentEmptyState(
-    onAddAppointment: () -> Unit
+    onAddAppointment: () -> Unit,
+    canManage: Boolean = true
 ) {
     Column(
         modifier = Modifier
@@ -281,13 +298,23 @@ private fun AppointmentEmptyState(
         )
 
         Text(
-            text = "Add an appointment to keep track of upcoming visits.",
+            text = if (canManage) {
+                "Add an appointment to keep track of upcoming visits."
+            } else {
+                "This patient has no appointments to display."
+            },
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
 
-        OutlinedButton(onClick = onAddAppointment) {
-            Text("Add your first appointment")
+        if (canManage) {
+            OutlinedButton(
+                onClick = {
+                    if (canManage) onAddAppointment()
+                }
+            ) {
+                Text("Add your first appointment")
+            }
         }
     }
 }
