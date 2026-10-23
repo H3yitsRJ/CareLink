@@ -18,6 +18,7 @@ class FirestoreRefillRequestRepository(
     private val db: FirebaseFirestore,
     private val readSource: () -> Source = { Source.DEFAULT }
 ) : RefillRequestRepository {
+
     fun load(patientId: String, onResult: (Result<List<RefillRequest>>) -> Unit) {
         db.collection("users").document(patientId).collection("refillRequests")
             .get(readSource())
@@ -46,27 +47,19 @@ class FirestoreRefillRequestRepository(
             val saved = request.copy(medicationName = medication.getString("name").orEmpty())
             transaction.set(reference, saved.toFirestore() + ("requestedAt" to FieldValue.serverTimestamp()))
             saved
-        }.addOnSuccessListener { completed(Result.success(it)) }
+        }
+            .addOnSuccessListener { completed(Result.success(it)) }
             .addOnFailureListener { completed(Result.failure(it)) }
     }
+
 }
 
-internal fun refillRequestFromFirestore(id: String, patientId: String, data: Map<String, Any>): RefillRequest =
-    RefillRequest(
-        id = id,
-        patientId = patientId,
-        medicationId = data["medicationId"] as? String ?: "",
-        requestedById = data["requestedById"] as? String ?: "",
-        medicationName = data["medicationName"] as? String ?: "",
-        note = data["note"] as? String ?: "",
-        status = runCatching { RefillRequestStatus.valueOf(data["status"] as? String ?: "REQUESTED") }
-            .getOrDefault(RefillRequestStatus.REQUESTED),
-        requestedAt = when (val value = data["requestedAt"]) {
-            is Timestamp -> value.toDate().time
-            is Number -> value.toLong()
-            else -> 0L
-        }
-    )
+internal fun refillRequestFromFirestore(
+    id: String,
+    patientId: String,
+    data: Map<String, Any>
+): RefillRequest =
+    RefillRequest.fromFirestore(id, patientId, data)
 
 class InMemoryRefillRequestRepository(private val medications: () -> List<Medication>) : RefillRequestRepository {
     private val requests = mutableMapOf<Pair<String, String>, RefillRequest>()
