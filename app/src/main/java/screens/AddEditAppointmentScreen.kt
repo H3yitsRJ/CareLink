@@ -42,7 +42,10 @@ fun AddEditAppointmentScreen(
     onSave: (Appointment) -> Unit = {},
     onCancel: () -> Unit = {}
 ) {
-    BackHandler { if (!isSaving) onCancel() }
+    BackHandler {
+        if (!isSaving) onCancel()
+    }
+
     var title by rememberSaveable(appointment?.id) { mutableStateOf(appointment?.title.orEmpty()) }
     var provider by rememberSaveable(appointment?.id) { mutableStateOf(appointment?.provider.orEmpty()) }
     var date by rememberSaveable(appointment?.id) { mutableStateOf(appointment?.date.orEmpty()) }
@@ -154,6 +157,7 @@ fun AddEditAppointmentScreen(
             },
             shape = RoundedCornerShape(12.dp)
         )
+
         OutlinedTextField(
             value = time,
             onValueChange = { time = it },
@@ -191,7 +195,7 @@ fun AddEditAppointmentScreen(
         )
 
         if (saveError != null) {
-            Text(saveError)
+            CareErrorState(message = saveError)
         }
 
         Button(
@@ -239,6 +243,7 @@ fun AddEditAppointmentScreen(
         ) {
             Text("Cancel")
         }
+
     }
 }
 

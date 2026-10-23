@@ -57,35 +57,52 @@ fun PasswordResetEmailScreen(
     }
 
     Column(
-        modifier = modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)
-            .safeDrawingPadding().verticalScroll(rememberScrollState()).imePadding()
+        modifier = modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+            .safeDrawingPadding()
+            .verticalScroll(rememberScrollState())
+            .imePadding()
             .padding(horizontal = 16.dp, vertical = 24.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        TextButton(onClick = onBackToSignIn, modifier = Modifier.align(Alignment.Start)) {
+        TextButton(
+            onClick = onBackToSignIn,
+            modifier = Modifier.align(Alignment.Start)
+        ) {
             Text("Back to sign in")
         }
+
         Text("Reset your password", style = MaterialTheme.typography.headlineLarge)
+
         if (emailSent) {
             Card(
                 modifier = Modifier.fillMaxWidth().semantics { liveRegion = LiveRegionMode.Polite },
                 shape = RoundedCornerShape(16.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
             ) {
-                Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                Column(
+                    Modifier.padding(24.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
                     Text("Check your email", style = MaterialTheme.typography.headlineSmall)
                     Text("If an account exists for $email, you will receive a link to reset your password.")
+
                     Button(
                         onClick = onBackToSignIn,
                         modifier = Modifier.fillMaxWidth().height(56.dp)
-                    ) { Text("Return to sign in") }
+                    ) {
+                        Text("Return to sign in")
+                    }
                 }
             }
+
         } else {
             Text(
                 "Enter the email address for your CareLink account.",
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(16.dp),
@@ -107,13 +124,11 @@ fun PasswordResetEmailScreen(
                     keyboardActions = KeyboardActions(onDone = { submit() })
                 )
             }
-            submitError?.let {
-                Text(
-                    it,
-                    modifier = Modifier.semantics { liveRegion = LiveRegionMode.Assertive },
-                    color = MaterialTheme.colorScheme.error
-                )
+
+            submitError?.let { message ->
+                CareErrorState(message = message)
             }
+
             Button(
                 onClick = ::submit,
                 enabled = !isSubmitting,
@@ -121,7 +136,9 @@ fun PasswordResetEmailScreen(
                 shape = RoundedCornerShape(12.dp)
             ) {
                 if (isSubmitting) CircularProgressIndicator(
-                    modifier = Modifier.height(24.dp), color = MaterialTheme.colorScheme.onPrimary, strokeWidth = 2.dp
+                    modifier = Modifier.height(24.dp),
+                    color = MaterialTheme.colorScheme.onPrimary,
+                    strokeWidth = 2.dp
                 ) else Text("Send reset link")
             }
         }
@@ -130,4 +147,8 @@ fun PasswordResetEmailScreen(
 
 @Preview(showBackground = true, widthDp = 412, heightDp = 892)
 @Composable
-private fun PasswordResetEmailScreenPreview() { CareLinkTheme { PasswordResetEmailScreen() } }
+private fun PasswordResetEmailScreenPreview() {
+    CareLinkTheme {
+        PasswordResetEmailScreen()
+    }
+}

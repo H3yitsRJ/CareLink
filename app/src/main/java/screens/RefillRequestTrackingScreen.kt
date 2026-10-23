@@ -31,7 +31,10 @@ fun RefillRequestTrackingScreen(
     var selectedRequest by remember {
         mutableStateOf<RefillRequest?>(null)
     }
-    BackHandler { if (selectedRequest != null) selectedRequest = null else onBack() }
+
+    BackHandler {
+        if (selectedRequest != null) selectedRequest = null else onBack()
+    }
 
     val sortedRequests = requests.sortedByDescending {
         it.requestedAt
@@ -44,8 +47,12 @@ fun RefillRequestTrackingScreen(
             .padding(16.dp)
     ) {
         IconButton(onClick = onBack) {
-            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+            Icon(
+                Icons.AutoMirrored.Filled.ArrowBack,
+                contentDescription = "Back"
+            )
         }
+
         Text(
             text = "Refill Request Tracking",
             style = MaterialTheme.typography.headlineMedium
@@ -62,13 +69,13 @@ fun RefillRequestTrackingScreen(
         when {
             isLoading -> CircularProgressIndicator()
 
-            error != null -> Text(
-                text = error,
-                color = MaterialTheme.colorScheme.error
+            error != null -> CareErrorState(
+                message = error,
+                onRetry = onRefresh,
+                retryEnabled = !isLoading
             )
 
-            sortedRequests.isEmpty() ->
-                Text("No refill requests found.")
+            sortedRequests.isEmpty() -> Text("No refill requests found.")
 
             else -> LazyColumn(
                 verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -88,8 +95,11 @@ fun RefillRequestTrackingScreen(
                             else
                                 MaterialTheme.colorScheme.primaryContainer
                         )
+
                     ) {
-                        Column(Modifier.padding(16.dp)) {
+                        Column(
+                            Modifier.padding(16.dp)
+                        ) {
                             Text(
                                 request.medicationName.ifBlank {
                                     medicationNames[request.medicationId] ?: "Medication no longer available"
@@ -104,10 +114,15 @@ fun RefillRequestTrackingScreen(
                             )
                             Text("Status: ${status.name}")
                         }
+
                     }
+
                 }
+
             }
+
         }
+
     }
 
     selectedRequest?.let { request ->
@@ -130,10 +145,15 @@ fun RefillRequestTrackingScreen(
                 }
             },
             confirmButton = {
-                TextButton(onClick = { selectedRequest = null }) {
+                TextButton(
+                    onClick = { selectedRequest = null }
+                ) {
                     Text("Close")
                 }
             }
+
         )
+
     }
+
 }

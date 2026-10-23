@@ -94,16 +94,18 @@ fun CareTasksScreen(
                 }
             }
 
-            if (error != null && tasks.isNotEmpty()) StateMessage(error, true)
+            if (error != null && tasks.isNotEmpty()) {
+                CareErrorState(message = error)
+            }
 
             when {
                 isLoading -> StateMessage("Loading care tasks")
 
                 error != null && tasks.isEmpty() -> {
-                    StateMessage(error, true)
-                    Button(onClick = onRetry) {
-                            Text("Retry")
-                    }
+                    CareErrorState(
+                        message = error,
+                        onRetry = onRetry
+                    )
                 }
 
                 tasks.isEmpty() -> StateMessage("No care tasks yet.")

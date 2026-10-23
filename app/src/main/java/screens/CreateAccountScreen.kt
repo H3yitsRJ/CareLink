@@ -167,10 +167,12 @@ fun CreateAccountScreen(
                             .fillMaxWidth()
                             .height(104.dp)
                     )
+
                     Text(
                         text = "Create your account",
                         style = MaterialTheme.typography.headlineLarge
                     )
+
                     Text(
                         text = "Start organizing your medications and daily care.",
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -200,6 +202,7 @@ fun CreateAccountScreen(
                                 imeAction = ImeAction.Next
                             )
                         )
+
                         RegistrationTextField(
                             value = password,
                             onValueChange = { password = it },
@@ -214,6 +217,7 @@ fun CreateAccountScreen(
                                 imeAction = ImeAction.Next
                             )
                         )
+
                         RegistrationTextField(
                             value = confirmPassword,
                             onValueChange = { confirmPassword = it },
@@ -233,14 +237,9 @@ fun CreateAccountScreen(
                 }
 
                 if (submitError != null) {
-                    Text(
-                        text = submitError,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 12.dp)
-                            .semantics { liveRegion = LiveRegionMode.Assertive },
-                        color = MaterialTheme.colorScheme.error,
-                        style = MaterialTheme.typography.bodyMedium
+                    CareErrorState(
+                        message = submitError,
+                        modifier = Modifier.padding(top = 12.dp)
                     )
                 }
 
@@ -273,6 +272,7 @@ fun CreateAccountScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         style = MaterialTheme.typography.bodyMedium
                     )
+
                     TextButton(onClick = onSignIn) {
                         Text("Sign in")
                     }
@@ -299,7 +299,11 @@ private fun RegistrationTextField(
     val focusManager = LocalFocusManager.current
 
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text(text = label, style = MaterialTheme.typography.labelLarge)
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelLarge
+        )
+
         OutlinedTextField(
             value = value,
             onValueChange = onValueChange,
@@ -355,6 +359,7 @@ private fun RegistrationSuccess(
         ) {
             Text("Account created", style = MaterialTheme.typography.headlineLarge)
             Text("Next, set up your profile.", style = MaterialTheme.typography.bodyMedium)
+
             Button(
                 onClick = onContinue,
                 modifier = Modifier
