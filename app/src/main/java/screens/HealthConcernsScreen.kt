@@ -37,28 +37,76 @@ fun HealthConcernsScreen(
     var severity by rememberSaveable { mutableStateOf<ConcernSeverity?>(null) }
     // Filters are combined so patients can narrow by status and severity at the same time.
     val visible = concerns.filter { (status == null || it.status == status) && (severity == null || it.severity == severity) }
-    Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+
+    Column(Modifier
+        .fillMaxSize()
+        .background(MaterialTheme.colorScheme.background)
+        .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
         Text("Health concerns", style = MaterialTheme.typography.headlineLarge)
-        if (onAdd != null) Button(onClick = onAdd, modifier = Modifier.fillMaxWidth()) { Text("Add concern") }
+
+        if (onAdd != null)
+            Button(
+                onClick = onAdd,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Add concern")
+            }
+
         Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            FilterChip(selected = status == null, onClick = { status = null }, label = { Text("All") })
-            FilterChip(selected = status == ConcernStatus.ACTIVE, onClick = { status = ConcernStatus.ACTIVE }, label = { Text("Active") })
-            FilterChip(selected = status == ConcernStatus.DISCUSSED, onClick = { status = ConcernStatus.DISCUSSED }, label = { Text("Discussed") })
+            FilterChip(
+                selected = status == null,
+                onClick = { status = null },
+                label = { Text("All") }
+            )
+            FilterChip(
+                selected = status == ConcernStatus.ACTIVE,
+                onClick = { status = ConcernStatus.ACTIVE },
+                label = { Text("Active") }
+            )
+            FilterChip(
+                selected = status == ConcernStatus.DISCUSSED,
+                onClick = { status = ConcernStatus.DISCUSSED },
+                label = { Text("Discussed") }
+            )
         }
+
         Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             ConcernSeverity.entries.forEach { item ->
-                FilterChip(selected = severity == item, onClick = { severity = if (severity == item) null else item }, label = { Text(item.name.lowercase().replaceFirstChar(Char::uppercase)) })
+                FilterChip(
+                    selected = severity == item,
+                    onClick = { severity = if (severity == item) null else item },
+                    label = {
+                        Text(
+                            item.name
+                                .lowercase()
+                                .replaceFirstChar(Char::uppercase)
+                        )
+                    }
+                )
             }
         }
+
         when {
             isLoading -> StateMessage("Loading health concerns")
-            error != null -> StateMessage(error, true)
+            error != null -> CareErrorState(message = error)
             concerns.isEmpty() -> StateMessage("No health concerns recorded.")
             visible.isEmpty() -> StateMessage("No health concerns match these filters.")
+
             // Higher-severity concerns come first without hiding the text severity label.
-            else -> LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                items(visible.sortedByDescending { it.severity.ordinal }, key = { it.id }) { concern ->
-                    Column(Modifier.fillMaxWidth().clickable(role = Role.Button) { onSelect(concern) }) {
+            else -> LazyColumn(
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                items(
+                    visible.sortedByDescending { it.severity.ordinal },
+                    key = { it.id }
+                ) { concern ->
+                    Column(
+                        Modifier
+                            .fillMaxWidth()
+                            .clickable(role = Role.Button) { onSelect(concern) }
+                    ) {
                         CareCard(concern.title) {
                             Text("${concern.severity.name.lowercase().replaceFirstChar(Char::uppercase)} severity")
                             Text("${concern.recordedDate} · ${concern.status.name.lowercase().replaceFirstChar(Char::uppercase)}")

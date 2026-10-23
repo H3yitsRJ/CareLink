@@ -33,14 +33,25 @@ fun HealthConcernDetailsScreen(
         }
     }
 
-    Column(Modifier.fillMaxSize().safeDrawingPadding().verticalScroll(rememberScrollState()).padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    Column(
+        Modifier
+            .fillMaxSize()
+            .safeDrawingPadding()
+            .verticalScroll(rememberScrollState())
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
 
         Text("Health concern details", style = MaterialTheme.typography.headlineLarge)
 
         when {
             isLoading -> Text("Loading health concern...")
-            error != null -> { Text(error); Button(onClick = onRetry) { Text("Retry") } }
+            error != null -> {
+                CareErrorState(
+                    message = error,
+                    onRetry = onRetry
+                )
+            }
             concern == null -> Text("This health concern could not be found.")
 
             else -> {
@@ -51,16 +62,23 @@ fun HealthConcernDetailsScreen(
                 Text("Status: ${concern.status.name.lowercase().replaceFirstChar(Char::uppercase)}")
                 val linked = appointments.find { it.id == concern.appointmentId }
 
-                Text(when {
-                    concern.appointmentId == null -> "Linked appointment: None"
-                    appointmentsLoading -> "Loading linked appointment..."
-                    appointmentsError != null -> "Linked appointment: ${concern.appointmentId} (unavailable)"
-                    linked == null -> "Linked appointment: ${concern.appointmentId} (no longer available)"
-                    else -> "Linked appointment: ${linked.title} — ${linked.date} at ${linked.time}"
-                })
+                Text(
+                    when {
+                        concern.appointmentId == null -> "Linked appointment: None"
+                        appointmentsLoading -> "Loading linked appointment..."
+                        appointmentsError != null -> "Linked appointment: ${concern.appointmentId} (unavailable)"
+                        linked == null -> "Linked appointment: ${concern.appointmentId} (no longer available)"
 
-                if (appointmentsError != null) { Text(appointmentsError);
-                    TextButton(onClick = onRetry) { Text("Retry appointments") }
+                        else -> "Linked appointment: ${linked.title} — ${linked.date} at ${linked.time}"
+                    }
+                )
+
+                if (appointmentsError != null) {
+                    CareErrorState(
+                        message = appointmentsError,
+                        onRetry = onRetry,
+                        retryEnabled = !appointmentsLoading && !isSaving
+                    )
                 }
 
                 if (canEdit) {
@@ -97,16 +115,26 @@ fun HealthConcernDetailsScreen(
                     ) {
                         Text("Link to Appointment")
                     }
+
                 } else {
                     Text("View-only access. You cannot change this health concern.")
                 }
 
                 if (isSaving) Text("Saving changes...")
-                saveError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+
+                saveError?.let { message ->
+                    CareErrorState(message = message)
+                }
             }
         }
-        OutlinedButton(onClick = onBack) { Text("Back to health concerns") }
+
+        OutlinedButton(
+            onClick = onBack
+        ) {
+            Text("Back to health concerns")
+        }
     }
+
     if (choosingAppointment && concern != null) AlertDialog(
         onDismissRequest = { choosingAppointment = false },
         title = { Text("Choose an appointment") },
@@ -114,7 +142,13 @@ fun HealthConcernDetailsScreen(
             Column(Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState())) {
                 when {
                     appointmentsLoading -> Text("Loading appointments...")
-                    appointmentsError != null -> Text(appointmentsError)
+                    appointmentsError != null -> {
+                        CareErrorState(
+                            message = appointmentsError,
+                            onRetry = onRetry,
+                            retryEnabled = !appointmentsLoading && !isSaving
+                        )
+                    }
                     appointments.isEmpty() -> Text("No appointments available. Create an appointment first.")
                     else -> appointments.forEach { appointment ->
                         TextButton(enabled = !isSaving && canEdit, onClick = {
@@ -129,6 +163,10 @@ fun HealthConcernDetailsScreen(
         },
         confirmButton = {
             TextButton(
-                onClick = { choosingAppointment = false }) { Text("Cancel") } }
+                onClick = { choosingAppointment = false }
+            ) {
+                Text("Cancel")
+            }
+        }
     )
 }

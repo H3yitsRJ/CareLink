@@ -42,6 +42,7 @@ fun AddEditCareTaskScreen(
         time.trim(), task?.completed ?: false,
         task?.appointmentId ?: sourceAppointment?.id
     )
+
     val errors = if (attempted) {
         draft().validationErrors(requireFuture = task == null)
     } else {
@@ -71,14 +72,18 @@ fun AddEditCareTaskScreen(
             enabled = !isSaving,
             isError = errors.containsKey("title"),
             supportingText = { errors["title"]?.let { Text(it) } },
-            modifier = Modifier.fillMaxWidth())
+            modifier = Modifier.fillMaxWidth()
+        )
+
         OutlinedTextField(
             description,
             { description = it },
             label = { Text("Description (optional)") },
             enabled = !isSaving,
             minLines = 3,
-            modifier = Modifier.fillMaxWidth())
+            modifier = Modifier.fillMaxWidth()
+        )
+
         OutlinedTextField(
             dueDate,
             { dueDate = it },
@@ -88,7 +93,9 @@ fun AddEditCareTaskScreen(
             singleLine = true,
             isError = errors.containsKey("dueDate"),
             supportingText = { errors["dueDate"]?.let { Text(it) } },
-            modifier = Modifier.fillMaxWidth())
+            modifier = Modifier.fillMaxWidth()
+        )
+
         OutlinedTextField(
             time,
             { time = it },
@@ -98,9 +105,12 @@ fun AddEditCareTaskScreen(
             singleLine = true,
             isError = errors.containsKey("time"),
             supportingText = { errors["time"]?.let { Text(it) } },
-            modifier = Modifier.fillMaxWidth())
+            modifier = Modifier.fillMaxWidth()
+        )
 
-        saveError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+        saveError?.let { message ->
+            CareErrorState(message = message)
+        }
 
         Button(
             onClick = {
@@ -109,7 +119,7 @@ fun AddEditCareTaskScreen(
                 if (candidate.validationErrors(requireFuture = task == null).isEmpty()) {
                     onSave(candidate)
                 }
-        },
+            },
             enabled = !isSaving,
             modifier = Modifier.fillMaxWidth()
         ) {

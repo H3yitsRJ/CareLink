@@ -69,14 +69,24 @@ fun LoginScreen(
             contentScale = ContentScale.Fit,
             modifier = Modifier.fillMaxWidth().height(104.dp)
         )
-        Text("Sign in", modifier = Modifier.fillMaxWidth(), style = MaterialTheme.typography.headlineLarge)
+
+        Text(
+            "Sign in",
+            modifier = Modifier.fillMaxWidth(),
+            style = MaterialTheme.typography.headlineLarge
+        )
+
         Spacer(Modifier.height(24.dp))
+
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(16.dp),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
         ) {
-            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            Column(
+                Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
                 OutlinedTextField(
                     value = email,
                     onValueChange = { email = it },
@@ -91,6 +101,7 @@ fun LoginScreen(
                         imeAction = ImeAction.Next
                     )
                 )
+
                 OutlinedTextField(
                     value = password,
                     onValueChange = { password = it },
@@ -128,16 +139,18 @@ fun LoginScreen(
                 )
             }
         }
-        TextButton(onClick = onForgotPassword, modifier = Modifier.align(Alignment.End)) {
+
+        TextButton(
+            onClick = onForgotPassword,
+            modifier = Modifier.align(Alignment.End)
+        ) {
             Text("Forgot password?")
         }
-        submitError?.let {
-            Text(
-                it,
-                modifier = Modifier.fillMaxWidth().semantics { liveRegion = LiveRegionMode.Assertive },
-                color = MaterialTheme.colorScheme.error
-            )
+
+        submitError?.let { message ->
+            CareErrorState(message = message)
         }
+
         Button(
             onClick = ::submit,
             enabled = !isSubmitting,
@@ -154,4 +167,8 @@ fun LoginScreen(
 
 @Preview(showBackground = true, widthDp = 412, heightDp = 892)
 @Composable
-private fun LoginScreenPreview() { CareLinkTheme { LoginScreen() } }
+private fun LoginScreenPreview() {
+    CareLinkTheme {
+        LoginScreen()
+    }
+}

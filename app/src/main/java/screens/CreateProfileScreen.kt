@@ -114,12 +114,15 @@ internal fun validateProfile(
 // This checks the agreed display format without introducing a date dependency into the form.
 private fun isValidDateOfBirth(value: String): Boolean {
     val parts = value.trim().split("/")
+
     if (parts.size != 3 || parts[0].length != 2 || parts[1].length != 2 || parts[2].length != 4) {
         return false
     }
+
     val month = parts[0].toIntOrNull() ?: return false
     val day = parts[1].toIntOrNull() ?: return false
     val year = parts[2].toIntOrNull() ?: return false
+
     return month in 1..12 && day in 1..31 && year in 1900..2100
 }
 
@@ -136,47 +139,36 @@ fun CreateProfileScreen(
     var firstName by rememberSaveable {
         mutableStateOf(initialProfile?.firstName.orEmpty())
     }
-
     var lastName by rememberSaveable {
         mutableStateOf(initialProfile?.lastName.orEmpty())
     }
-
     var preferredName by rememberSaveable {
         mutableStateOf(initialProfile?.preferredName.orEmpty())
     }
-
     var dateOfBirth by rememberSaveable {
         mutableStateOf(initialProfile?.dateOfBirth.orEmpty())
     }
-
     var phoneNumber by rememberSaveable {
         mutableStateOf(initialProfile?.phoneNumber.orEmpty())
     }
-
     var addressLine1 by rememberSaveable {
         mutableStateOf(initialProfile?.addressLine1.orEmpty())
     }
-
     var addressLine2 by rememberSaveable {
         mutableStateOf(initialProfile?.addressLine2.orEmpty())
     }
-
     var city by rememberSaveable {
         mutableStateOf(initialProfile?.city.orEmpty())
     }
-
     var state by rememberSaveable {
         mutableStateOf(initialProfile?.state.orEmpty())
     }
-
     var zipCode by rememberSaveable {
         mutableStateOf(initialProfile?.zipCode.orEmpty())
     }
-
     var attemptedSave by rememberSaveable {
         mutableStateOf(false)
     }
-
     val errors = remember(
         firstName,
         lastName,
@@ -204,6 +196,7 @@ fun CreateProfileScreen(
             state,
             zipCode
         )
+
         if (!currentErrors.hasErrors && !isSaving) {
             onSaveProfile(
                 PatientProfileDetails(
@@ -220,6 +213,7 @@ fun CreateProfileScreen(
                 )
             )
         }
+
     }
 
     Column(
@@ -253,7 +247,10 @@ fun CreateProfileScreen(
                 modifier = Modifier.padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                Text("Personal information", style = MaterialTheme.typography.titleLarge)
+                Text(
+                    "Personal information",
+                    style = MaterialTheme.typography.titleLarge
+                )
                 ProfileTextField(
                     value = firstName,
                     onValueChange = { firstName = it },
@@ -298,7 +295,9 @@ fun CreateProfileScreen(
                     keyboardType = KeyboardType.Phone,
                     capitalization = KeyboardCapitalization.None
                 )
+
             }
+
         }
 
         Spacer(Modifier.height(16.dp))
@@ -312,7 +311,10 @@ fun CreateProfileScreen(
                 modifier = Modifier.padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                Text("Mailing address (optional)", style = MaterialTheme.typography.titleLarge)
+                Text(
+                    "Mailing address (optional)",
+                    style = MaterialTheme.typography.titleLarge
+                )
                 ProfileTextField(
                     value = addressLine1,
                     onValueChange = { addressLine1 = it },
@@ -360,18 +362,15 @@ fun CreateProfileScreen(
                     capitalization = KeyboardCapitalization.None,
                     onDone = ::save
                 )
+
             }
+
         }
 
         if (saveError != null) {
-            Text(
-                text = saveError,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 12.dp)
-                    .semantics { liveRegion = LiveRegionMode.Assertive },
-                color = MaterialTheme.colorScheme.error,
-                style = MaterialTheme.typography.bodyMedium
+            CareErrorState(
+                message = saveError,
+                modifier = Modifier.padding(top = 12.dp)
             )
         }
 

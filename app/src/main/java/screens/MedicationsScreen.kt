@@ -59,19 +59,18 @@ fun MedicationsScreen(
     onOpenCareHistory: () -> Unit = {},
     onOpenRefills: () -> Unit = {}
 ) {
-
     var medications by remember {
         mutableStateOf<List<Medication>>(emptyList())
     }
-
     var loading by remember { mutableStateOf(true) }
     var loadError by remember { mutableStateOf<String?>(null) }
     var retry by remember { mutableStateOf(0) }
-
     val connectionAvailable = LocalConnectionAvailable.current
+
     LaunchedEffect(retry, connectionAvailable) {
         loading = true
         loadError = null
+
         val user = FirebaseAuth.getInstance().currentUser
 
         if (user != null) {
@@ -97,50 +96,144 @@ fun MedicationsScreen(
         }
     }
 
-    MedicationsContent(medications, loading, loadError, { retry++ }, onAddMedication,
-        onMedicationSelected, onMedicationScheduler, successMessage, onCaregiverMedications,
-        onOpenCareHistory, onOpenRefills, onNavigate)
+    MedicationsContent(
+        medications,
+        loading,
+        loadError,
+        { retry++ },
+        onAddMedication,
+        onMedicationSelected,
+        onMedicationScheduler,
+        successMessage,
+        onCaregiverMedications,
+        onOpenCareHistory,
+        onOpenRefills,
+        onNavigate
+    )
+
 }
 
 @Composable
 internal fun MedicationsContent(
-    medications: List<Medication>, loading: Boolean = false, loadError: String? = null,
-    onRetry: () -> Unit = {}, onAddMedication: () -> Unit = {},
-    onMedicationSelected: (Medication) -> Unit = {}, onMedicationScheduler: () -> Unit = {},
-    successMessage: String? = null, onCaregiverMedications: () -> Unit = {},
-    onOpenCareHistory: () -> Unit = {}, onOpenRefills: () -> Unit = {},
+    medications: List<Medication>,
+    loading: Boolean = false,
+    loadError: String? = null,
+    onRetry: () -> Unit = {},
+    onAddMedication: () -> Unit = {},
+    onMedicationSelected: (Medication) -> Unit = {},
+    onMedicationScheduler: () -> Unit = {},
+    successMessage: String? = null,
+    onCaregiverMedications: () -> Unit = {},
+    onOpenCareHistory: () -> Unit = {},
+    onOpenRefills: () -> Unit = {},
     onNavigate: (BottomNavDestination) -> Unit = {}
 ) {
-    Scaffold(bottomBar = { BottomNavBar(BottomNavDestination.Medications, onNavigate) }) { padding ->
-        LazyColumn(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)
-            .padding(padding).padding(horizontal = 16.dp),
-            contentPadding = PaddingValues(vertical = 16.dp),
-            verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(12.dp)) {
-            item {
-                Text("Medications", style = MaterialTheme.typography.headlineLarge)
-                successMessage?.let { Text(it, color = MaterialTheme.colorScheme.primary) }
-                TextButton(onClick = onCaregiverMedications) { Text("Caregiver medications") }
-                TextButton(onClick = onOpenCareHistory) { Text("Care history") }
-                TextButton(onClick = onOpenRefills) { Text("Medication refills") }
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(12.dp)) {
-                    Button(onClick = onAddMedication, modifier = Modifier.weight(1f).height(63.dp)) { Text("Add Medication") }
-                    Button(onClick = onMedicationScheduler, modifier = Modifier.size(63.dp), contentPadding = PaddingValues(0.dp)) {
-                        Icon(Icons.Default.CalendarMonth, "Medication Scheduler", Modifier.size(35.dp))
-                    }
-                }
-                Text(SimpleDateFormat("EEEE, MMMM d", Locale.getDefault()).format(Date()), style = MaterialTheme.typography.titleLarge)
-                HorizontalDivider()
-            }
-            when {
-                loading -> item { StateMessage("Loading medications") }
-                loadError != null -> item { StateMessage(loadError, true); Button(onClick = onRetry) { Text("Retry") } }
-                medications.isEmpty() -> item { StateMessage("No medications to display. Add a medication to start tracking doses and schedules.") }
-                else -> items(count = medications.size, key = { medications[it].id }) { index ->
-                    MedicationCard(medications[index], onClick = { onMedicationSelected(medications[index]) })
-                }
-            }
+    Scaffold(
+        bottomBar = {
+            BottomNavBar(
+                BottomNavDestination.Medications,
+                onNavigate
+            )
         }
+
+    ) { padding ->
+        LazyColumn(
+            Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background)
+                .padding(padding)
+                .padding(horizontal = 16.dp),
+            contentPadding = PaddingValues(vertical = 16.dp),
+            verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(12.dp)
+        ) {
+            item {
+                Text(
+                    "Medications",
+                    style = MaterialTheme.typography.headlineLarge
+                )
+
+                successMessage?.let {
+                    Text(
+                        it,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+
+                TextButton(onClick = onCaregiverMedications) {
+                    Text("Caregiver medications")
+                }
+                TextButton(onClick = onOpenCareHistory) {
+                    Text("Care history")
+                }
+                TextButton(onClick = onOpenRefills) {
+                    Text("Medication refills")
+                }
+
+                Row(
+                    Modifier
+                        .fillMaxWidth(),
+                    horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(12.dp)
+                ) {
+                    Button(
+                        onClick = onAddMedication,
+                        modifier = Modifier.weight(1f).height(63.dp)
+                    ) {
+                        Text("Add Medication")
+
+                    }
+                    Button(
+                        onClick = onMedicationScheduler,
+                        modifier = Modifier.size(63.dp),
+                        contentPadding = PaddingValues(0.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.CalendarMonth,
+                            "Medication Scheduler",
+                            Modifier.size(35.dp)
+                        )
+
+                    }
+
+                }
+
+                Text(
+                    SimpleDateFormat("EEEE, MMMM d", Locale.getDefault()).format(Date()),
+                    style = MaterialTheme.typography.titleLarge
+                )
+
+                HorizontalDivider()
+
+            }
+
+            when {
+                loading -> item {
+                    StateMessage("Loading medications")
+                }
+                loadError != null -> item {
+                    CareErrorState(
+                        message = loadError,
+                        onRetry = onRetry
+                    )
+                }
+                medications.isEmpty() -> item { StateMessage("No medications to display. Add a medication to start tracking doses and schedules.") }
+
+                else -> items(
+                    count = medications.size,
+                    key = { medications[it].id }
+                ) { index ->
+                    MedicationCard(
+                        medications[index],
+                        onClick = { onMedicationSelected(medications[index]) }
+                    )
+
+                }
+
+            }
+
+        }
+
     }
+
 }
 
 @Composable
@@ -152,9 +245,7 @@ fun MedicationCard(
         onClick = onClick,
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
-        elevation = CardDefaults.cardElevation(
-            defaultElevation = 4.dp
-        )
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
     ) {
         Column(
             modifier = Modifier.padding(16.dp)
