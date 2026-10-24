@@ -31,5 +31,12 @@ internal fun CareCard(title: String, content: @Composable () -> Unit) {
 // Error styling is opt-in so empty and loading messages stay calm and neutral.
 @Composable
 internal fun StateMessage(message: String, isError: Boolean = false) {
-    Text(message, color = if (isError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)
+    if (isError) {
+        CareErrorState(message = message)
+    } else {
+        Text(
+            text = message,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
 }

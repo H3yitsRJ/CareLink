@@ -87,6 +87,7 @@ fun AddEditMedicationScreen(
         "3 times daily",
         "4 times daily"
     )
+
     // Saveable state keeps entered values through rotation and process recreation.
     var name by rememberSaveable(medication?.id) { mutableStateOf(medication?.name.orEmpty()) }
     var strength by rememberSaveable(medication?.id) { mutableStateOf(medication?.strength.orEmpty()) }
@@ -96,7 +97,13 @@ fun AddEditMedicationScreen(
     var instructions by rememberSaveable(medication?.id) { mutableStateOf(medication?.instructions.orEmpty()) }
     var attemptedSave by rememberSaveable { mutableStateOf(false) }
     var showDeleteDialog by rememberSaveable { mutableStateOf(false) }
-    BackHandler { if (!isSaving) { if (showDeleteDialog) showDeleteDialog = false else onCancel() } }
+
+    BackHandler {
+        if (!isSaving) {
+            if (showDeleteDialog) showDeleteDialog = false else onCancel()
+        }
+    }
+
     fun showFrequencyPicker() {
         android.app.AlertDialog.Builder(context)
             .setTitle("Select frequency")
@@ -107,6 +114,7 @@ fun AddEditMedicationScreen(
             .setNegativeButton("Cancel", null)
             .show()
     }
+
     fun showTimePicker() {
         TimePickerDialog(
             context,
@@ -128,8 +136,22 @@ fun AddEditMedicationScreen(
             false
         ).show()
     }
-    val errors = remember(name, strength, dose, frequency, reminderTime, attemptedSave) {
-        if (attemptedSave) validateMedicationEditor(name, strength, dose, frequency, reminderTime) else MedicationEditorErrors()
+
+    val errors = remember(
+        name,
+        strength,
+        dose,
+        frequency,
+        reminderTime,
+        attemptedSave
+    ) {
+        if (attemptedSave) validateMedicationEditor(
+            name,
+            strength,
+            dose,
+            frequency,
+            reminderTime
+        ) else MedicationEditorErrors()
     }
 
     fun save() {
@@ -148,11 +170,16 @@ fun AddEditMedicationScreen(
     }
 
     Column(
-        modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)
-            .verticalScroll(rememberScrollState()).imePadding().padding(16.dp),
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+            .verticalScroll(rememberScrollState())
+            .imePadding()
+            .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         Text(if (medication == null) "Add medication" else "Edit medication", style = MaterialTheme.typography.headlineLarge)
+
         MedicationFormCard(title = "Medication details") {
             MedicationField(
                 value = name,
@@ -180,8 +207,11 @@ fun AddEditMedicationScreen(
                     error = errors.dose,
                     modifier = Modifier.weight(1f)
                 )
+
             }
+
         }
+
         MedicationFormCard("Schedule") {
             MedicationField(
                 value = frequency,
@@ -191,6 +221,7 @@ fun AddEditMedicationScreen(
                 readOnly = true,
                 onClick = { showFrequencyPicker() }
             )
+
             MedicationField(
                 value = reminderTime,
                 onValueChange = { },
@@ -199,17 +230,32 @@ fun AddEditMedicationScreen(
                 readOnly = true,
                 onClick = { showTimePicker() }
             )
+
         }
+
         MedicationFormCard("Instructions") {
             OutlinedTextField(
-                value = instructions, onValueChange = { instructions = it }, label = { Text("Instructions (optional)") },
-                modifier = Modifier.fillMaxWidth(), minLines = 3, shape = RoundedCornerShape(12.dp)
+                value = instructions,
+                onValueChange = { instructions = it },
+                label = { Text("Instructions (optional)") },
+                modifier = Modifier.fillMaxWidth(),
+                minLines = 3,
+                shape = RoundedCornerShape(12.dp)
             )
         }
-        if (saveError != null) Text(saveError, color = MaterialTheme.colorScheme.error, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Assertive })
-        Button(onClick = ::save, enabled = !isSaving && canSave, modifier = Modifier.fillMaxWidth().height(56.dp)) {
+
+        if (saveError != null) {
+            CareErrorState(message = saveError)
+        }
+
+        Button(
+            onClick = ::save,
+            enabled = !isSaving && canSave,
+            modifier = Modifier.fillMaxWidth().height(56.dp)
+        ) {
             Text(if (isSaving) "Saving medication" else "Save medication")
         }
+
         if (medication != null && canDelete) {
             OutlinedButton(
                 onClick = { showDeleteDialog = true },
@@ -224,8 +270,17 @@ fun AddEditMedicationScreen(
                 )
             }
         }
-        OutlinedButton(onClick = onCancel, enabled = !isSaving, modifier = Modifier.fillMaxWidth().height(56.dp)) { Text("Cancel") }
+
+        OutlinedButton(
+            onClick = onCancel,
+            enabled = !isSaving,
+            modifier = Modifier.fillMaxWidth().height(56.dp)
+        ) {
+            Text("Cancel")
+        }
+
     }
+
     if (showDeleteDialog && medication != null && canDelete) {
         AlertDialog(
             onDismissRequest = {
@@ -259,18 +314,33 @@ fun AddEditMedicationScreen(
                     Text("Cancel")
                 }
             }
+
         )
+
     }
+
 }
 
 @Composable
 // One card helper keeps the three form sections visually consistent.
 private fun MedicationFormCard(title: String, content: @Composable () -> Unit) {
-    Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text(title, style = MaterialTheme.typography.titleLarge)
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
+        Column(
+            Modifier
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Text(
+                title,
+                style = MaterialTheme.typography.titleLarge
+            )
             content()
         }
+
     }
 }
 

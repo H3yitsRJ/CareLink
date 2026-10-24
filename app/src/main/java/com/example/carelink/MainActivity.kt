@@ -61,6 +61,7 @@ import com.example.carelink.data.FirestoreRefillRequestRepository
 import com.example.carelink.data.RefillRequestAlreadyActiveException
 import com.example.carelink.model.RefillRequest
 import com.example.carelink.notifications.MedicationReminderScheduler
+import com.example.carelink.screens.CareErrorState
 import com.example.carelink.screens.CreateAccountScreen
 import com.example.carelink.screens.CreateProfileScreen
 import com.example.carelink.screens.DashboardScreen
@@ -148,31 +149,26 @@ class MainActivity : ComponentActivity() {
 
             CareLinkTheme {
                 val auth = remember { FirebaseAuth.getInstance() }
-
                 val notificationPermissionLauncher = rememberLauncherForActivityResult(
                     ActivityResultContracts.RequestPermission()
                 ) { _: Boolean ->
                     // Permission result handled here
                 }
-
                 val firestore = remember { FirebaseFirestore.getInstance() }
                 var networkAvailable by remember { mutableStateOf(false) }
                 var firebaseAvailable by remember { mutableStateOf(false) }
                 val readSource = remember {
                     { if (networkAvailable && firebaseAvailable) Source.DEFAULT else Source.CACHE }
                 }
-
                 val refillRequestRepository = remember {
                     FirestoreRefillRequestRepository(firestore, readSource)
                 }
                 var refillRequests by remember {
                     mutableStateOf<List<RefillRequest>>(emptyList())
                 }
-
                 var refillLoading by remember {
                     mutableStateOf(false)
                 }
-
                 var refillError by remember {
                     mutableStateOf<String?>(null)
                 }
@@ -224,7 +220,6 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
-
                 val appointmentRepository = remember { AppointmentRepository(firestore, readSource) }
                 val doseHistoryStore = remember { DoseHistoryStore(firestore) }
                 val careHistoryStore = remember { CareHistoryStore(firestore, readSource) }
@@ -246,6 +241,7 @@ class MainActivity : ComponentActivity() {
                 val careTaskRepository = remember(firestore) { FirestoreCareTaskRepository(firestore, readSource) }
                 var isAuthenticated by remember { mutableStateOf(auth.currentUser != null) }
                 val connectionAvailable = networkAvailable && (!isAuthenticated || firebaseAvailable)
+
                 DisposableEffect(Unit) {
                     val monitor = ConnectivityMonitor(this@MainActivity) { available ->
                         runOnUiThread { networkAvailable = available }
@@ -253,6 +249,7 @@ class MainActivity : ComponentActivity() {
                     monitor.start()
                     onDispose { monitor.stop() }
                 }
+
                 LaunchedEffect(networkAvailable, isAuthenticated, auth.currentUser?.uid) {
                     firebaseAvailable = false
                     val patientId = auth.currentUser?.uid
@@ -263,6 +260,7 @@ class MainActivity : ComponentActivity() {
                         }
                     }
                 }
+
                 var screen by remember { mutableStateOf(AuthScreen.SignIn) }
                 var isSubmitting by remember { mutableStateOf(false) }
                 var submitError by remember { mutableStateOf<String?>(null) }
@@ -406,1245 +404,1254 @@ class MainActivity : ComponentActivity() {
                 }
 
                 CompositionLocalProvider(LocalConnectionAvailable provides connectionAvailable) {
-                Column(Modifier.fillMaxSize().safeDrawingPadding()) {
-                    OfflineBanner(!connectionAvailable)
-                    Box(Modifier.weight(1f)) {
-                when {
-                    isAuthenticated && hasProfile == null -> {
-                        if (submitError != null) {
-                            Column(Modifier.safeDrawingPadding()) {
-                                Text(submitError!!)
-                                TextButton(onClick = { medicationReminderScheduler.clear(); auth.signOut(); isAuthenticated = false }) {
-                                    Text("Back to sign in")
-                                }
-                            }
-                        } else LoadingScreen()
-                    }
 
-                    isAuthenticated && hasProfile == false -> {
-                        CreateProfileScreen(
-                            isSaving = isSubmitting,
-                            saveError = submitError,
-                            onSaveProfile = { profile ->
-                                if (!connectionAvailable) {
-                                    submitError = OFFLINE_ACTION_MESSAGE
-                                    return@CreateProfileScreen
-                                }
-                                val user =
-                                    auth.currentUser
-                                        ?: return@CreateProfileScreen
+                    Column(Modifier
+                        .fillMaxSize()
+                        .safeDrawingPadding()
+                    ) {
+                        OfflineBanner(!connectionAvailable)
 
-                                isSubmitting = true
-                                submitError = null
+                        Box(Modifier.weight(1f)) {
 
-                                val displayName = listOf(
-                                    profile.firstName,
-                                    profile.lastName
-                                )
-                                    .filter(String::isNotBlank)
-                                    .joinToString(" ")
-
-                                firestore
-                                    .collection("users")
-                                    .document(user.uid)
-                                    .set(
-                                        mapOf(
-                                            "fullName" to displayName,
-                                            "firstName" to profile.firstName,
-                                            "lastName" to profile.lastName,
-                                            "preferredName" to profile.preferredName,
-                                            "dateOfBirth" to profile.dateOfBirth,
-                                            "phoneNumber" to profile.phoneNumber,
-                                            "addressLine1" to profile.addressLine1,
-                                            "addressLine2" to profile.addressLine2,
-                                            "city" to profile.city,
-                                            "state" to profile.state,
-                                            "zipCode" to profile.zipCode,
-                                            "email" to user.email.orEmpty()
-                                        )
-                                    )
-                                    .addOnSuccessListener {
-                                        isSubmitting = false
-                                        fullName = displayName
-                                        hasProfile = true
-                                    }
-                                    .addOnFailureListener {
-                                        isSubmitting = false
-                                        submitError =
-                                            "We couldn't save your profile."
-                                    }
-                            }
-                        )
-                    }
-
-                    isAuthenticated && hasProfile == true -> {
-                        fun openTopLevel(
-                            destination: BottomNavDestination
-                        ) {
-                            medicationOpenedFromHistory = false
-
-                            appScreen = when (destination) {
-                                BottomNavDestination.Home -> AppScreen.Home
-                                BottomNavDestination.Medications -> AppScreen.Medications
-                                BottomNavDestination.Appointments -> AppScreen.Appointments
-                                BottomNavDestination.CareTasks -> AppScreen.CareTasks
-                                BottomNavDestination.Profile -> AppScreen.Profile
-                            }
-                        }
-
-
-
-                        when (appScreen) {
-                            AppScreen.RefillRequest -> {
-                                var medicationsLoading by remember { mutableStateOf(true) }
-                                var medicationLoadError by remember { mutableStateOf<String?>(null) }
-                                var medicationRetry by remember { mutableStateOf(0) }
-                                var submittingRefill by remember { mutableStateOf(false) }
-                                var submittedRefill by remember { mutableStateOf(false) }
-                                var refillSaveError by remember { mutableStateOf<String?>(null) }
-
-                                var refillMedications by remember {
-                                    mutableStateOf<List<Medication>>(emptyList())
-                                }
-                                LaunchedEffect(auth.currentUser?.uid, connectionAvailable, medicationRetry) {
-                                    medicationsLoading = true
-                                    medicationLoadError = null
-                                    val user = auth.currentUser
-
-                                    if (user != null) {
-                                        FirebaseFirestore.getInstance()
-                                            .collection("users")
-                                            .document(user.uid)
-                                            .collection("medications")
-                                            .get(readSource())
-                                            .addOnSuccessListener { result ->
-                                                refillMedications = result.documents.mapNotNull { document ->
-                                                    Medication.fromFirestore(
-                                                        document.id,
-                                                        document.data.orEmpty() + ("patientId" to user.uid)
-                                                    )
-                                                }
-                                                medicationsLoading = false
-                                            }
-                                            .addOnFailureListener {
-                                                medicationsLoading = false
-                                                medicationLoadError = "We couldn't load your medications. Check your connection and try again."
-                                            }
-                                    } else {
-                                        medicationsLoading = false
-                                        medicationLoadError = "Sign in to view your medications."
-                                    }
-                                }
-                                RefillRequestScreen(
-                                    eligibleMedications = refillMedications,
-                                    patientId = auth.currentUser?.uid.orEmpty(),
-                                    requestedById = auth.currentUser?.uid.orEmpty(),
-                                    activeRequests = refillRequests,
-                                    isSaving = submittingRefill,
-                                    saved = submittedRefill,
-                                    saveError = refillSaveError,
-                                    medicationsLoading = medicationsLoading,
-                                    medicationLoadError = medicationLoadError,
-                                    onRetryMedications = { medicationRetry++ },
-                                    onOpenMedications = { appScreen = AppScreen.Medications },
-                                    onCancel = { appScreen = if (submittedRefill) AppScreen.RefillRequestTracking else AppScreen.MedicationRefills },
-                                    onSave = { request ->
-                                        if (!connectionAvailable || submittingRefill || submittedRefill) return@RefillRequestScreen
-                                        submittingRefill = true
-                                        refillSaveError = null
-                                        refillRequestRepository.create(request) { result ->
-                                            submittingRefill = false
-                                            result.onSuccess {
-                                                submittedRefill = true
-                                            }
-
-                                            result.onFailure { error ->
-                                                refillSaveError = if (generateSequence(error) { it.cause }.any { it is RefillRequestAlreadyActiveException })
-                                                    "A refill request is already active for this medication."
-                                                else "Couldn't submit the refill request. Check your connection and try again."
-                                            }
-                                        }
-                                    }
-                                )
-                            }
-                            AppScreen.MedicationRefills -> {
-                                MedicationRefillsScreen(
-                                    onRequestRefill = {
-                                        appScreen = AppScreen.RefillRequest
-                                    },
-                                    onTrackRefills = {
-                                        appScreen = AppScreen.RefillRequestTracking
-                                    },
-                                    onBack = { appScreen = AppScreen.Medications }
-                                )
-                            }
-                            AppScreen.RefillRequestTracking -> {
-                                val patientId = auth.currentUser?.uid.orEmpty()
-                                var trackingMedications by remember {
-                                    mutableStateOf<List<Medication>>(emptyList())
-                                }
-                                LaunchedEffect(patientId, connectionAvailable) {
-                                    if (patientId.isNotBlank()) {
-                                        FirebaseFirestore.getInstance()
-                                            .collection("users")
-                                            .document(patientId)
-                                            .collection("medications")
-                                            .get(readSource())
-                                            .addOnSuccessListener { result ->
-                                                trackingMedications = result.documents.mapNotNull { document ->
-                                                    Medication.fromFirestore(
-                                                        document.id,
-                                                        document.data.orEmpty() + ("patientId" to patientId)
-                                                    )
-                                                }
-                                            }
-                                    }
-                                }
-
-                                LaunchedEffect(patientId, connectionAvailable) {
-                                    if (patientId.isNotBlank()) {
-                                        loadRefillRequests(patientId)
-                                    }
-                                }
-
-                                RefillRequestTrackingScreen(
-                                    requests = refillRequests,
-                                    medicationNames = trackingMedications.associate {
-                                        it.id to it.name
-                                    },
-                                    isLoading = refillLoading,
-                                    error = refillError,
-                                    onRefresh = {
-                                        loadRefillRequests(patientId)
-                                    },
-                                    onBack = { appScreen = AppScreen.MedicationRefills }
-                                )
-                            }
-                            AppScreen.Notifications -> {
-                                NotificationsScreen(onBack = { appScreen = AppScreen.Home })
-                            }
-                            AppScreen.Home -> {
-                                DashboardScreen(
-                                    fullName = fullName,
-                                    unreadNotificationCount = unreadNotificationCount,
-                                    summary = DashboardSummary(
-                                        medication = "Review today's medication schedule",
-                                        appointment = "View upcoming appointments",
-                                        healthConcern = "Review active health concerns",
-                                        careTask = "Check open care tasks"
-                                    ),
-                                    onOpen = { destination ->
-                                        appScreen = when (destination) {
-                                            "medications" -> AppScreen.Medications
-                                            "appointments" -> AppScreen.Appointments
-                                            "health-concerns" -> AppScreen.HealthConcerns
-                                            "care-tasks" -> AppScreen.CareTasks
-                                            "notifications" -> AppScreen.Notifications
-                                            else -> AppScreen.Home
-                                        }
-                                    },
-                                    onNavigate = ::openTopLevel
-                                )
-                            }
-                            AppScreen.HealthConcerns -> {
-                                val actorId = auth.currentUser?.uid
-
-                                if (actorId != null) {
-                                    var caregiverMode by rememberSaveable(actorId) {
-                                        mutableStateOf(selectedCareRecipient != null)
-                                    }
-
-                                    if (caregiverMode) {
-                                        CareRecipientSelector(
-                                            actorId = actorId,
-                                            selectedPatientId = selectedCareRecipient,
-                                            onSelect = {
-                                                selectedCareRecipient = it
-                                            },
-                                            directory = recipientDirectory,
-                                            medicationData = caregiverMedicationData,
-                                            onBack = {
-                                                caregiverMode = false
-                                            },
-                                            content = { patientId ->
-                                                com.example.carelink.screens.CaregiverHealthConcernsRoute(
-                                                    patientId = patientId,
-                                                    actorId = actorId,
-                                                    repository = healthConcernRepository,
-                                                    accessData = caregiverMedicationData,
-                                                    onBack = {
-                                                        caregiverMode = false
-                                                    }
-                                                )
-                                            }
-                                        )
-                                    } else {
-                                        Column(
-                                            modifier = Modifier
-                                                .fillMaxSize()
-                                                .safeDrawingPadding()
-                                        ) {
+                            when {
+                                isAuthenticated && hasProfile == null -> {
+                                    if (submitError != null) {
+                                        Column(Modifier.safeDrawingPadding()) {
+                                            CareErrorState(message = submitError!!)
                                             TextButton(
                                                 onClick = {
-                                                    caregiverMode = true
+                                                    medicationReminderScheduler.clear();
+                                                    auth.signOut();
+                                                    isAuthenticated = false
                                                 }
                                             ) {
-                                                Text("Care recipient health concerns")
-                                            }
-
-                                            androidx.compose.foundation.layout.Box(
-                                                modifier = Modifier.weight(1f)
-                                            ) {
-                                                HealthConcernsFlow(
-                                                    patientId = actorId,
-                                                    repository = healthConcernRepository,
-                                                    onBack = {
-                                                        appScreen = AppScreen.Home
-                                                    }
-                                                )
+                                                Text("Back to sign in")
                                             }
                                         }
-                                    }
+                                    } else LoadingScreen()
                                 }
-                            }
-                            AppScreen.Medications -> {
-                                MedicationsScreen(
-                                    onCaregiverMedications = {
-                                        appScreen = AppScreen.CaregiverMedications },
-                                    onOpenCareHistory = {
-                                        appScreen = AppScreen.CareHistory
-                                    },
-                                    onOpenRefills = {
-                                        appScreen = AppScreen.MedicationRefills
-                                    },
-                                    onAddMedication = {
-                                        selectedMedication = null
-                                        medicationSuccessMessage = null
-                                        doseMessage = null
-                                        doseError = null
-                                        appScreen = AppScreen.AddMedication
-                                    },
-                                    onMedicationSelected = {
-                                        medication ->
-                                            selectedMedication = medication
-                                            medicationOpenedFromHistory = false
-                                            medicationSuccessMessage = null
-                                            appScreen = AppScreen.MedicationDetails
-                                    },
-                                    onMedicationScheduler = {
-                                        appScreen = AppScreen.MedicationScheduler
-                                    },
-                                    successMessage = medicationSuccessMessage,
-                                    onNavigate = ::openTopLevel
-                                )
-                            }
-                            AppScreen.MedicationDetails -> {
-                                MedicationDetailsScreen(
-                                    medication = selectedMedication,
-                                    errorMessage = medicationSaveError,
-                                    isSavingDose = isSavingDose,
-                                    doseMessage = doseMessage,
-                                    doseError = doseError,
-                                    onRecordDose = { medication, scheduledTime, status ->
-                                        doseMessage = null
-                                        if (!connectionAvailable) {
-                                            doseError = OFFLINE_ACTION_MESSAGE
-                                            return@MedicationDetailsScreen
-                                        }
-                                        val user = auth.currentUser
 
-                                        if (user == null) {
-                                            doseMessage = null
-                                            doseError = "Sign in to record a dose."
-                                        } else if (!isSavingDose) {
-                                            isSavingDose = true
-                                            doseMessage = null
-                                            doseError = null
+                                isAuthenticated && hasProfile == false -> {
+                                    CreateProfileScreen(
+                                        isSaving = isSubmitting,
+                                        saveError = submitError,
+                                        onSaveProfile = { profile ->
+                                            if (!connectionAvailable) {
+                                                submitError = OFFLINE_ACTION_MESSAGE
+                                                return@CreateProfileScreen
+                                            }
+                                            val user =
+                                                auth.currentUser
+                                                    ?: return@CreateProfileScreen
 
-                                            doseHistoryStore.record(
-                                                patientId = user.uid,
-                                                medication = medication,
-                                                scheduledTimeMillis = scheduledTime,
-                                                status = status,
-                                                onComplete = { result ->
-                                                    isSavingDose = false
+                                            isSubmitting = true
+                                            submitError = null
 
-                                                    result.fold(
-                                                        onSuccess = {
-                                                            val statusLabel = status.name.lowercase()
-                                                            doseMessage = "Dose recorded as $statusLabel."
-                                                            doseError = null
-                                                        },
-                                                        onFailure = {
-                                                            doseMessage = null
-                                                            doseError =
-                                                                "We couldn't record the dose. Please try again."
-                                                        }
-                                                    )
-                                                }
+                                            val displayName = listOf(
+                                                profile.firstName,
+                                                profile.lastName
                                             )
-                                        }
-                                    },
-                                    onEdit = { medication ->
-                                        selectedMedication = medication
-                                        medicationSaveError = null
-                                        appScreen = AppScreen.AddMedication
-                                    },
-                                    onRemove = { medication ->
-                                        if (!connectionAvailable) {
-                                            medicationSaveError = OFFLINE_ACTION_MESSAGE
-                                            return@MedicationDetailsScreen
-                                        }
-                                        val user = auth.currentUser
+                                                .filter(String::isNotBlank)
+                                                .joinToString(" ")
 
-                                        if (user != null) {
                                             firestore
                                                 .collection("users")
                                                 .document(user.uid)
-                                                .collection("medications")
-                                                .document(medication.id)
-                                                .delete()
+                                                .set(
+                                                    mapOf(
+                                                        "fullName" to displayName,
+                                                        "firstName" to profile.firstName,
+                                                        "lastName" to profile.lastName,
+                                                        "preferredName" to profile.preferredName,
+                                                        "dateOfBirth" to profile.dateOfBirth,
+                                                        "phoneNumber" to profile.phoneNumber,
+                                                        "addressLine1" to profile.addressLine1,
+                                                        "addressLine2" to profile.addressLine2,
+                                                        "city" to profile.city,
+                                                        "state" to profile.state,
+                                                        "zipCode" to profile.zipCode,
+                                                        "email" to user.email.orEmpty()
+                                                    )
+                                                )
                                                 .addOnSuccessListener {
-                                                    medicationReminderScheduler.cancel(medication)
-                                                    selectedMedication = null
-                                                    medicationSaveError = null
-                                                    medicationSuccessMessage = "Medication removed successfully."
-                                                    appScreen = AppScreen.Medications
+                                                    isSubmitting = false
+                                                    fullName = displayName
+                                                    hasProfile = true
                                                 }
                                                 .addOnFailureListener {
-                                                    medicationSaveError = "We couldn't remove the medication. Please try again."
+                                                    isSubmitting = false
+                                                    submitError =
+                                                        "We couldn't save your profile."
                                                 }
                                         }
-                                    },
-                                    onBack = {
-                                        selectedMedication = null
-                                        medicationSuccessMessage = null
-
-                                        appScreen = if (medicationOpenedFromHistory) {
-                                            AppScreen.CareHistory
-                                        } else {
-                                            AppScreen.Medications
-                                        }
-
-                                        medicationOpenedFromHistory = false
-                                    },
-                                    onNavigate = ::openTopLevel
-                                )
-                            }
-                            AppScreen.CareHistory -> {
-                                val patientId = auth.currentUser?.uid.orEmpty()
-
-                                var openingMedicationId by remember(patientId) {
-                                    mutableStateOf<String?>(null)
-                                }
-                                var medicationLinkError by remember(patientId) {
-                                    mutableStateOf<String?>(null)
-                                }
-                                var historyRetry by remember(patientId) {
-                                    mutableIntStateOf(0)
+                                    )
                                 }
 
-                                val historyPager = remember(patientId, historyRetry) {
-                                    if (patientId.isNotBlank()) {
-                                        com.example.carelink.data.CareHistoryPager(
-                                            firestore = firestore,
-                                            patientId = patientId
-                                        )
-                                    } else {
-                                        null
-                                    }
-                                }
-
-                                var historyEntries by remember(historyPager) {
-                                    mutableStateOf<List<CareHistoryEntry>>(emptyList())
-                                }
-                                var historyLoading by remember(historyPager) {
-                                    mutableStateOf(true)
-                                }
-                                var historyError by remember(historyPager) {
-                                    mutableStateOf<String?>(null)
-                                }
-                                var historyHasMore by remember(historyPager) {
-                                    mutableStateOf(false)
-                                }
-                                var historyLoadingMore by remember(historyPager) {
-                                    mutableStateOf(false)
-                                }
-                                var historyMoreError by remember(historyPager) {
-                                    mutableStateOf<String?>(null)
-                                }
-                                var historyPageRequest by remember(historyPager) {
-                                    mutableIntStateOf(0)
-                                }
-
-                                DisposableEffect(historyPager, historyPageRequest) {
-                                    var active = true
-                                    val firstPage = historyEntries.isEmpty()
-
-                                    if (
-                                        historyPager == null ||
-                                        auth.currentUser?.uid != patientId
+                                isAuthenticated && hasProfile == true -> {
+                                    fun openTopLevel(
+                                        destination: BottomNavDestination
                                     ) {
-                                        historyEntries = emptyList()
-                                        historyLoading = false
-                                        historyLoadingMore = false
-                                        historyHasMore = false
-                                        historyError = "Sign in to view your care history."
-                                    } else {
-                                        historyLoading = firstPage
-                                        historyLoadingMore = !firstPage
-                                        historyError = null
-                                        historyMoreError = null
+                                        medicationOpenedFromHistory = false
 
-                                        historyPager.loadNext { result ->
-                                            if (active && auth.currentUser?.uid == patientId) {
-                                                historyLoading = false
-                                                historyLoadingMore = false
-
-                                                result.onSuccess { page ->
-                                                    historyEntries = CareHistoryEntry.newestFirst(
-                                                        (historyEntries + page.entries)
-                                                            .distinctBy { it.id }
-                                                    )
-
-                                                    historyHasMore = page.hasMore
-                                                }.onFailure { exception ->
-                                                    android.util.Log.e(
-                                                        "CareHistoryPaging",
-                                                        "Failed to load care history",
-                                                        exception
-                                                    )
-
-                                                    if (firstPage) {
-                                                        historyError =
-                                                            "We couldn't load your care history. Please try again."
-                                                    } else {
-                                                        historyMoreError =
-                                                            "We couldn't load older history. Your loaded events are still available."
-                                                    }
-                                                }
-                                            }
+                                        appScreen = when (destination) {
+                                            BottomNavDestination.Home -> AppScreen.Home
+                                            BottomNavDestination.Medications -> AppScreen.Medications
+                                            BottomNavDestination.Appointments -> AppScreen.Appointments
+                                            BottomNavDestination.CareTasks -> AppScreen.CareTasks
+                                            BottomNavDestination.Profile -> AppScreen.Profile
                                         }
                                     }
 
-                                    onDispose {
-                                        active = false
-                                    }
-                                }
 
-                                DisposableEffect(patientId, openingMedicationId) {
-                                    val medicationId = openingMedicationId
-                                    var active = true
+                                    when (appScreen) {
+                                        AppScreen.RefillRequest -> {
+                                            var medicationsLoading by remember { mutableStateOf(true) }
+                                            var medicationLoadError by remember { mutableStateOf<String?>(null) }
+                                            var medicationRetry by remember { mutableStateOf(0) }
+                                            var submittingRefill by remember { mutableStateOf(false) }
+                                            var submittedRefill by remember { mutableStateOf(false) }
+                                            var refillSaveError by remember { mutableStateOf<String?>(null) }
 
-                                    if (medicationId != null) {
-                                        if (
-                                            patientId.isBlank() ||
-                                            auth.currentUser?.uid != patientId
-                                        ) {
-                                            medicationLinkError =
-                                                "Sign in to open this medication."
+                                            var refillMedications by remember {
+                                                mutableStateOf<List<Medication>>(emptyList())
+                                            }
+                                            LaunchedEffect(auth.currentUser?.uid, connectionAvailable, medicationRetry) {
+                                                medicationsLoading = true
+                                                medicationLoadError = null
+                                                val user = auth.currentUser
 
-                                            openingMedicationId = null
-                                        } else {
-                                            firestore.collection("users")
-                                                .document(patientId)
-                                                .collection("medications")
-                                                .document(medicationId)
-                                                .get(com.google.firebase.firestore.Source.SERVER)
-                                                .addOnSuccessListener { document ->
-                                                    if (active && auth.currentUser?.uid == patientId) {
-                                                        val medication = Medication.fromFirestore(
-                                                            document.id,
-                                                            document.data.orEmpty()
-                                                        )
+                                                if (user != null) {
+                                                    FirebaseFirestore.getInstance()
+                                                        .collection("users")
+                                                        .document(user.uid)
+                                                        .collection("medications")
+                                                        .get(readSource())
+                                                        .addOnSuccessListener { result ->
+                                                            refillMedications = result.documents.mapNotNull { document ->
+                                                                Medication.fromFirestore(
+                                                                    document.id,
+                                                                    document.data.orEmpty() + ("patientId" to user.uid)
+                                                                )
+                                                            }
+                                                            medicationsLoading = false
+                                                        }
+                                                        .addOnFailureListener {
+                                                            medicationsLoading = false
+                                                            medicationLoadError = "We couldn't load your medications. Check your connection and try again."
+                                                        }
+                                                } else {
+                                                    medicationsLoading = false
+                                                    medicationLoadError = "Sign in to view your medications."
+                                                }
+                                            }
 
-                                                        openingMedicationId = null
+                                            RefillRequestScreen(
+                                                eligibleMedications = refillMedications,
+                                                patientId = auth.currentUser?.uid.orEmpty(),
+                                                requestedById = auth.currentUser?.uid.orEmpty(),
+                                                activeRequests = refillRequests,
+                                                isSaving = submittingRefill,
+                                                saved = submittedRefill,
+                                                saveError = refillSaveError,
+                                                medicationsLoading = medicationsLoading,
+                                                medicationLoadError = medicationLoadError,
+                                                onRetryMedications = { medicationRetry++ },
+                                                onOpenMedications = { appScreen = AppScreen.Medications },
+                                                onCancel = { appScreen = if (submittedRefill) AppScreen.RefillRequestTracking else AppScreen.MedicationRefills },
+                                                onSave = { request ->
+                                                    if (!connectionAvailable || submittingRefill || submittedRefill) return@RefillRequestScreen
+                                                    submittingRefill = true
+                                                    refillSaveError = null
+                                                    refillRequestRepository.create(request) { result ->
+                                                        submittingRefill = false
+                                                        result.onSuccess {
+                                                            submittedRefill = true
+                                                        }
 
-                                                        if (
-                                                            medication == null ||
-                                                            medication.patientId != patientId
-                                                        ) {
-                                                            medicationLinkError =
-                                                                "This medication is no longer available."
-                                                        } else {
-                                                            selectedMedication = medication
-                                                            medicationSaveError = null
-                                                            medicationSuccessMessage = null
-                                                            doseMessage = null
-                                                            doseError = null
-                                                            medicationOpenedFromHistory = true
-                                                            appScreen = AppScreen.MedicationDetails
+                                                        result.onFailure { error ->
+                                                            refillSaveError = if (generateSequence(error) { it.cause }.any { it is RefillRequestAlreadyActiveException })
+                                                                "A refill request is already active for this medication."
+                                                            else "Couldn't submit the refill request. Check your connection and try again."
                                                         }
                                                     }
                                                 }
-                                                .addOnFailureListener {
-                                                    if (active && auth.currentUser?.uid == patientId) {
-                                                        openingMedicationId = null
-
-                                                        medicationLinkError =
-                                                            "We couldn't open this medication. Check your connection and try again."
-                                                    }
-                                                }
+                                            )
                                         }
-                                    }
-
-                                    onDispose {
-                                        active = false
-                                    }
-                                }
-
-                                CareHistoryScreen(
-                                    entries = historyEntries,
-                                    isLoading = historyLoading,
-                                    loadError = historyError,
-                                    onRetry = {
-                                        historyRetry++
-                                    },
-                                    onBack = {
-                                        appScreen = AppScreen.Medications
-                                    },
-                                    onOpenMedication = { entry ->
-                                        val medicationId = entry.relatedRecordId
-
-                                        if (
-                                            entry.patientId == patientId &&
-                                            entry.type ==
-                                            com.example.carelink.model.CareActivityType.MEDICATION &&
-                                            !medicationId.isNullOrBlank() &&
-                                            '/' !in medicationId &&
-                                            medicationId != "." &&
-                                            medicationId != ".." &&
-                                            openingMedicationId == null
-                                        ) {
-                                            medicationLinkError = null
-                                            openingMedicationId = medicationId
+                                        AppScreen.MedicationRefills -> {
+                                            MedicationRefillsScreen(
+                                                onRequestRefill = {
+                                                    appScreen = AppScreen.RefillRequest
+                                                },
+                                                onTrackRefills = {
+                                                    appScreen = AppScreen.RefillRequestTracking
+                                                },
+                                                onBack = { appScreen = AppScreen.Medications }
+                                            )
                                         }
-                                    },
-                                    onOpenCaregiverAccess = { entry ->
-                                        if (
-                                            entry.patientId == patientId &&
-                                            auth.currentUser?.uid == patientId &&
-                                            entry.type ==
-                                            com.example.carelink.model.CareActivityType.CAREGIVER_ACCESS &&
-                                            !entry.relatedRecordId.isNullOrBlank()
-                                        ) {
-                                            appScreen = AppScreen.MedicationCaregiverAccess
-                                        }
-                                    },
-                                    hasMore = historyHasMore,
-                                    isLoadingMore = historyLoadingMore,
-                                    loadMoreError = historyMoreError,
-                                    onLoadMore = {
-                                        if (
-                                            !historyLoading &&
-                                            !historyLoadingMore &&
-                                            historyHasMore
-                                        ) {
-                                            historyPageRequest++
-                                        }
-                                    }
-                                )
-
-                                if (medicationLinkError != null) {
-                                    androidx.compose.material3.AlertDialog(
-                                        onDismissRequest = {
-                                            medicationLinkError = null
-                                        },
-                                        title = {
-                                            Text("Medication unavailable")
-                                        },
-                                        text = {
-                                            Text(medicationLinkError.orEmpty())
-                                        },
-                                        confirmButton = {
-                                            TextButton(
-                                                onClick = {
-                                                    medicationLinkError = null
-                                                }
-                                            ) {
-                                                Text("OK")
+                                        AppScreen.RefillRequestTracking -> {
+                                            val patientId = auth.currentUser?.uid.orEmpty()
+                                            var trackingMedications by remember {
+                                                mutableStateOf<List<Medication>>(emptyList())
                                             }
+                                            LaunchedEffect(patientId, connectionAvailable) {
+                                                if (patientId.isNotBlank()) {
+                                                    FirebaseFirestore.getInstance()
+                                                        .collection("users")
+                                                        .document(patientId)
+                                                        .collection("medications")
+                                                        .get(readSource())
+                                                        .addOnSuccessListener { result ->
+                                                            trackingMedications = result.documents.mapNotNull { document ->
+                                                                Medication.fromFirestore(
+                                                                    document.id,
+                                                                    document.data.orEmpty() + ("patientId" to patientId)
+                                                                )
+                                                            }
+                                                        }
+                                                }
+                                            }
+
+                                            LaunchedEffect(patientId, connectionAvailable) {
+                                                if (patientId.isNotBlank()) {
+                                                    loadRefillRequests(patientId)
+                                                }
+                                            }
+
+                                            RefillRequestTrackingScreen(
+                                                requests = refillRequests,
+                                                medicationNames = trackingMedications.associate {
+                                                    it.id to it.name
+                                                },
+                                                isLoading = refillLoading,
+                                                error = refillError,
+                                                onRefresh = {
+                                                    loadRefillRequests(patientId)
+                                                },
+                                                onBack = { appScreen = AppScreen.MedicationRefills }
+                                            )
                                         }
-                                    )
-                                }
-                            }
-                            AppScreen.AddMedication -> {
-                                AddEditMedicationScreen(
-                                    medication = selectedMedication,
-                                    isSaving = isSavingMedication,
-                                    saveError = medicationSaveError,
-                                    onSave = { medication ->
-                                        if (!connectionAvailable) {
-                                            medicationSaveError = OFFLINE_ACTION_MESSAGE
-                                            return@AddEditMedicationScreen
+                                        AppScreen.Notifications -> {
+                                            NotificationsScreen(onBack = { appScreen = AppScreen.Home })
                                         }
-                                        val user = auth.currentUser
+                                        AppScreen.Home -> {
+                                            DashboardScreen(
+                                                fullName = fullName,
+                                                unreadNotificationCount = unreadNotificationCount,
+                                                summary = DashboardSummary(
+                                                    medication = "Review today's medication schedule",
+                                                    appointment = "View upcoming appointments",
+                                                    healthConcern = "Review active health concerns",
+                                                    careTask = "Check open care tasks"
+                                                ),
+                                                onOpen = { destination ->
+                                                    appScreen = when (destination) {
+                                                        "medications" -> AppScreen.Medications
+                                                        "appointments" -> AppScreen.Appointments
+                                                        "health-concerns" -> AppScreen.HealthConcerns
+                                                        "care-tasks" -> AppScreen.CareTasks
+                                                        "notifications" -> AppScreen.Notifications
+                                                        else -> AppScreen.Home
+                                                    }
+                                                },
+                                                onNavigate = ::openTopLevel
+                                            )
+                                        }
+                                        AppScreen.HealthConcerns -> {
+                                            val actorId = auth.currentUser?.uid
 
-                                        if (user != null) {
-                                            isSavingMedication = true
-                                            medicationSaveError = null
+                                            if (actorId != null) {
+                                                var caregiverMode by rememberSaveable(actorId) {
+                                                    mutableStateOf(selectedCareRecipient != null)
+                                                }
 
-                                            val medicationData =
-                                                hashMapOf(
-                                                    "id" to medication.id,
-                                                    "patientId" to user.uid,
-                                                    "name" to medication.name,
-                                                    "strength" to medication.strength,
-                                                    "dose" to medication.dose,
-                                                    "frequency" to medication.frequency,
-                                                    "reminderTimes" to medication.reminderTimes,
-                                                    "instructions" to medication.instructions,
-                                                    "active" to medication.active,
-                                                    "updatedById" to user.uid,
-                                                    "updatedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
-                                                )
-
-                                            firestore
-                                                .collection("users")
-                                                .document(user.uid)
-                                                .collection("medications")
-                                                .document(medication.id)
-                                                .set(medicationData)
-                                                .addOnSuccessListener {
-                                                    val saved = medication.copy(patientId = user.uid, updatedById = user.uid)
-                                                    val remindersScheduled = selectedMedication?.let {
-                                                        medicationReminderScheduler.replace(it, saved)
-                                                    } ?: medicationReminderScheduler.schedule(saved)
-                                                    if (
-                                                        !remindersScheduled &&
-                                                        Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-                                                        !NotificationPermissionManager.canPostNotifications(this@MainActivity) &&
-                                                        !notificationPreferences.getBoolean("explanationShown", false)
+                                                if (caregiverMode) {
+                                                    CareRecipientSelector(
+                                                        actorId = actorId,
+                                                        selectedPatientId = selectedCareRecipient,
+                                                        onSelect = {
+                                                            selectedCareRecipient = it
+                                                        },
+                                                        directory = recipientDirectory,
+                                                        medicationData = caregiverMedicationData,
+                                                        onBack = {
+                                                            caregiverMode = false
+                                                        },
+                                                        content = { patientId ->
+                                                            com.example.carelink.screens.CaregiverHealthConcernsRoute(
+                                                                patientId = patientId,
+                                                                actorId = actorId,
+                                                                repository = healthConcernRepository,
+                                                                accessData = caregiverMedicationData,
+                                                                onBack = {
+                                                                    caregiverMode = false
+                                                                }
+                                                            )
+                                                        }
+                                                    )
+                                                } else {
+                                                    Column(
+                                                        modifier = Modifier
+                                                            .fillMaxSize()
+                                                            .safeDrawingPadding()
                                                     ) {
-                                                        notificationPreferences.edit().putBoolean("explanationShown", true).apply()
-                                                        medicationPermissionExplanation = saved
-                                                    }
+                                                        TextButton(
+                                                            onClick = {
+                                                                caregiverMode = true
+                                                            }
+                                                        ) {
+                                                            Text("Care recipient health concerns")
+                                                        }
 
-                                                    isSavingMedication = false
-                                                    selectedMedication = null
-                                                    medicationSuccessMessage = if (remindersScheduled) "Medication saved successfully."
-                                                        else "Medication saved. Enable CareLink notifications in Android Settings to receive reminders."
-                                                    appScreen = AppScreen.Medications
-                                                }
-                                                .addOnFailureListener {
-                                                    isSavingMedication = false
-                                                    medicationSaveError = "We couldn't save the medication."
-                                                }
-                                        }
-                                    },
-                                    onCancel = {
-                                        medicationSaveError = null
-
-                                        appScreen =
-                                            if (
-                                                selectedMedication != null
-                                            ) {
-                                                AppScreen.MedicationDetails
-                                            } else {
-                                                AppScreen.Medications
-                                            }
-                                    },
-                                    onDelete = { medication ->
-                                        if (!connectionAvailable) {
-                                            medicationSaveError = OFFLINE_ACTION_MESSAGE
-                                            return@AddEditMedicationScreen
-                                        }
-                                        val user = auth.currentUser
-
-                                        if (user != null) {
-                                            firestore
-                                                .collection("users")
-                                                .document(user.uid)
-                                                .collection("medications")
-                                                .document(medication.id)
-                                                .delete()
-                                                .addOnSuccessListener {
-                                                    medicationReminderScheduler.cancel(medication)
-                                                    selectedMedication = null
-                                                    medicationSaveError = null
-                                                    medicationSuccessMessage = "Medication removed successfully."
-                                                    appScreen = AppScreen.Medications
-                                                }
-                                                .addOnFailureListener {
-                                                    medicationSaveError = "We couldn't remove the medication. Please try again."
-                                                }
-                                        }
-                                    }
-                                )
-                            }
-                            AppScreen.MedicationScheduler -> {
-                                MedicationScheduleScreen(
-                                    onBack = { appScreen = AppScreen.Medications },
-                                    onNavigate = ::openTopLevel,
-                                    onEditMedication = {
-                                        selectedMedication = it
-                                        medicationSaveError = null
-                                        appScreen = AppScreen.AddMedication
-                                    },
-                                    onAddMedication = {
-                                        selectedMedication = null
-                                        medicationSaveError = null
-                                        appScreen = AppScreen.AddMedication
-                                    }
-                                )
-                            }
-                            AppScreen.Appointments -> {
-                                val actorId = auth.currentUser?.uid
-
-                                if (actorId != null) {
-                                    var caregiverMode by rememberSaveable(actorId) {
-                                        mutableStateOf(selectedCareRecipient != null)
-                                    }
-
-                                    if (caregiverMode) {
-                                        CareRecipientSelector(
-                                            actorId = actorId,
-                                            selectedPatientId = selectedCareRecipient,
-                                            onSelect = {
-                                                selectedCareRecipient = it
-                                            },
-                                            directory = recipientDirectory,
-                                            medicationData = caregiverMedicationData,
-                                            onBack = {
-                                                caregiverMode = false
-                                            },
-                                            content = { patientId ->
-                                                com.example.carelink.screens.CaregiverAppointmentsRoute(
-                                                    patientId = patientId,
-                                                    actorId = actorId,
-                                                    repository = healthConcernRepository,
-                                                    accessData = caregiverMedicationData,
-                                                    onBack = {
-                                                        caregiverMode = false
-                                                    },
-                                                    onNavigate = { destination ->
-                                                        if (destination != BottomNavDestination.Appointments) {
-                                                            openTopLevel(destination)
+                                                        androidx.compose.foundation.layout.Box(
+                                                            modifier = Modifier.weight(1f)
+                                                        ) {
+                                                            HealthConcernsFlow(
+                                                                patientId = actorId,
+                                                                repository = healthConcernRepository,
+                                                                onBack = {
+                                                                    appScreen = AppScreen.Home
+                                                                }
+                                                            )
                                                         }
                                                     }
-                                                )
-                                            }
-                                        )
-                                    } else {
-                                        Column(
-                                            modifier = Modifier
-                                                .fillMaxSize()
-                                                .safeDrawingPadding()
-                                        ) {
-                                            TextButton(
-                                                onClick = {
-                                                    caregiverMode = true
                                                 }
-                                            ) {
-                                                Text("Care recipient appointments")
-                                            }
-
-                                            androidx.compose.foundation.layout.Box(
-                                                modifier = Modifier.weight(1f)
-                                            ) {
-                                                AppointmentsScreen(
-                                                    appointments = appointments,
-                                                    isLoading = appointmentsLoading,
-                                                    errorMessage = appointmentLoadError,
-                                                    successMessage = appointmentSuccessMessage,
-                                                    onAddAppointment = {
-                                                        selectedAppointment = null
-                                                        appointmentSaveError = null
-                                                        appointmentSuccessMessage = null
-                                                        appScreen = AppScreen.AddAppointment
-                                                    },
-                                                    onAppointmentSelected = { appointment ->
-                                                        selectedAppointment = appointment
-                                                        appointmentSaveError = null
-                                                        appointmentSuccessMessage = null
-                                                        appScreen = AppScreen.AppointmentDetails
-                                                    },
-                                                    onEditAppointment = { appointment ->
-                                                        selectedAppointment = appointment
-                                                        appointmentSaveError = null
-                                                        appointmentSuccessMessage = null
-                                                        appScreen = AppScreen.AddAppointment
-                                                    },
-                                                    onRetry = {
-                                                        loadAppointments()
-                                                    },
-                                                    onNavigate = ::openTopLevel,
-                                                    canManage = true
-                                                )
                                             }
                                         }
-                                    }
-                                }
-                            }
-                            AppScreen.AppointmentDetails -> {
-                                AppointmentDetailsScreen(
-                                    appointment = selectedAppointment,
-                                    successMessage = appointmentSuccessMessage,
-                                    onEdit = {
-                                        appointmentSaveError = null
-                                        appScreen = AppScreen.AddAppointment
-                                    },
-                                    onGenerateFollowUp = { appScreen = AppScreen.FollowUpTask },
-                                    onCancelAppointment = { appointment ->
-                                        if (!connectionAvailable) {
-                                            appointmentSuccessMessage = OFFLINE_ACTION_MESSAGE
-                                            return@AppointmentDetailsScreen
-                                        }
-                                        val user = auth.currentUser
-
-                                        if (user != null) {
-                                            appointmentRepository.cancelAppointment(
-                                                userId = user.uid,
-                                                appointment = appointment,
-                                                onSuccess = {
-                                                    val cancelledAppointment = appointment.copy(
-                                                        status = AppointmentStatus.CANCELLED
-                                                    )
-
-                                                    appointmentReminderScheduler.cancel(
-                                                        cancelledAppointment
-                                                    )
-
-                                                    selectedAppointment = cancelledAppointment
-
-                                                    appointmentSuccessMessage = "Appointment cancelled successfully."
-
-                                                    loadAppointments()
+                                        AppScreen.Medications -> {
+                                            MedicationsScreen(
+                                                onCaregiverMedications = {
+                                                    appScreen = AppScreen.CaregiverMedications },
+                                                onOpenCareHistory = {
+                                                    appScreen = AppScreen.CareHistory
                                                 },
-                                                onError = {
-                                                    appointmentSuccessMessage = "Sorry, we couldn't cancel the appointment. Please try again later."
-                                                }
-                                            )
-                                        }
-                                    },
-                                    onBack = {
-                                        selectedAppointment = null
-                                        appointmentSuccessMessage = null
-                                        appScreen = AppScreen.Appointments
-                                    }
-                                )
-                            }
-                            AppScreen.AddAppointment -> {
-                                AddEditAppointmentScreen(
-                                    appointment = selectedAppointment,
-                                    isSaving = isSavingAppointment,
-                                    saveError = appointmentSaveError,
-                                    onSave = { appointment ->
-                                        if (!connectionAvailable) {
-                                            appointmentSaveError = OFFLINE_ACTION_MESSAGE
-                                            return@AddEditAppointmentScreen
-                                        }
-                                        val user = auth.currentUser
-
-                                        if (user != null) {
-                                            isSavingAppointment = true
-                                            appointmentSaveError = null
-
-                                            appointmentRepository.saveAppointment(
-                                                userId = user.uid,
-                                                appointment = appointment,
-                                                onSuccess = {
-                                                    appointmentReminderScheduler.schedule(appointment)
-
-                                                    isSavingAppointment = false
-                                                    selectedAppointment = null
-                                                    appointmentSaveError = null
-
-                                                    appointmentSuccessMessage = "Appointment saved successfully."
-
-                                                    loadAppointments()
-
-                                                    appScreen = AppScreen.Appointments
+                                                onOpenRefills = {
+                                                    appScreen = AppScreen.MedicationRefills
                                                 },
-                                                onError = {
-                                                    isSavingAppointment = false
-                                                    appointmentSaveError = "Could not save appointment. Please try again."
+                                                onAddMedication = {
+                                                    selectedMedication = null
+                                                    medicationSuccessMessage = null
+                                                    doseMessage = null
+                                                    doseError = null
+                                                    appScreen = AppScreen.AddMedication
+                                                },
+                                                onMedicationSelected = {
+                                                        medication ->
+                                                    selectedMedication = medication
+                                                    medicationOpenedFromHistory = false
+                                                    medicationSuccessMessage = null
+                                                    appScreen = AppScreen.MedicationDetails
+                                                },
+                                                onMedicationScheduler = {
+                                                    appScreen = AppScreen.MedicationScheduler
+                                                },
+                                                successMessage = medicationSuccessMessage,
+                                                onNavigate = ::openTopLevel
+                                            )
+                                        }
+                                        AppScreen.MedicationDetails -> {
+                                            MedicationDetailsScreen(
+                                                medication = selectedMedication,
+                                                errorMessage = medicationSaveError,
+                                                isSavingDose = isSavingDose,
+                                                doseMessage = doseMessage,
+                                                doseError = doseError,
+                                                onRecordDose = { medication, scheduledTime, status ->
+                                                    doseMessage = null
+                                                    if (!connectionAvailable) {
+                                                        doseError = OFFLINE_ACTION_MESSAGE
+                                                        return@MedicationDetailsScreen
+                                                    }
+                                                    val user = auth.currentUser
+
+                                                    if (user == null) {
+                                                        doseMessage = null
+                                                        doseError = "Sign in to record a dose."
+                                                    } else if (!isSavingDose) {
+                                                        isSavingDose = true
+                                                        doseMessage = null
+                                                        doseError = null
+
+                                                        doseHistoryStore.record(
+                                                            patientId = user.uid,
+                                                            medication = medication,
+                                                            scheduledTimeMillis = scheduledTime,
+                                                            status = status,
+                                                            onComplete = { result ->
+                                                                isSavingDose = false
+
+                                                                result.fold(
+                                                                    onSuccess = {
+                                                                        val statusLabel = status.name.lowercase()
+                                                                        doseMessage = "Dose recorded as $statusLabel."
+                                                                        doseError = null
+                                                                    },
+                                                                    onFailure = {
+                                                                        doseMessage = null
+                                                                        doseError =
+                                                                            "We couldn't record the dose. Please try again."
+                                                                    }
+                                                                )
+                                                            }
+                                                        )
+                                                    }
+                                                },
+                                                onEdit = { medication ->
+                                                    selectedMedication = medication
+                                                    medicationSaveError = null
+                                                    appScreen = AppScreen.AddMedication
+                                                },
+                                                onRemove = { medication ->
+                                                    if (!connectionAvailable) {
+                                                        medicationSaveError = OFFLINE_ACTION_MESSAGE
+                                                        return@MedicationDetailsScreen
+                                                    }
+                                                    val user = auth.currentUser
+
+                                                    if (user != null) {
+                                                        firestore
+                                                            .collection("users")
+                                                            .document(user.uid)
+                                                            .collection("medications")
+                                                            .document(medication.id)
+                                                            .delete()
+                                                            .addOnSuccessListener {
+                                                                medicationReminderScheduler.cancel(medication)
+                                                                selectedMedication = null
+                                                                medicationSaveError = null
+                                                                medicationSuccessMessage = "Medication removed successfully."
+                                                                appScreen = AppScreen.Medications
+                                                            }
+                                                            .addOnFailureListener {
+                                                                medicationSaveError = "We couldn't remove the medication. Please try again."
+                                                            }
+                                                    }
+                                                },
+                                                onBack = {
+                                                    selectedMedication = null
+                                                    medicationSuccessMessage = null
+
+                                                    appScreen = if (medicationOpenedFromHistory) {
+                                                        AppScreen.CareHistory
+                                                    } else {
+                                                        AppScreen.Medications
+                                                    }
+
+                                                    medicationOpenedFromHistory = false
+                                                },
+                                                onNavigate = ::openTopLevel
+                                            )
+                                        }
+                                        AppScreen.CareHistory -> {
+                                            val patientId = auth.currentUser?.uid.orEmpty()
+
+                                            var openingMedicationId by remember(patientId) {
+                                                mutableStateOf<String?>(null)
+                                            }
+                                            var medicationLinkError by remember(patientId) {
+                                                mutableStateOf<String?>(null)
+                                            }
+                                            var historyRetry by remember(patientId) {
+                                                mutableIntStateOf(0)
+                                            }
+
+                                            val historyPager = remember(patientId, historyRetry) {
+                                                if (patientId.isNotBlank()) {
+                                                    com.example.carelink.data.CareHistoryPager(
+                                                        firestore = firestore,
+                                                        patientId = patientId
+                                                    )
+                                                } else {
+                                                    null
                                                 }
-                                            )
-                                        } else {
-                                            appointmentSaveError =
-                                                "You must be signed in to save an appointment."
-                                        }
-                                    },
-                                    onCancel = {
-                                        appointmentSaveError = null
-
-                                        appScreen =
-                                            if (selectedAppointment != null) {
-                                                AppScreen.AppointmentDetails
-                                            } else {
-                                                AppScreen.Appointments
                                             }
-                                    }
-                                )
-                            }
-                            AppScreen.CareTasks,
-                            AppScreen.FollowUpTask -> {
-                                val patientId = auth.currentUser?.uid
-                                if (patientId != null) {
-                                    CareTasksFlow(
-                                        patientId = patientId,
-                                        repository = careTaskRepository,
-                                        sourceAppointment = if (appScreen == AppScreen.FollowUpTask) selectedAppointment else null,
-                                        onCancelFollowUp = { appScreen = AppScreen.AppointmentDetails },
-                                        onNavigate = ::openTopLevel
-                                    )
-                                }
-                            }
-                            AppScreen.Profile -> {
-                                ProfileScreen(
-                                    fullName = fullName,
-                                    email = auth.currentUser
-                                        ?.email
-                                        .orEmpty(),
-                                    onEditProfile = {
-                                        appScreen =
-                                            AppScreen.EditProfile
-                                    },
-                                    onOpenSettings = {
-                                        appScreen =
-                                            AppScreen.Settings
-                                    },
-                                    onNavigate = ::openTopLevel
-                                )
-                            }
-                            AppScreen.EditProfile -> {
-                                CreateProfileScreen(
-                                    isSaving = isSubmitting,
-                                    saveError = submitError,
-                                    initialProfile =
-                                        PatientProfileDetails(
-                                            firstName = firstName,
-                                            lastName = lastName,
-                                            preferredName = preferredName,
-                                            dateOfBirth = dateOfBirth,
-                                            phoneNumber = phoneNumber,
-                                            addressLine1 = addressLine1,
-                                            addressLine2 = addressLine2,
-                                            city = city,
-                                            state = state,
-                                            zipCode = zipCode
-                                        ),
-                                    onSaveProfile = { profile ->
-                                        if (!connectionAvailable) {
-                                            submitError = OFFLINE_ACTION_MESSAGE
-                                            return@CreateProfileScreen
-                                        }
-                                        val user =
-                                            auth.currentUser
-                                                ?: return@CreateProfileScreen
 
-                                        val displayName = listOf(
-                                            profile.firstName,
-                                            profile.lastName
-                                        )
-                                            .filter { it.isNotBlank() }
-                                            .joinToString(" ")
-
-                                        isSubmitting = true
-                                        submitError = null
-                                        firestore
-                                            .collection("users")
-                                            .document(user.uid)
-                                            .update(
-                                                mapOf(
-                                                    "fullName" to displayName,
-                                                    "firstName" to profile.firstName,
-                                                    "lastName" to profile.lastName,
-                                                    "preferredName" to profile.preferredName,
-                                                    "dateOfBirth" to profile.dateOfBirth,
-                                                    "phoneNumber" to profile.phoneNumber,
-                                                    "addressLine1" to profile.addressLine1,
-                                                    "addressLine2" to profile.addressLine2,
-                                                    "city" to profile.city,
-                                                    "state" to profile.state,
-                                                    "zipCode" to profile.zipCode
-                                                )
-                                            )
-                                            .addOnSuccessListener {
-                                                isSubmitting = false
-                                                fullName = displayName
-                                                firstName = profile.firstName
-                                                lastName = profile.lastName
-                                                preferredName = profile.preferredName
-                                                dateOfBirth = profile.dateOfBirth
-                                                phoneNumber = profile.phoneNumber
-                                                addressLine1 = profile.addressLine1
-                                                addressLine2 = profile.addressLine2
-                                                city = profile.city
-                                                state = profile.state
-                                                zipCode = profile.zipCode
-
-                                                appScreen = AppScreen.Profile
+                                            var historyEntries by remember(historyPager) {
+                                                mutableStateOf<List<CareHistoryEntry>>(emptyList())
                                             }
-                                            .addOnFailureListener {
-                                                isSubmitting = false
-                                                submitError = "We couldn't update your profile."
+                                            var historyLoading by remember(historyPager) {
+                                                mutableStateOf(true)
                                             }
-                                    },
-                                    onCancel = {
-                                        appScreen = AppScreen.Profile
-                                    }
-                                )
-                            }
-                            AppScreen.Settings -> {
-                                SettingsScreen(
-                                    onCaregiverAccess = { appScreen = AppScreen.MedicationCaregiverAccess },
-                                    onBack = {
-                                        appScreen = AppScreen.Profile
-                                    },
-                                    onOpenLogout = {
-                                        appScreen = AppScreen.Logout
-                                    }
-                                )
-                            }
-                            AppScreen.CaregiverMedications -> CaregiverMedicationsScreen(
-                                actorId = auth.currentUser!!.uid, onBack = { appScreen = AppScreen.Medications })
-                            AppScreen.MedicationCaregiverAccess -> MedicationCaregiverAccessScreen(
-                                patientId = auth.currentUser!!.uid, patientName = fullName,
-                                onBack = { appScreen = AppScreen.Settings })
-                            AppScreen.Logout -> {
-                                LogoutScreen(
-                                    onBack = {
-                                        appScreen = AppScreen.Settings
-                                    },
-                                    onLogout = {
-                                        medicationReminderScheduler.clear()
-                                        auth.signOut()
-                                        appScreen = AppScreen.Home
-                                        screen = AuthScreen.SignIn
-                                        isAuthenticated = false
-                                    }
-                                )
-                            }
-                        }
-                    }
+                                            var historyError by remember(historyPager) {
+                                                mutableStateOf<String?>(null)
+                                            }
+                                            var historyHasMore by remember(historyPager) {
+                                                mutableStateOf(false)
+                                            }
+                                            var historyLoadingMore by remember(historyPager) {
+                                                mutableStateOf(false)
+                                            }
+                                            var historyMoreError by remember(historyPager) {
+                                                mutableStateOf<String?>(null)
+                                            }
+                                            var historyPageRequest by remember(historyPager) {
+                                                mutableIntStateOf(0)
+                                            }
 
-                    else -> {
-                        when (screen) {
-
-                            AuthScreen.SignIn -> {
-                                LoginScreen(
-                                    isSubmitting = isSubmitting,
-                                    submitError = submitError,
-                                    onSignIn = { details ->
-                                        if (!connectionAvailable) {
-                                            submitError = "Connect to the internet to sign in."
-                                            return@LoginScreen
-                                        }
-                                        isSubmitting = true
-                                        submitError = null
-
-                                        auth
-                                            .signInWithEmailAndPassword(
-                                                details.email,
-                                                details.password
-                                            )
-                                            .addOnSuccessListener {
-                                                isSubmitting = false
-                                                hasProfile = null
-                                                isAuthenticated = true
-                                            }
-                                            .addOnFailureListener {
-                                                isSubmitting = false
-                                                submitError = "We couldn't sign you in. Check your email and password."
-                                            }
-                                    },
-                                    onForgotPassword = {
-                                        navigate(
-                                            AuthScreen.ResetPassword
-                                        )
-                                    },
-                                    onCreateAccount = {
-                                        navigate(
-                                            AuthScreen.CreateAccount
-                                        )
-                                    }
-                                )
-                            }
-                            AuthScreen.CreateAccount -> {
-                                CreateAccountScreen(
-                                    isSubmitting = isSubmitting,
-                                    submitError = submitError,
-                                    accountCreated = requestSucceeded,
-                                    onCreateAccount = { details ->
-                                        if (!connectionAvailable) {
-                                            submitError = "Connect to the internet to create an account."
-                                            return@CreateAccountScreen
-                                        }
-                                        isSubmitting = true
-                                        submitError = null
-
-                                        auth
-                                            .createUserWithEmailAndPassword(
-                                                details.email,
-                                                details.password
-                                            )
-                                            .addOnSuccessListener {
-                                                isSubmitting = false
-                                                requestSucceeded = true
-                                                isAuthenticated = true
-                                            }
-                                            .addOnFailureListener {
-                                                    exception ->
-                                                isSubmitting = false
-                                                submitError =
-                                                    exception
-                                                        .localizedMessage
-                                                        ?: "Unable to create account."
-                                            }
-                                    },
-                                    onSignIn = {
-                                        navigate(AuthScreen.SignIn)
-                                    }
-                                )
-                            }
-                            AuthScreen.ResetPassword -> {
-                                PasswordResetEmailScreen(
-                                    isSubmitting = isSubmitting,
-                                    submitError = submitError,
-                                    emailSent = requestSucceeded,
-                                    onSendResetEmail = { email ->
-                                        if (!connectionAvailable) {
-                                            submitError = "Connect to the internet to reset your password."
-                                            return@PasswordResetEmailScreen
-                                        }
-                                        isSubmitting = true
-                                        submitError = null
-
-                                        auth
-                                            .sendPasswordResetEmail(email)
-                                            .addOnSuccessListener {
-                                                isSubmitting = false
-                                                requestSucceeded = true
-                                            }
-                                            .addOnFailureListener {
-                                                    exception ->
-                                                isSubmitting = false
+                                            DisposableEffect(historyPager, historyPageRequest) {
+                                                var active = true
+                                                val firstPage = historyEntries.isEmpty()
 
                                                 if (
-                                                    exception is
-                                                            FirebaseAuthInvalidUserException
+                                                    historyPager == null ||
+                                                    auth.currentUser?.uid != patientId
                                                 ) {
-                                                    requestSucceeded = true
+                                                    historyEntries = emptyList()
+                                                    historyLoading = false
+                                                    historyLoadingMore = false
+                                                    historyHasMore = false
+                                                    historyError = "Sign in to view your care history."
                                                 } else {
-                                                    submitError = "We couldn't send the reset link. Check your connection and try again."
+                                                    historyLoading = firstPage
+                                                    historyLoadingMore = !firstPage
+                                                    historyError = null
+                                                    historyMoreError = null
+
+                                                    historyPager.loadNext { result ->
+                                                        if (active && auth.currentUser?.uid == patientId) {
+                                                            historyLoading = false
+                                                            historyLoadingMore = false
+
+                                                            result.onSuccess { page ->
+                                                                historyEntries = CareHistoryEntry.newestFirst(
+                                                                    (historyEntries + page.entries)
+                                                                        .distinctBy { it.id }
+                                                                )
+
+                                                                historyHasMore = page.hasMore
+                                                            }.onFailure { exception ->
+                                                                android.util.Log.e(
+                                                                    "CareHistoryPaging",
+                                                                    "Failed to load care history",
+                                                                    exception
+                                                                )
+
+                                                                if (firstPage) {
+                                                                    historyError =
+                                                                        "We couldn't load your care history. Please try again."
+                                                                } else {
+                                                                    historyMoreError =
+                                                                        "We couldn't load older history. Your loaded events are still available."
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+
+                                                onDispose {
+                                                    active = false
                                                 }
                                             }
-                                    },
-                                    onBackToSignIn = {
-                                        navigate(AuthScreen.SignIn)
+
+                                            DisposableEffect(patientId, openingMedicationId) {
+                                                val medicationId = openingMedicationId
+                                                var active = true
+
+                                                if (medicationId != null) {
+                                                    if (
+                                                        patientId.isBlank() ||
+                                                        auth.currentUser?.uid != patientId
+                                                    ) {
+                                                        medicationLinkError =
+                                                            "Sign in to open this medication."
+
+                                                        openingMedicationId = null
+                                                    } else {
+                                                        firestore.collection("users")
+                                                            .document(patientId)
+                                                            .collection("medications")
+                                                            .document(medicationId)
+                                                            .get(com.google.firebase.firestore.Source.SERVER)
+                                                            .addOnSuccessListener { document ->
+                                                                if (active && auth.currentUser?.uid == patientId) {
+                                                                    val medication = Medication.fromFirestore(
+                                                                        document.id,
+                                                                        document.data.orEmpty()
+                                                                    )
+
+                                                                    openingMedicationId = null
+
+                                                                    if (
+                                                                        medication == null ||
+                                                                        medication.patientId != patientId
+                                                                    ) {
+                                                                        medicationLinkError =
+                                                                            "This medication is no longer available."
+                                                                    } else {
+                                                                        selectedMedication = medication
+                                                                        medicationSaveError = null
+                                                                        medicationSuccessMessage = null
+                                                                        doseMessage = null
+                                                                        doseError = null
+                                                                        medicationOpenedFromHistory = true
+                                                                        appScreen = AppScreen.MedicationDetails
+                                                                    }
+                                                                }
+                                                            }
+                                                            .addOnFailureListener {
+                                                                if (active && auth.currentUser?.uid == patientId) {
+                                                                    openingMedicationId = null
+
+                                                                    medicationLinkError =
+                                                                        "We couldn't open this medication. Check your connection and try again."
+                                                                }
+                                                            }
+                                                    }
+                                                }
+
+                                                onDispose {
+                                                    active = false
+                                                }
+                                            }
+
+                                            CareHistoryScreen(
+                                                entries = historyEntries,
+                                                isLoading = historyLoading,
+                                                loadError = historyError,
+                                                onRetry = {
+                                                    historyRetry++
+                                                },
+                                                onBack = {
+                                                    appScreen = AppScreen.Medications
+                                                },
+                                                onOpenMedication = { entry ->
+                                                    val medicationId = entry.relatedRecordId
+
+                                                    if (
+                                                        entry.patientId == patientId &&
+                                                        entry.type ==
+                                                        com.example.carelink.model.CareActivityType.MEDICATION &&
+                                                        !medicationId.isNullOrBlank() &&
+                                                        '/' !in medicationId &&
+                                                        medicationId != "." &&
+                                                        medicationId != ".." &&
+                                                        openingMedicationId == null
+                                                    ) {
+                                                        medicationLinkError = null
+                                                        openingMedicationId = medicationId
+                                                    }
+                                                },
+                                                onOpenCaregiverAccess = { entry ->
+                                                    if (
+                                                        entry.patientId == patientId &&
+                                                        auth.currentUser?.uid == patientId &&
+                                                        entry.type ==
+                                                        com.example.carelink.model.CareActivityType.CAREGIVER_ACCESS &&
+                                                        !entry.relatedRecordId.isNullOrBlank()
+                                                    ) {
+                                                        appScreen = AppScreen.MedicationCaregiverAccess
+                                                    }
+                                                },
+                                                hasMore = historyHasMore,
+                                                isLoadingMore = historyLoadingMore,
+                                                loadMoreError = historyMoreError,
+                                                onLoadMore = {
+                                                    if (
+                                                        !historyLoading &&
+                                                        !historyLoadingMore &&
+                                                        historyHasMore
+                                                    ) {
+                                                        historyPageRequest++
+                                                    }
+                                                }
+                                            )
+
+                                            if (medicationLinkError != null) {
+                                                androidx.compose.material3.AlertDialog(
+                                                    onDismissRequest = {
+                                                        medicationLinkError = null
+                                                    },
+                                                    title = {
+                                                        Text("Medication unavailable")
+                                                    },
+                                                    text = {
+                                                        CareErrorState(message = medicationLinkError.orEmpty())
+                                                    },
+                                                    confirmButton = {
+                                                        TextButton(
+                                                            onClick = {
+                                                                medicationLinkError = null
+                                                            }
+                                                        ) {
+                                                            Text("OK")
+                                                        }
+                                                    }
+                                                )
+                                            }
+                                        }
+                                        AppScreen.AddMedication -> {
+                                            AddEditMedicationScreen(
+                                                medication = selectedMedication,
+                                                isSaving = isSavingMedication,
+                                                saveError = medicationSaveError,
+                                                onSave = { medication ->
+                                                    if (!connectionAvailable) {
+                                                        medicationSaveError = OFFLINE_ACTION_MESSAGE
+                                                        return@AddEditMedicationScreen
+                                                    }
+                                                    val user = auth.currentUser
+
+                                                    if (user != null) {
+                                                        isSavingMedication = true
+                                                        medicationSaveError = null
+
+                                                        val medicationData =
+                                                            hashMapOf(
+                                                                "id" to medication.id,
+                                                                "patientId" to user.uid,
+                                                                "name" to medication.name,
+                                                                "strength" to medication.strength,
+                                                                "dose" to medication.dose,
+                                                                "frequency" to medication.frequency,
+                                                                "reminderTimes" to medication.reminderTimes,
+                                                                "instructions" to medication.instructions,
+                                                                "active" to medication.active,
+                                                                "updatedById" to user.uid,
+                                                                "updatedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
+                                                            )
+
+                                                        firestore
+                                                            .collection("users")
+                                                            .document(user.uid)
+                                                            .collection("medications")
+                                                            .document(medication.id)
+                                                            .set(medicationData)
+                                                            .addOnSuccessListener {
+                                                                val saved = medication.copy(patientId = user.uid, updatedById = user.uid)
+                                                                val remindersScheduled = selectedMedication?.let {
+                                                                    medicationReminderScheduler.replace(it, saved)
+                                                                } ?: medicationReminderScheduler.schedule(saved)
+                                                                if (
+                                                                    !remindersScheduled &&
+                                                                    Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                                                                    !NotificationPermissionManager.canPostNotifications(this@MainActivity) &&
+                                                                    !notificationPreferences.getBoolean("explanationShown", false)
+                                                                ) {
+                                                                    notificationPreferences.edit().putBoolean("explanationShown", true).apply()
+                                                                    medicationPermissionExplanation = saved
+                                                                }
+
+                                                                isSavingMedication = false
+                                                                selectedMedication = null
+                                                                medicationSuccessMessage = if (remindersScheduled) "Medication saved successfully."
+                                                                else "Medication saved. Enable CareLink notifications in Android Settings to receive reminders."
+                                                                appScreen = AppScreen.Medications
+                                                            }
+                                                            .addOnFailureListener {
+                                                                isSavingMedication = false
+                                                                medicationSaveError = "We couldn't save the medication."
+                                                            }
+                                                    }
+                                                },
+                                                onCancel = {
+                                                    medicationSaveError = null
+
+                                                    appScreen =
+                                                        if (
+                                                            selectedMedication != null
+                                                        ) {
+                                                            AppScreen.MedicationDetails
+                                                        } else {
+                                                            AppScreen.Medications
+                                                        }
+                                                },
+                                                onDelete = { medication ->
+                                                    if (!connectionAvailable) {
+                                                        medicationSaveError = OFFLINE_ACTION_MESSAGE
+                                                        return@AddEditMedicationScreen
+                                                    }
+                                                    val user = auth.currentUser
+
+                                                    if (user != null) {
+                                                        firestore
+                                                            .collection("users")
+                                                            .document(user.uid)
+                                                            .collection("medications")
+                                                            .document(medication.id)
+                                                            .delete()
+                                                            .addOnSuccessListener {
+                                                                medicationReminderScheduler.cancel(medication)
+                                                                selectedMedication = null
+                                                                medicationSaveError = null
+                                                                medicationSuccessMessage = "Medication removed successfully."
+                                                                appScreen = AppScreen.Medications
+                                                            }
+                                                            .addOnFailureListener {
+                                                                medicationSaveError = "We couldn't remove the medication. Please try again."
+                                                            }
+                                                    }
+                                                }
+                                            )
+                                        }
+                                        AppScreen.MedicationScheduler -> {
+                                            MedicationScheduleScreen(
+                                                onBack = { appScreen = AppScreen.Medications },
+                                                onNavigate = ::openTopLevel,
+                                                onEditMedication = {
+                                                    selectedMedication = it
+                                                    medicationSaveError = null
+                                                    appScreen = AppScreen.AddMedication
+                                                },
+                                                onAddMedication = {
+                                                    selectedMedication = null
+                                                    medicationSaveError = null
+                                                    appScreen = AppScreen.AddMedication
+                                                }
+                                            )
+                                        }
+                                        AppScreen.Appointments -> {
+                                            val actorId = auth.currentUser?.uid
+
+                                            if (actorId != null) {
+                                                var caregiverMode by rememberSaveable(actorId) {
+                                                    mutableStateOf(selectedCareRecipient != null)
+                                                }
+
+                                                if (caregiverMode) {
+                                                    CareRecipientSelector(
+                                                        actorId = actorId,
+                                                        selectedPatientId = selectedCareRecipient,
+                                                        onSelect = {
+                                                            selectedCareRecipient = it
+                                                        },
+                                                        directory = recipientDirectory,
+                                                        medicationData = caregiverMedicationData,
+                                                        onBack = {
+                                                            caregiverMode = false
+                                                        },
+                                                        content = { patientId ->
+                                                            com.example.carelink.screens.CaregiverAppointmentsRoute(
+                                                                patientId = patientId,
+                                                                actorId = actorId,
+                                                                repository = healthConcernRepository,
+                                                                accessData = caregiverMedicationData,
+                                                                onBack = {
+                                                                    caregiverMode = false
+                                                                },
+                                                                onNavigate = { destination ->
+                                                                    if (destination != BottomNavDestination.Appointments) {
+                                                                        openTopLevel(destination)
+                                                                    }
+                                                                }
+                                                            )
+                                                        }
+                                                    )
+                                                } else {
+                                                    Column(
+                                                        modifier = Modifier
+                                                            .fillMaxSize()
+                                                            .safeDrawingPadding()
+                                                    ) {
+                                                        TextButton(
+                                                            onClick = {
+                                                                caregiverMode = true
+                                                            }
+                                                        ) {
+                                                            Text("Care recipient appointments")
+                                                        }
+
+                                                        androidx.compose.foundation.layout.Box(
+                                                            modifier = Modifier.weight(1f)
+                                                        ) {
+                                                            AppointmentsScreen(
+                                                                appointments = appointments,
+                                                                isLoading = appointmentsLoading,
+                                                                errorMessage = appointmentLoadError,
+                                                                successMessage = appointmentSuccessMessage,
+                                                                onAddAppointment = {
+                                                                    selectedAppointment = null
+                                                                    appointmentSaveError = null
+                                                                    appointmentSuccessMessage = null
+                                                                    appScreen = AppScreen.AddAppointment
+                                                                },
+                                                                onAppointmentSelected = { appointment ->
+                                                                    selectedAppointment = appointment
+                                                                    appointmentSaveError = null
+                                                                    appointmentSuccessMessage = null
+                                                                    appScreen = AppScreen.AppointmentDetails
+                                                                },
+                                                                onEditAppointment = { appointment ->
+                                                                    selectedAppointment = appointment
+                                                                    appointmentSaveError = null
+                                                                    appointmentSuccessMessage = null
+                                                                    appScreen = AppScreen.AddAppointment
+                                                                },
+                                                                onRetry = {
+                                                                    loadAppointments()
+                                                                },
+                                                                onNavigate = ::openTopLevel,
+                                                                canManage = true
+                                                            )
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        AppScreen.AppointmentDetails -> {
+                                            AppointmentDetailsScreen(
+                                                appointment = selectedAppointment,
+                                                successMessage = appointmentSuccessMessage,
+                                                onEdit = {
+                                                    appointmentSaveError = null
+                                                    appScreen = AppScreen.AddAppointment
+                                                },
+                                                onGenerateFollowUp = { appScreen = AppScreen.FollowUpTask },
+                                                onCancelAppointment = { appointment ->
+                                                    if (!connectionAvailable) {
+                                                        appointmentSuccessMessage = OFFLINE_ACTION_MESSAGE
+                                                        return@AppointmentDetailsScreen
+                                                    }
+                                                    val user = auth.currentUser
+
+                                                    if (user != null) {
+                                                        appointmentRepository.cancelAppointment(
+                                                            userId = user.uid,
+                                                            appointment = appointment,
+                                                            onSuccess = {
+                                                                val cancelledAppointment = appointment.copy(
+                                                                    status = AppointmentStatus.CANCELLED
+                                                                )
+
+                                                                appointmentReminderScheduler.cancel(
+                                                                    cancelledAppointment
+                                                                )
+
+                                                                selectedAppointment = cancelledAppointment
+
+                                                                appointmentSuccessMessage = "Appointment cancelled successfully."
+
+                                                                loadAppointments()
+                                                            },
+                                                            onError = {
+                                                                appointmentSuccessMessage = "Sorry, we couldn't cancel the appointment. Please try again later."
+                                                            }
+                                                        )
+                                                    }
+                                                },
+                                                onBack = {
+                                                    selectedAppointment = null
+                                                    appointmentSuccessMessage = null
+                                                    appScreen = AppScreen.Appointments
+                                                }
+                                            )
+                                        }
+                                        AppScreen.AddAppointment -> {
+                                            AddEditAppointmentScreen(
+                                                appointment = selectedAppointment,
+                                                isSaving = isSavingAppointment,
+                                                saveError = appointmentSaveError,
+                                                onSave = { appointment ->
+                                                    if (!connectionAvailable) {
+                                                        appointmentSaveError = OFFLINE_ACTION_MESSAGE
+                                                        return@AddEditAppointmentScreen
+                                                    }
+                                                    val user = auth.currentUser
+
+                                                    if (user != null) {
+                                                        isSavingAppointment = true
+                                                        appointmentSaveError = null
+
+                                                        appointmentRepository.saveAppointment(
+                                                            userId = user.uid,
+                                                            appointment = appointment,
+                                                            onSuccess = {
+                                                                appointmentReminderScheduler.schedule(appointment)
+
+                                                                isSavingAppointment = false
+                                                                selectedAppointment = null
+                                                                appointmentSaveError = null
+
+                                                                appointmentSuccessMessage = "Appointment saved successfully."
+
+                                                                loadAppointments()
+
+                                                                appScreen = AppScreen.Appointments
+                                                            },
+                                                            onError = {
+                                                                isSavingAppointment = false
+                                                                appointmentSaveError = "Could not save appointment. Please try again."
+                                                            }
+                                                        )
+                                                    } else {
+                                                        appointmentSaveError =
+                                                            "You must be signed in to save an appointment."
+                                                    }
+                                                },
+                                                onCancel = {
+                                                    appointmentSaveError = null
+
+                                                    appScreen =
+                                                        if (selectedAppointment != null) {
+                                                            AppScreen.AppointmentDetails
+                                                        } else {
+                                                            AppScreen.Appointments
+                                                        }
+                                                }
+                                            )
+                                        }
+                                        AppScreen.CareTasks,
+                                        AppScreen.FollowUpTask -> {
+                                            val patientId = auth.currentUser?.uid
+                                            if (patientId != null) {
+                                                CareTasksFlow(
+                                                    patientId = patientId,
+                                                    repository = careTaskRepository,
+                                                    sourceAppointment = if (appScreen == AppScreen.FollowUpTask) selectedAppointment else null,
+                                                    onCancelFollowUp = { appScreen = AppScreen.AppointmentDetails },
+                                                    onNavigate = ::openTopLevel
+                                                )
+                                            }
+                                        }
+                                        AppScreen.Profile -> {
+                                            ProfileScreen(
+                                                fullName = fullName,
+                                                email = auth.currentUser
+                                                    ?.email
+                                                    .orEmpty(),
+                                                onEditProfile = {
+                                                    appScreen =
+                                                        AppScreen.EditProfile
+                                                },
+                                                onOpenSettings = {
+                                                    appScreen =
+                                                        AppScreen.Settings
+                                                },
+                                                onNavigate = ::openTopLevel
+                                            )
+                                        }
+                                        AppScreen.EditProfile -> {
+                                            CreateProfileScreen(
+                                                isSaving = isSubmitting,
+                                                saveError = submitError,
+                                                initialProfile =
+                                                    PatientProfileDetails(
+                                                        firstName = firstName,
+                                                        lastName = lastName,
+                                                        preferredName = preferredName,
+                                                        dateOfBirth = dateOfBirth,
+                                                        phoneNumber = phoneNumber,
+                                                        addressLine1 = addressLine1,
+                                                        addressLine2 = addressLine2,
+                                                        city = city,
+                                                        state = state,
+                                                        zipCode = zipCode
+                                                    ),
+                                                onSaveProfile = { profile ->
+                                                    if (!connectionAvailable) {
+                                                        submitError = OFFLINE_ACTION_MESSAGE
+                                                        return@CreateProfileScreen
+                                                    }
+                                                    val user =
+                                                        auth.currentUser
+                                                            ?: return@CreateProfileScreen
+
+                                                    val displayName = listOf(
+                                                        profile.firstName,
+                                                        profile.lastName
+                                                    )
+                                                        .filter { it.isNotBlank() }
+                                                        .joinToString(" ")
+
+                                                    isSubmitting = true
+                                                    submitError = null
+                                                    firestore
+                                                        .collection("users")
+                                                        .document(user.uid)
+                                                        .update(
+                                                            mapOf(
+                                                                "fullName" to displayName,
+                                                                "firstName" to profile.firstName,
+                                                                "lastName" to profile.lastName,
+                                                                "preferredName" to profile.preferredName,
+                                                                "dateOfBirth" to profile.dateOfBirth,
+                                                                "phoneNumber" to profile.phoneNumber,
+                                                                "addressLine1" to profile.addressLine1,
+                                                                "addressLine2" to profile.addressLine2,
+                                                                "city" to profile.city,
+                                                                "state" to profile.state,
+                                                                "zipCode" to profile.zipCode
+                                                            )
+                                                        )
+                                                        .addOnSuccessListener {
+                                                            isSubmitting = false
+                                                            fullName = displayName
+                                                            firstName = profile.firstName
+                                                            lastName = profile.lastName
+                                                            preferredName = profile.preferredName
+                                                            dateOfBirth = profile.dateOfBirth
+                                                            phoneNumber = profile.phoneNumber
+                                                            addressLine1 = profile.addressLine1
+                                                            addressLine2 = profile.addressLine2
+                                                            city = profile.city
+                                                            state = profile.state
+                                                            zipCode = profile.zipCode
+
+                                                            appScreen = AppScreen.Profile
+                                                        }
+                                                        .addOnFailureListener {
+                                                            isSubmitting = false
+                                                            submitError = "We couldn't update your profile."
+                                                        }
+                                                },
+                                                onCancel = {
+                                                    appScreen = AppScreen.Profile
+                                                }
+                                            )
+                                        }
+                                        AppScreen.Settings -> {
+                                            SettingsScreen(
+                                                onCaregiverAccess = { appScreen = AppScreen.MedicationCaregiverAccess },
+                                                onBack = {
+                                                    appScreen = AppScreen.Profile
+                                                },
+                                                onOpenLogout = {
+                                                    appScreen = AppScreen.Logout
+                                                }
+                                            )
+                                        }
+                                        AppScreen.CaregiverMedications -> CaregiverMedicationsScreen(
+                                            actorId = auth.currentUser!!.uid, onBack = { appScreen = AppScreen.Medications })
+                                        AppScreen.MedicationCaregiverAccess -> MedicationCaregiverAccessScreen(
+                                            patientId = auth.currentUser!!.uid, patientName = fullName,
+                                            onBack = { appScreen = AppScreen.Settings })
+                                        AppScreen.Logout -> {
+                                            LogoutScreen(
+                                                onBack = {
+                                                    appScreen = AppScreen.Settings
+                                                },
+                                                onLogout = {
+                                                    medicationReminderScheduler.clear()
+                                                    auth.signOut()
+                                                    appScreen = AppScreen.Home
+                                                    screen = AuthScreen.SignIn
+                                                    isAuthenticated = false
+                                                }
+                                            )
+                                        }
                                     }
-                                )
+                                }
+
+                                else -> {
+                                    when (screen) {
+                                        AuthScreen.SignIn -> {
+                                            LoginScreen(
+                                                isSubmitting = isSubmitting,
+                                                submitError = submitError,
+                                                onSignIn = { details ->
+                                                    if (!connectionAvailable) {
+                                                        submitError = "Connect to the internet to sign in."
+                                                        return@LoginScreen
+                                                    }
+                                                    isSubmitting = true
+                                                    submitError = null
+
+                                                    auth
+                                                        .signInWithEmailAndPassword(
+                                                            details.email,
+                                                            details.password
+                                                        )
+                                                        .addOnSuccessListener {
+                                                            isSubmitting = false
+                                                            hasProfile = null
+                                                            isAuthenticated = true
+                                                        }
+                                                        .addOnFailureListener {
+                                                            isSubmitting = false
+                                                            submitError = "We couldn't sign you in. Check your email and password."
+                                                        }
+                                                },
+                                                onForgotPassword = {
+                                                    navigate(
+                                                        AuthScreen.ResetPassword
+                                                    )
+                                                },
+                                                onCreateAccount = {
+                                                    navigate(
+                                                        AuthScreen.CreateAccount
+                                                    )
+                                                }
+                                            )
+                                        }
+                                        AuthScreen.CreateAccount -> {
+                                            CreateAccountScreen(
+                                                isSubmitting = isSubmitting,
+                                                submitError = submitError,
+                                                accountCreated = requestSucceeded,
+                                                onCreateAccount = { details ->
+                                                    if (!connectionAvailable) {
+                                                        submitError = "Connect to the internet to create an account."
+                                                        return@CreateAccountScreen
+                                                    }
+                                                    isSubmitting = true
+                                                    submitError = null
+
+                                                    auth
+                                                        .createUserWithEmailAndPassword(
+                                                            details.email,
+                                                            details.password
+                                                        )
+                                                        .addOnSuccessListener {
+                                                            isSubmitting = false
+                                                            requestSucceeded = true
+                                                            isAuthenticated = true
+                                                        }
+                                                        .addOnFailureListener {
+                                                            isSubmitting = false
+                                                            submitError =
+                                                                "We couldn't create your account. Check your details and connection, then try again."
+                                                        }
+                                                },
+                                                onSignIn = {
+                                                    navigate(AuthScreen.SignIn)
+                                                }
+                                            )
+                                        }
+                                        AuthScreen.ResetPassword -> {
+                                            PasswordResetEmailScreen(
+                                                isSubmitting = isSubmitting,
+                                                submitError = submitError,
+                                                emailSent = requestSucceeded,
+                                                onSendResetEmail = { email ->
+                                                    if (!connectionAvailable) {
+                                                        submitError = "Connect to the internet to reset your password."
+                                                        return@PasswordResetEmailScreen
+                                                    }
+                                                    isSubmitting = true
+                                                    submitError = null
+
+                                                    auth
+                                                        .sendPasswordResetEmail(email)
+                                                        .addOnSuccessListener {
+                                                            isSubmitting = false
+                                                            requestSucceeded = true
+                                                        }
+                                                        .addOnFailureListener {
+                                                                exception ->
+                                                            isSubmitting = false
+
+                                                            if (
+                                                                exception is
+                                                                        FirebaseAuthInvalidUserException
+                                                            ) {
+                                                                requestSucceeded = true
+                                                            } else {
+                                                                submitError = "We couldn't send the reset link. Check your connection and try again."
+                                                            }
+                                                        }
+                                                },
+                                                onBackToSignIn = {
+                                                    navigate(AuthScreen.SignIn)
+                                                }
+                                            )
+                                        }
+
+                                    }
+                                }
+
                             }
+
 
                         }
                     }
-
-                }
-
-                    }
-                }
                 }
 
                 if (medicationPermissionExplanation != null) {
@@ -1683,6 +1690,8 @@ class MainActivity : ComponentActivity() {
                         }
                     )
                 }
+
+
 
             }
         }

@@ -62,7 +62,9 @@ fun MedicationDetailsScreen(
 
 ) {
     var showRemoveDialog by remember(medication?.id) { mutableStateOf(false) }
-    BackHandler { if (showRemoveDialog) showRemoveDialog = false else onBack() }
+    BackHandler {
+        if (showRemoveDialog) showRemoveDialog = false else onBack()
+    }
     var selectedReminder by remember(medication?.id) { mutableStateOf(medication?.reminderTimes?.firstOrNull().orEmpty()) }
 
     Scaffold(
@@ -98,8 +100,12 @@ fun MedicationDetailsScreen(
 
             Spacer(modifier = Modifier.height(32.dp))
 
-            if (errorMessage != null) { Text(errorMessage, color = MaterialTheme.colorScheme.error) }
-            if (doseError != null) { Text(doseError, color = MaterialTheme.colorScheme.error) }
+            errorMessage?.let { message ->
+                CareErrorState(message = message)
+            }
+            doseError?.let { message ->
+                CareErrorState(message = message)
+            }
             if (doseMessage != null && doseError == null) { Text(doseMessage, color = MaterialTheme.colorScheme.primary) }
 
             when {

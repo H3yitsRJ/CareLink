@@ -146,8 +146,10 @@ fun CareHistoryScreen(
             when {
                 isLoading -> item { CircularProgressIndicator(); Text("Loading care history...") }
                 loadError != null -> item {
-                    Text(loadError, color = MaterialTheme.colorScheme.error)
-                    Button(onClick = onRetry) { Text("Retry") }
+                    CareErrorState(
+                        message = loadError,
+                        onRetry = onRetry
+                    )
                 }
                 visible.isEmpty() -> item {
                     Text(
@@ -179,10 +181,7 @@ fun CareHistoryScreen(
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         loadMoreError?.let { message ->
-                            Text(
-                                text = message,
-                                color = MaterialTheme.colorScheme.error
-                            )
+                            CareErrorState(message = message)
                         }
 
                         when {

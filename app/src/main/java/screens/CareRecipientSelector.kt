@@ -31,7 +31,9 @@ fun CareRecipientSelector(
         val currentSelected by rememberUpdatedState(selectedPatientId)
         val selectCallback by rememberUpdatedState(onSelect)
 
-        BackHandler { if (choosing) choosing = false else onBack() }
+        BackHandler {
+            if (choosing) choosing = false else onBack()
+        }
 
         DisposableEffect(actorId, directory, retry) {
             var active = true
@@ -51,16 +53,33 @@ fun CareRecipientSelector(
                 }
             }
             onDispose { active = false; stop() }
+
         }
 
         val selected = recipients.find { it.patientId == selectedPatientId }
 
         if (!loading && error == null && selected != null && !choosing) {
-            Column(Modifier.fillMaxSize()) {
-                Row(Modifier.statusBarsPadding().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Current care recipient: ${selected.name}", Modifier.weight(1f))
-                    TextButton(onClick = { choosing = true }) { Text("Change recipient") }
+            Column(
+                Modifier.fillMaxSize()
+            ) {
+                Row(
+                    Modifier
+                        .statusBarsPadding()
+                        .padding(horizontal = 16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        "Current care recipient: ${selected.name}",
+                        Modifier.weight(1f)
+                    )
+                    TextButton(
+                        onClick = { choosing = true }
+                    ) {
+                        Text("Change recipient")
+                    }
+
                 }
+
                 Box(Modifier.weight(1f)) {
                     key(actorId, selected.patientId) {
                         if (content != null) {
@@ -75,6 +94,7 @@ fun CareRecipientSelector(
                         }
                     }
                 }
+
             }
 
         } else {
@@ -83,25 +103,33 @@ fun CareRecipientSelector(
                     .safeDrawingPadding()
                     .verticalScroll(rememberScrollState())
                     .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text("Choose a care recipient", style = MaterialTheme.typography.headlineMedium)
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text(
+                    "Choose a care recipient",
+                    style = MaterialTheme.typography.headlineMedium
+                )
 
                 when {
                     loading -> Text("Loading care recipients...")
                     error != null -> {
-                        Text(error!!)
-                        Button(
-                            onClick = {
+                        CareErrorState(
+                            message = error!!,
+                            onRetry = {
                                 error = null
                                 retry++
                             }
-                        ) {
-                            Text("Retry")
-                        }
+                        )
                     }
                     recipients.isEmpty() -> Text("You don't have access to any care recipients yet.")
+
                     else -> recipients.forEach { recipient ->
-                        OutlinedButton(onClick = { onSelect(recipient.patientId); choosing = false }, modifier = Modifier.fillMaxWidth()) {
+                        OutlinedButton(
+                            onClick = {
+                                onSelect(recipient.patientId);
+                                choosing = false },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
                             Column {
                                 Text(recipient.name)
                                 Text("CareLink ID: ${recipient.patientId}")
@@ -110,8 +138,18 @@ fun CareRecipientSelector(
                         }
                     }
                 }
-                OutlinedButton(onClick = { if (choosing && selected != null) choosing = false else onBack() }) { Text("Back") }
+
+                OutlinedButton(
+                    onClick = {
+                        if (choosing && selected != null) choosing = false else onBack()
+                    }
+                ) {
+                    Text("Back")
+                }
+
             }
+
         }
+
     }
 }

@@ -324,23 +324,11 @@ private fun AppointmentErrorState(
     message: String,
     onRetry: () -> Unit
 ) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(top = 40.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        Text(
-            text = message,
-            color = MaterialTheme.colorScheme.error,
-            style = MaterialTheme.typography.bodyLarge
-        )
-
-        OutlinedButton(onClick = onRetry) {
-            Text("Try again")
-        }
-    }
+    CareErrorState(
+        message = message,
+        modifier = Modifier.padding(top = 40.dp),
+        onRetry = onRetry
+    )
 }
 
 private fun AppointmentStatus.displayName(): String {
