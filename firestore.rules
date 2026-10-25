@@ -72,13 +72,57 @@ service cloud.firestore {
           && validAccessEvent(getAfter(/databases/$(database)/documents/users/$(userId)/careHistory/$(request.resource.data.historyEventId)).data, userId, caregiverId);
       }
 
-      match /careHistory/{eventId} {
-        allow read: if isOwner(userId);
-        allow create: if isOwner(userId) && validAccessEvent(request.resource.data, userId, request.resource.data.caregiverId)
-          && getAfter(/databases/$(database)/documents/users/$(userId)/medicationCaregivers/$(request.resource.data.caregiverId)).data.historyEventId == eventId
-          && (!exists(/databases/$(database)/documents/users/$(userId)/medicationCaregivers/$(request.resource.data.caregiverId))
-            || get(/databases/$(database)/documents/users/$(userId)/medicationCaregivers/$(request.resource.data.caregiverId)).data.get('historyEventId', '') != eventId);
-      }
+
+match /careHistory/{eventId} {
+  allow read: if isOwner(userId);
+
+  // Medication history events
+  allow create: if isOwner(userId)
+    && request.resource.data.keys().hasAll([
+      'patientId',
+      'actorId',
+      'occurredAtMillis',
+      'type',
+      'summary',
+      'relatedRecordId'
+    ])
+    && request.resource.data.keys().hasOnly([
+      'patientId',
+      'actorId',
+      'occurredAtMillis',
+      'type',
+      'summary',
+      'relatedRecordId'
+    ])
+    && request.resource.data.type == "MEDICATION"
+    && request.resource.data.patientId == userId
+    && request.resource.data.actorId == request.auth.uid
+    && request.resource.data.occurredAtMillis is int
+    && request.resource.data.summary is string
+    && request.resource.data.summary.size() > 0
+    && request.resource.data.relatedRecordId is string
+    && request.resource.data.relatedRecordId.size() > 0;
+
+  // Existing caregiver access history events
+  allow create: if isOwner(userId)
+    && validAccessEvent(
+      request.resource.data,
+      userId,
+      request.resource.data.caregiverId
+    )
+    && getAfter(
+      /databases/$(database)/documents/users/$(userId)/medicationCaregivers/$(request.resource.data.caregiverId)
+    ).data.historyEventId == eventId
+    && (
+      !exists(
+        /databases/$(database)/documents/users/$(userId)/medicationCaregivers/$(request.resource.data.caregiverId)
+      )
+      || get(
+        /databases/$(database)/documents/users/$(userId)/medicationCaregivers/$(request.resource.data.caregiverId)
+      ).data.get('historyEventId', '') != eventId
+    );
+}
+
 
       match /doseRecords/{doseId} {
         allow read, delete: if isOwner(userId);
