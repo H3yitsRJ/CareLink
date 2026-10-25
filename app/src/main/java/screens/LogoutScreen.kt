@@ -16,11 +16,14 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 
 @Composable
-fun LogoutScreen(onBack: () -> Unit, onLogout: () -> Unit) {
+fun LogoutScreen(onBack: () -> Unit, onLogout: () -> Unit, errorMessage: String? = null) {
     Column(
         Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)
             .padding(horizontal = 16.dp, vertical = 24.dp),
@@ -31,6 +34,13 @@ fun LogoutScreen(onBack: () -> Unit, onLogout: () -> Unit) {
         }
         Text("Log out", style = MaterialTheme.typography.headlineLarge)
         Text("Are you sure you want to log out?", style = MaterialTheme.typography.bodyLarge)
+        errorMessage?.let { message ->
+            Text(
+                message,
+                color = MaterialTheme.colorScheme.error,
+                modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }
+            )
+        }
         Button(onClick = onLogout, modifier = Modifier.fillMaxWidth().sizeIn(minHeight = 56.dp)) {
             Text("Log out")
         }

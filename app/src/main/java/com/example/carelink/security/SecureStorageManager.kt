@@ -19,10 +19,11 @@ class SecureStorageManager(
             "AES/GCM/NoPadding"
     }
 
-    private val keyStore: KeyStore =
+    private val keyStore: KeyStore by lazy {
         KeyStore.getInstance(ANDROID_KEYSTORE).apply {
             load(null)
         }
+    }
 
     private fun getOrCreateSecretKey(): SecretKey {
         val existingKey = keyStore.getKey(
@@ -111,97 +112,60 @@ class SecureStorageManager(
         )
     }
 
-    fun save(key: String, value: String): Boolean {
+    /** Null after success or an ordinary missing-key lookup; otherwise safe to display to users. */
+    var lastError: String? = null
+        private set
+
+    private fun <T> attempt(message: String, fallback: T, action: () -> T): T {
+        lastError = null
         return try {
-            require(key.isNotBlank()) {
-                "Storage key cannot be blank"
-            }
-
-            val encryptedValue = encrypt(value)
-
-            securePreferences.edit()
-                .putString(key, encryptedValue)
-                .commit()
-        } catch (e: Exception) {
-            android.util.Log.e(
-                "SecureStorageManager",
-                "Failed to save encrypted value",
-                e
-            )
-            false
+            action()
+        } catch (_: Exception) {
+            lastError = message
+            // Do not log keys, values, ciphertext, or exception details containing user data.
+            android.util.Log.e("SecureStorageManager", message)
+            fallback
         }
     }
 
-    fun get(key: String): String? {
-        return try {
-            require(key.isNotBlank()) {
-                "Storage key cannot be blank"
-            }
-
-            val encryptedValue =
-                securePreferences.getString(key, null)
-                    ?: return null
-
-            decrypt(encryptedValue)
-        } catch (e: Exception) {
-            android.util.Log.e(
-                "SecureStorageManager",
-                "Failed to retrieve encrypted value",
-                e
-            )
-            null
-        }
+    private fun validKey(key: String) {
+        require(key.isNotBlank()) { "Storage key cannot be blank" }
     }
 
-
-    fun delete(key: String): Boolean {
-        return try {
-            require(key.isNotBlank()) {
-                "Storage key cannot be blank"
-            }
-
-            securePreferences.edit()
-                .remove(key)
-                .commit()
-        } catch (e: Exception) {
-            android.util.Log.e(
-                "SecureStorageManager",
-                "Failed to delete stored value",
-                e
-            )
-            false
-        }
+    fun save(key: String, value: String): Boolean = attempt(
+        "We couldn't securely save your data on this device. Please try again.", false
+    ) {
+        validKey(key)
+        val encryptedValue = encrypt(value)
+        check(securePreferences.edit().putString(key, encryptedValue).commit())
+        true
     }
 
-    fun getAllKeys(): Set<String> {
-        return try {
-            securePreferences.all.keys.toSet()
-        } catch (e: Exception) {
-            android.util.Log.e(
-                "SecureStorageManager",
-                "Failed to retrieve secure storage keys",
-                e
-            )
-            emptySet()
-        }
+    fun get(key: String): String? = attempt(
+        "We couldn't read your saved secure data on this device. Please try again.", null
+    ) {
+        validKey(key)
+        securePreferences.getString(key, null)?.let(::decrypt)
     }
 
-
-    fun clearAll(): Boolean {
-        return try {
-            securePreferences.edit()
-                .clear()
-                .commit()
-        } catch (e: Exception) {
-            android.util.Log.e(
-                "SecureStorageManager",
-                "Failed to clear secure storage",
-                e
-            )
-            false
-        }
+    fun delete(key: String): Boolean = attempt(
+        "We couldn't remove the saved secure value from this device. Please try again.", false
+    ) {
+        validKey(key)
+        check(securePreferences.edit().remove(key).commit())
+        true
     }
 
+    fun getAllKeys(): Set<String> = attempt(
+        "We couldn't access your saved secure data on this device. Please try again.", emptySet()
+    ) {
+        securePreferences.all.keys.toSet()
+    }
 
-
+    fun clearAll(): Boolean = attempt(
+        "We couldn't remove your saved secure data from this device. Please try again.", false
+    ) {
+        check(securePreferences.edit().clear().commit())
+        true
+    }
 }
