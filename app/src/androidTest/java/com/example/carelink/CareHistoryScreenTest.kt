@@ -21,7 +21,7 @@ class CareHistoryScreenTest {
     }
     @Test fun applyAndClearUpdateVisibleHistory() {
         open()
-        compose.onNodeWithText("Caregiver access", useUnmergedTree = true).performScrollTo().performClick()
+        compose.onNode(hasText("Caregiver access") and hasClickAction()).performScrollTo().performClick()
         compose.onNodeWithText("Apply filters").performScrollTo().performClick()
         compose.onNodeWithText("Aspirin taken").assertDoesNotExist()
         compose.onNodeWithText("Caregiver access revoked").performScrollTo().assertIsDisplayed()

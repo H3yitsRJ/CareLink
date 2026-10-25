@@ -101,11 +101,14 @@ class CaregiverMedicationWorkflowTest {
         compose.onNodeWithText("Medication access is unavailable or has been revoked. Ask the patient to grant access.").assertExists()
         compose.runOnIdle { assertEquals(0, data.saves) }
     }
-    @Test fun editPermissionRemovalDisablesSave() {
+    @Test fun editPermissionRemovalClosesEditAndPreventsSave() {
         edit()
         compose.runOnIdle { data.changeAccess(data.grant.copy(permissions = setOf(CarePermission.VIEW))) }
-        compose.onNodeWithText("Save medication").performScrollTo().assertIsNotEnabled()
-        compose.onNodeWithText("Cancel").assertIsEnabled()
+        compose.onNodeWithText("Save medication").assertDoesNotExist()
+        compose.onNodeWithText("Edit medication").assertDoesNotExist()
+        compose.onNodeWithText("Your access changed to view-only. You can view medications, but you cannot edit them.").assertExists()
+        compose.onNodeWithText("Example medication").assertExists()
+        compose.runOnIdle { assertEquals(0, data.saves) }
     }
     @Test fun failedSaveKeepsFormValuesForRecovery() {
         edit()

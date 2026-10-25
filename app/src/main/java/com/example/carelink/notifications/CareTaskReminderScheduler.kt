@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import com.example.carelink.model.CareTask
+import com.example.carelink.security.SecureStorageManager
 import org.json.JSONObject
 import java.text.ParsePosition
 import java.text.SimpleDateFormat
@@ -14,10 +15,10 @@ import java.util.UUID
 
 class CareTaskReminderScheduler(context: Context) {
     private val context = context.applicationContext
+
+    private val secureStorage = SecureStorageManager(this.context)
     private val alarms =
         this.context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-    private val preferences =
-        this.context.getSharedPreferences("care_task_reminders", Context.MODE_PRIVATE)
 
     fun schedule(task: CareTask): Boolean {
         if (task.patientId.isBlank() || task.id.isBlank()) return false
@@ -41,9 +42,10 @@ class CareTaskReminderScheduler(context: Context) {
             put("revision", revision)
         }
 
-        if (!preferences.edit()
-                .putString(key(task.patientId, task.id), record.toString())
-                .commit()
+        if (!secureStorage.save(
+                key(task.patientId, task.id),
+                record.toString()
+            )
         ) {
             return false
         }
@@ -75,7 +77,7 @@ class CareTaskReminderScheduler(context: Context) {
         if (patientId.isBlank() || taskId.isBlank()) return
 
         // Remove the record first so an already-delivered alarm is rejected.
-        preferences.edit().remove(key(patientId, taskId)).commit()
+        secureStorage.delete(key(patientId, taskId))
 
         val pending = PendingIntent.getBroadcast(
             context,
@@ -96,13 +98,13 @@ class CareTaskReminderScheduler(context: Context) {
 
     internal fun stored(patientId: String, taskId: String): JSONObject? =
         runCatching {
-            val value = preferences.getString(key(patientId, taskId), null)
+            val value = secureStorage.get(key(patientId, taskId))
                 ?: return null
             JSONObject(value)
         }.getOrNull()
 
     internal fun consume(patientId: String, taskId: String) {
-        preferences.edit().remove(key(patientId, taskId)).commit()
+        secureStorage.delete(key(patientId, taskId))
     }
 
     private fun reminderIntent(patientId: String, taskId: String) =

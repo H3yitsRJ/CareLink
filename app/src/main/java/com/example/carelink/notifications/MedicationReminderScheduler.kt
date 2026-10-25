@@ -7,6 +7,7 @@ import android.content.Intent
 import android.net.Uri
 import androidx.core.app.NotificationManagerCompat
 import com.example.carelink.model.Medication
+import com.example.carelink.security.SecureStorageManager
 import org.json.JSONObject
 import java.util.UUID
 
@@ -26,6 +27,7 @@ class AndroidMedicationReminderScheduler(
 ) : MedicationReminderScheduler {
     private val preferences = context.getSharedPreferences("medication_reminders", Context.MODE_PRIVATE)
 
+    private val secureStorage = SecureStorageManager(context)
     override fun schedule(medication: Medication): Boolean {
         if (medication.patientId.isBlank() || medication.id.isBlank() || medication.validate().isNotEmpty() ||
             MedicationSchedule.days(medication.frequency) == null) return false
@@ -36,11 +38,47 @@ class AndroidMedicationReminderScheduler(
         cancel(medication)
         if (!medication.active) return true
         val revision = UUID.randomUUID().toString()
-        val stored = preferences.edit().putString(key(medication), JSONObject(medication.toFirestore()).apply {
-            put("id", medication.id); put("revision", revision)
-        }.toString()).commit()
-        if (!stored) return false
-        return scheduleTimes(medication, revision)
+        val medicationJson = JSONObject(medication.toFirestore()).apply {
+            put("id", medication.id)
+            put("revision", revision)
+        }.toString()
+
+
+        val stored = secureStorage.save(
+            key(medication),
+            medicationJson
+        )
+
+        if (!stored) {
+            android.util.Log.e(
+                "MedicationReminderScheduler",
+                "Secure storage failed while saving medication reminder"
+            )
+            return false
+        }
+
+// Remove any old plaintext copy after encryption succeeds.
+        val legacyRemoved = preferences.edit()
+            .remove(key(medication))
+            .commit()
+
+        if (!legacyRemoved) {
+            android.util.Log.e(
+                "MedicationReminderScheduler",
+                "Failed to remove legacy medication reminder data"
+            )
+            return false
+        }
+
+        val reminderScheduled = scheduleTimes(medication, revision)
+
+        android.util.Log.d(
+            "MedicationReminderScheduler",
+            "Reminder scheduling result: $reminderScheduled"
+        )
+
+        return reminderScheduled
+
     }
 
     private fun scheduleTimes(medication: Medication, revision: String): Boolean {
@@ -85,6 +123,7 @@ class AndroidMedicationReminderScheduler(
         }
         val manager = context.getSystemService(android.app.NotificationManager::class.java)
         manager.activeNotifications.filter { it.tag == key(medication) }.forEach { manager.cancel(it.tag, it.id) }
+        secureStorage.delete(key(medication))
         preferences.edit().remove(key(medication)).commit()
     }
 
@@ -93,17 +132,76 @@ class AndroidMedicationReminderScheduler(
         preferences.edit().clear().commit()
     }
 
+
     fun restore(patientId: String?) {
         all().forEach { (medication, revision) ->
-            if (patientId != medication.patientId) cancel(medication)
-            else scheduleTimes(medication, revision)
+            if (patientId != medication.patientId) {
+                cancel(medication)
+            } else {
+                val storageKey = key(medication)
+
+                // Migrate older plaintext reminders into secure storage.
+                val legacyValue = preferences.getString(storageKey, null)
+
+                if (legacyValue != null) {
+                    if (secureStorage.save(storageKey, legacyValue)) {
+                        preferences.edit().remove(storageKey).commit()
+                    }
+                }
+
+                scheduleTimes(medication, revision)
+            }
         }
     }
 
-    internal fun stored(patientId: String, medicationId: String): Pair<Medication, String>? =
-        decode(preferences.getString(key(patientId, medicationId), null))
 
-    private fun all() = preferences.all.values.mapNotNull { decode(it as? String) }
+
+    internal fun stored(
+        patientId: String,
+        medicationId: String
+    ): Pair<Medication, String>? {
+        val storageKey = key(patientId, medicationId)
+
+        val encryptedValue = secureStorage.get(storageKey)
+
+        if (encryptedValue != null) {
+            return decode(encryptedValue)
+        }
+
+        // Read existing reminders until migration is complete.
+        val legacyValue = preferences.getString(
+            storageKey,
+            null
+        ) ?: return null
+
+
+        val medication = decode(legacyValue) ?: return null
+
+        if (!secureStorage.save(storageKey, legacyValue)) {
+            return medication
+        }
+
+        preferences.edit().remove(storageKey).commit()
+
+        return medication
+
+    }
+
+
+
+    private fun all(): List<Pair<Medication, String>> {
+        val secureReminders = secureStorage.getAllKeys()
+            .mapNotNull { storageKey ->
+                decode(secureStorage.get(storageKey))
+            }
+
+        val legacyReminders = preferences.all.values
+            .mapNotNull { decode(it as? String) }
+
+        return (secureReminders + legacyReminders)
+            .distinctBy { it.first.patientId to it.first.id }
+    }
+
     private fun decode(json: String?): Pair<Medication, String>? = runCatching {
         val value = JSONObject(json ?: return null)
         val times = value.getJSONArray("reminderTimes")

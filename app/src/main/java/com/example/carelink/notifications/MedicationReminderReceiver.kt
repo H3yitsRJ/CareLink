@@ -23,6 +23,12 @@ class MedicationReminderReceiver : BroadcastReceiver() {
         context: Context,
         intent: Intent
     ) {
+
+        android.util.Log.d(
+            "MedicationReminderReceiver",
+            "Reminder received: ${intent.action}"
+        )
+
         val patientId = FirebaseAuth.getInstance().currentUser?.uid
         val scheduler = AndroidMedicationReminderScheduler(context)
         if (intent.action in setOf(Intent.ACTION_BOOT_COMPLETED, Intent.ACTION_TIME_CHANGED,

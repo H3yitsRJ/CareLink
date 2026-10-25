@@ -101,11 +101,54 @@ fun DashboardScreen(
                     Triple("Care tasks", summary.careTask, "care-tasks")
                 ).forEach { (title, body, destination) ->
                     CareCard(title) {
-                        Text(body)
-                        TextButton(onClick = { onOpen(destination) }) { Text("View $title") }
+                        val isEmpty = body.isBlank()
+
+                        if (isEmpty) {
+                            Text(
+                                text = "No ${title.lowercase()} to display yet.",
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                        } else if (
+                            (title == "Medications" ||
+                                    title == "Care tasks" ||
+                                    title == "Health concerns") &&
+                            body.contains("Attention:")
+                        ) {
+                            val parts = body.split("\n", limit = 2)
+
+                            Text(
+                                text = parts[0],
+                                style = MaterialTheme.typography.bodyLarge
+                            )
+
+                            if (parts.size > 1) {
+                                Text(
+                                    text = parts[1],
+                                    color = MaterialTheme.colorScheme.error,
+                                    style = MaterialTheme.typography.bodyLarge
+                                )
+                            }
+                        } else {
+                            Text(body)
+                        }
+
+                        TextButton(
+                            onClick = {
+                                if (isEmpty && destination == "medications") {
+                                    onOpen("add-medication")
+                                } else {
+                                    onOpen(destination)
+                                }
+                            }
+                        ) {
+                            Text(
+                                if (isEmpty) "Get started" else "View $title"
+                            )
+                        }
                     }
                 }
             }
         }
     }
 }
+
