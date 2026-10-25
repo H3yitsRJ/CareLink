@@ -1799,12 +1799,15 @@ class MainActivity : ComponentActivity() {
                                             patientId = auth.currentUser!!.uid, patientName = fullName,
                                             onBack = { appScreen = AppScreen.Settings })
                                         AppScreen.Logout -> {
+                                            var logoutError by remember { mutableStateOf<String?>(null) }
                                             LogoutScreen(
+                                                errorMessage = logoutError,
                                                 onBack = {
                                                     appScreen = AppScreen.Settings
                                                 },
 
                                                 onLogout = {
+                                                    logoutError = null
                                                     val secureStorage = SecureStorageManager(
                                                         this@MainActivity
                                                     )
@@ -1816,6 +1819,7 @@ class MainActivity : ComponentActivity() {
                                                         screen = AuthScreen.SignIn
                                                         isAuthenticated = false
                                                     } else {
+                                                        logoutError = secureStorage.lastError + " You're still signed in. Tap Log out to try again."
                                                         android.util.Log.e(
                                                             "CareLinkLogout",
                                                             "Secure storage cleanup failed; logout cancelled"
