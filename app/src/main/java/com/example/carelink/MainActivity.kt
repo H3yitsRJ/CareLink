@@ -78,7 +78,14 @@ import com.example.carelink.screens.MedicationRefillsScreen
 import com.example.carelink.screens.NotificationsScreen
 import com.example.carelink.screens.RefillRequestScreen
 import com.example.carelink.screens.RefillRequestTrackingScreen
-
+import com.example.carelink.security.SecureStorageManager
+import androidx.compose.runtime.DisposableEffect
+import com.example.carelink.data.DoseHistoryItem
+import com.example.carelink.model.CareTask
+import com.example.carelink.model.ConcernSeverity
+import com.example.carelink.model.ConcernStatus
+import com.example.carelink.model.DashboardMedicationAttention
+import com.example.carelink.model.HealthConcern
 
 private enum class AuthScreen {
     SignIn,
@@ -141,6 +148,103 @@ class MainActivity : ComponentActivity() {
                 }
 
                 val firestore = remember { FirebaseFirestore.getInstance() }
+
+                var dashboardMedications by remember {
+                    mutableStateOf<List<Medication>>(emptyList())
+                }
+
+                var dashboardMedicationsLoading by remember {
+                    mutableStateOf(true)
+                }
+
+                var dashboardMedicationsError by remember {
+                    mutableStateOf<String?>(null)
+                }
+
+                var dashboardDoseHistory by remember {
+                    mutableStateOf<List<DoseHistoryItem>>(emptyList())
+                }
+
+                var dashboardDoseHistoryLoading by remember {
+                    mutableStateOf(true)
+                }
+
+                var dashboardDoseHistoryError by remember {
+                    mutableStateOf<String?>(null)
+                }
+
+                LaunchedEffect(auth.currentUser?.uid) {
+                    val patientId = auth.currentUser?.uid
+
+                    dashboardDoseHistory = emptyList()
+                    dashboardDoseHistoryError = null
+                    dashboardDoseHistoryLoading = true
+
+                    if (patientId == null) {
+                        dashboardDoseHistoryError = "Sign in to view dose history."
+                        dashboardDoseHistoryLoading = false
+                    } else {
+                        DoseHistoryStore(firestore).load(patientId) { result ->
+                            result.onSuccess { items ->
+                                dashboardDoseHistory = items
+                                dashboardDoseHistoryError = null
+
+                                android.util.Log.d(
+                                    "CareLinkDashboard",
+                                    "Dose history loaded: ${items.size} records"
+                                )
+                            }
+
+                            result.onFailure {
+                                dashboardDoseHistoryError =
+                                    "Unable to load dose history."
+                            }
+
+                            dashboardDoseHistoryLoading = false
+                        }
+                    }
+                }
+
+                DisposableEffect(auth.currentUser?.uid) {
+                    val patientId = auth.currentUser?.uid
+
+                    dashboardMedications = emptyList()
+                    dashboardMedicationsError = null
+                    dashboardMedicationsLoading = true
+
+                    val listener = if (patientId != null) {
+                        firestore.collection("users")
+                            .document(patientId)
+                            .collection("medications")
+                            .addSnapshotListener { snapshot, exception ->
+
+                                if (exception != null) {
+                                    dashboardMedicationsError =
+                                        "Unable to load medications."
+                                    dashboardMedicationsLoading = false
+                                } else if (snapshot != null) {
+                                    dashboardMedications = snapshot.documents.mapNotNull { document ->
+                                        Medication.fromFirestore(
+                                            document.id,
+                                            document.data.orEmpty() +
+                                                    ("patientId" to patientId)
+                                        )
+                                    }.filter { it.active }
+
+                                    dashboardMedicationsError = null
+                                    dashboardMedicationsLoading = false
+                                }
+                            }
+                    } else {
+                        dashboardMedicationsError = "Sign in to view medications."
+                        dashboardMedicationsLoading = false
+                        null
+                    }
+
+                    onDispose {
+                        listener?.remove()
+                    }
+                }
 
                 val refillRequestRepository = remember {
                     RefillRequestRepository(firestore)
@@ -228,6 +332,43 @@ class MainActivity : ComponentActivity() {
                 var selectedCareRecipient by rememberSaveable(auth.currentUser?.uid) { mutableStateOf<String?>(null) }
                 val healthConcernRepository = remember(firestore) { FirestoreHealthConcernRepository(firestore) }
                 val careTaskRepository = remember(firestore) { FirestoreCareTaskRepository(firestore) }
+                var dashboardCareTasks by remember {
+                    mutableStateOf<List<CareTask>>(emptyList())
+                }
+
+                var dashboardCareTasksLoading by remember {
+                    mutableStateOf(true)
+                }
+
+                var dashboardCareTasksError by remember {
+                    mutableStateOf<String?>(null)
+                }
+                var dashboardHealthConcerns by remember {
+                    mutableStateOf<List<HealthConcern>>(emptyList())
+                }
+
+                DisposableEffect(auth.currentUser?.uid) {
+                    val patientId = auth.currentUser?.uid
+
+                    val stopListening: () -> Unit = if (patientId != null) {
+                        healthConcernRepository.watchList(patientId) { result ->
+                            result.onSuccess { concerns ->
+                                dashboardHealthConcerns = concerns
+                            }
+                            result.onFailure {
+                                dashboardHealthConcerns = emptyList()
+                            }
+                        }
+                    } else {
+                        dashboardHealthConcerns = emptyList()
+                        ({})
+                    }
+
+                    onDispose {
+                        stopListening()
+                    }
+                }
+
                 var isAuthenticated by remember { mutableStateOf(auth.currentUser != null) }
                 var screen by remember { mutableStateOf(AuthScreen.SignIn) }
                 var isSubmitting by remember { mutableStateOf(false) }
@@ -258,6 +399,32 @@ class MainActivity : ComponentActivity() {
                 var isSavingAppointment by remember { mutableStateOf(false) }
                 var appointmentSaveError by remember { mutableStateOf<String?>(null) }
                 var appointmentSuccessMessage by remember { mutableStateOf<String?>(null) }
+
+                LaunchedEffect(auth.currentUser?.uid) {
+                    val patientId = auth.currentUser?.uid
+
+                    if (patientId != null && appScreen == AppScreen.Home) {
+                        dashboardCareTasksLoading = true
+                        dashboardCareTasksError = null
+
+                        careTaskRepository.list(patientId) { result ->
+                            result.onSuccess { tasks ->
+                                dashboardCareTasks = tasks
+                                dashboardCareTasksLoading = false
+                            }
+
+                            result.onFailure { exception ->
+                                dashboardCareTasksError =
+                                    exception.message ?: "Unable to load care tasks."
+                                dashboardCareTasksLoading = false
+                            }
+                        }
+                    } else {
+                        dashboardCareTasks = emptyList()
+                        dashboardCareTasksLoading = false
+                        dashboardCareTasksError = null
+                    }
+                }
 
                 DisposableEffect(isAuthenticated, auth.currentUser?.uid) {
                     val patientId = auth.currentUser?.uid
@@ -539,18 +706,113 @@ class MainActivity : ComponentActivity() {
                                 NotificationsScreen()
                             }
                             AppScreen.Home -> {
+
+                                val overdueMedicationCount =
+                                    if (
+                                        !dashboardMedicationsLoading &&
+                                        !dashboardDoseHistoryLoading &&
+                                        dashboardMedicationsError == null &&
+                                        dashboardDoseHistoryError == null
+                                    ) {
+                                        DashboardMedicationAttention.overdueCount(
+                                            medications = dashboardMedications,
+                                            doseRecords = dashboardDoseHistory.map { it.record }
+                                        )
+                                    } else {
+                                        null
+                                    }
+                                android.util.Log.d(
+                                    "CareLinkDashboard",
+                                    "Overdue medication count: $overdueMedicationCount"
+                                )
+
+                                val highSeverityConcernCount = dashboardHealthConcerns.count { concern ->
+                                    concern.severity == ConcernSeverity.HIGH &&
+                                            concern.status == ConcernStatus.ACTIVE
+                                }
+
+                                val overdueCareTaskCount =
+                                    if (
+                                        !dashboardCareTasksLoading &&
+                                        dashboardCareTasksError == null
+                                    ) {
+                                        val now = System.currentTimeMillis()
+
+                                        dashboardCareTasks.count { task ->
+                                            val deadline = if (
+                                                task.dueDate.matches(Regex("\\d{4}-\\d{2}-\\d{2}"))
+                                            ) {
+                                                val time = task.time.ifBlank { "23:59" }
+                                                val formatter = java.text.SimpleDateFormat(
+                                                    "yyyy-MM-dd HH:mm",
+                                                    java.util.Locale.US
+                                                ).apply {
+                                                    isLenient = false
+                                                }
+
+                                                val parsed = formatter.parse(
+                                                    "${task.dueDate} $time",
+                                                    java.text.ParsePosition(0)
+                                                )
+
+                                                parsed?.time?.let {
+                                                    if (task.time.isBlank()) it + 59_999L else it
+                                                }
+                                            } else {
+                                                null
+                                            }
+
+                                            !task.completed &&
+                                                    deadline != null &&
+                                                    now > deadline
+                                        }
+                                    } else {
+                                        null
+                                    }
                                 DashboardScreen(
                                     fullName = fullName,
                                     unreadNotificationCount = unreadNotificationCount,
                                     summary = DashboardSummary(
-                                        medication = "Review today's medication schedule",
+                                        medication = when {
+                                            dashboardMedicationsLoading -> "Loading medications..."
+                                            dashboardMedicationsError != null -> dashboardMedicationsError!!
+                                            dashboardMedications.isEmpty() -> ""
+                                            else -> {
+                                                val activeCount = dashboardMedications.size
+                                                val overdueCount = overdueMedicationCount ?: 0
+
+                                                if (overdueCount > 0) {
+                                                    "$activeCount active medication(s)\n" +
+                                                            "Attention: $overdueCount dose(s) may be overdue"
+                                                } else {
+                                                    "$activeCount active medication(s)"
+                                                }
+                                            }
+                                        },
                                         appointment = "View upcoming appointments",
-                                        healthConcern = "Review active health concerns",
-                                        careTask = "Check open care tasks"
+                                        healthConcern = if (highSeverityConcernCount > 0) {
+                                            "Review active health concerns\n" +
+                                                    "Attention: $highSeverityConcernCount high-severity health concern(s)"
+                                        } else {
+                                            "Review active health concerns"
+                                        },
+                                        careTask = when {
+                                            dashboardCareTasksLoading -> "Loading care tasks..."
+
+                                            dashboardCareTasksError != null ->
+                                                dashboardCareTasksError!!
+
+                                            overdueCareTaskCount != null && overdueCareTaskCount > 0 ->
+                                                "Check open care tasks\n" +
+                                                        "Attention: $overdueCareTaskCount care task(s) overdue"
+
+                                            else -> "Check open care tasks"
+                                        }
                                     ),
                                     onOpen = { destination ->
                                         appScreen = when (destination) {
                                             "medications" -> AppScreen.Medications
+                                            "add-medication" -> AppScreen.AddMedication
                                             "appointments" -> AppScreen.Appointments
                                             "health-concerns" -> AppScreen.HealthConcerns
                                             "care-tasks" -> AppScreen.CareTasks
@@ -818,6 +1080,27 @@ class MainActivity : ComponentActivity() {
                                                 .document(medication.id)
                                                 .set(medicationData)
                                                 .addOnSuccessListener {
+                                                    val historyRef = firestore
+                                                        .collection("users")
+                                                        .document(user.uid)
+                                                        .collection("careHistory")
+                                                        .document()
+
+                                                    val historyEntry = CareHistoryEntry(
+                                                        id = historyRef.id,
+                                                        patientId = user.uid,
+                                                        occurredAtMillis = System.currentTimeMillis(),
+                                                        type = CareActivityType.MEDICATION,
+                                                        summary = if (selectedMedication == null) {
+                                                            "Medication added: ${medication.name}"
+                                                        } else {
+                                                            "Medication updated: ${medication.name}"
+                                                        },
+                                                        actorId = user.uid,
+                                                        relatedRecordId = medication.id
+                                                    )
+
+                                                    historyRef.set(historyEntry.toFirestore())
                                                     val saved = medication.copy(patientId = user.uid, updatedById = user.uid)
                                                     val remindersScheduled = selectedMedication?.let {
                                                         medicationReminderScheduler.replace(it, saved)
@@ -1135,13 +1418,26 @@ class MainActivity : ComponentActivity() {
                                     onBack = {
                                         appScreen = AppScreen.Settings
                                     },
+
                                     onLogout = {
-                                        medicationReminderScheduler.clear()
-                                        auth.signOut()
-                                        appScreen = AppScreen.Home
-                                        screen = AuthScreen.SignIn
-                                        isAuthenticated = false
+                                        val secureStorage = SecureStorageManager(
+                                            this@MainActivity
+                                        )
+
+                                        if (secureStorage.clearAll()) {
+                                            medicationReminderScheduler.clear()
+                                            auth.signOut()
+                                            appScreen = AppScreen.Home
+                                            screen = AuthScreen.SignIn
+                                            isAuthenticated = false
+                                        } else {
+                                            android.util.Log.e(
+                                                "CareLinkLogout",
+                                                "Secure storage cleanup failed; logout cancelled"
+                                            )
+                                        }
                                     }
+
                                 )
                             }
                         }
