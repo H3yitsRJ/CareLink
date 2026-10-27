@@ -1,17 +1,20 @@
 {
-  "auth": {
-    "port": 9099
-  },
   "firestore": {
-    "port": 8080,
     "rules": "firestore.rules",
     "indexes": "firestore.indexes.json"
   },
   "emulators": {
+    "auth": {
+      "port": 9099
+    },
+    "firestore": {
+      "host": "127.0.0.1",
+      "port": 8180
+    },
     "ui": {
       "enabled": true,
       "port": 4000
     },
-    "singleProjectMode": true
+    "singleProjectMode": false
   }
 }
