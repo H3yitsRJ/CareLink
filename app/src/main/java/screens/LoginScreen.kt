@@ -154,7 +154,7 @@ fun LoginScreen(
         Button(
             onClick = ::submit,
             enabled = !isSubmitting,
-            modifier = Modifier.fillMaxWidth().padding(top = 16.dp).height(56.dp),
+            modifier = Modifier.fillMaxWidth().padding(top = 16.dp).heightIn(min = 56.dp),
             shape = RoundedCornerShape(12.dp)
         ) {
             if (isSubmitting) CircularProgressIndicator(

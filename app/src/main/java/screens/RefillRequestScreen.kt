@@ -63,7 +63,7 @@ fun RefillRequestScreen(
         }
         Text("Request a refill", style = MaterialTheme.typography.headlineMedium)
         Text("Select a medication (required)")
-        if (medicationsLoading) Text("Loading medications")
+        if (medicationsLoading) LoadingState("Loading medications")
         if (medicationLoadError != null) {
             StateMessage(medicationLoadError, true)
             TextButton(onClick = onRetryMedications, enabled = !medicationsLoading) { Text("Retry") }
@@ -88,7 +88,7 @@ fun RefillRequestScreen(
         Button(onClick = {
             attempted = true
             if (valid && connected && canSave && !isSaving && !saved) onSave(request)
-        }, enabled = connected && canSave && !isSaving && !saved && !medicationsLoading && medicationLoadError == null && eligible.isNotEmpty(), modifier = Modifier.fillMaxWidth()) { Text(if (isSaving) "Submitting refill request" else "Submit refill request") }
+        }, enabled = connected && canSave && !isSaving && !saved && !medicationsLoading && medicationLoadError == null && eligible.isNotEmpty(), modifier = Modifier.fillMaxWidth()) { SaveButtonLabel(isSaving, "Submit refill request", "Submitting refill request") }
         if (saved) Column(Modifier.semantics { liveRegion = LiveRegionMode.Polite }) { StateMessage("Refill request submitted.") }
         OutlinedButton(onClick = onCancel, enabled = !isSaving, modifier = Modifier.fillMaxWidth()) { Text(if (saved) "Done" else "Cancel") }
     }

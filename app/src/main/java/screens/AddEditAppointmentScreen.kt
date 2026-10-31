@@ -4,6 +4,7 @@ import androidx.compose.material3.TextButton
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -103,7 +104,7 @@ fun AddEditAppointmentScreen(
         modifier = Modifier
             .fillMaxSize()
             .statusBarsPadding()
-            .verticalScroll(rememberScrollState())
+            .imePadding().verticalScroll(rememberScrollState())
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
@@ -148,7 +149,6 @@ fun AddEditAppointmentScreen(
                 .fillMaxWidth(),
             singleLine = true,
             enabled = !isSaving,
-            trailingIcon = { TextButton(onClick = { showDatePicker() }, enabled = !isSaving) { Text("Choose date") } },
             isError = dateError != null,
             supportingText = {
                 if (dateError != null) {
@@ -158,6 +158,10 @@ fun AddEditAppointmentScreen(
             shape = RoundedCornerShape(12.dp)
         )
 
+        TextButton(onClick = { showDatePicker() }, enabled = !isSaving) {
+            Text("Choose date")
+        }
+
         OutlinedTextField(
             value = time,
             onValueChange = { time = it },
@@ -166,7 +170,6 @@ fun AddEditAppointmentScreen(
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
             enabled = !isSaving,
-            trailingIcon = { TextButton(onClick = { showTimePicker() }, enabled = !isSaving) { Text("Choose time") } },
             isError = timeError,
             supportingText = {
                 if (timeError) {
@@ -175,6 +178,10 @@ fun AddEditAppointmentScreen(
             },
             shape = RoundedCornerShape(12.dp)
         )
+
+        TextButton(onClick = { showTimePicker() }, enabled = !isSaving) {
+            Text("Choose time")
+        }
 
         OutlinedTextField(
             value = location,
@@ -227,13 +234,7 @@ fun AddEditAppointmentScreen(
             enabled = !isSaving,
             modifier = Modifier.fillMaxWidth()
         ) {
-            Text(
-                if (isSaving) {
-                    "Saving..."
-                } else {
-                    "Save appointment"
-                }
-            )
+            SaveButtonLabel(isSaving, "Save appointment")
         }
 
         OutlinedButton(

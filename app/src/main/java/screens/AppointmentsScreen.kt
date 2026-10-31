@@ -18,7 +18,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
@@ -43,11 +42,10 @@ fun AppointmentsScreen(
     onEditAppointment: (Appointment) -> Unit = {},
     onRetry: () -> Unit = {},
     onNavigate: (BottomNavDestination) -> Unit = {},
-    canManage: Boolean = true
+    canManage: Boolean = true,
+    onBack: () -> Unit = { onNavigate(BottomNavDestination.Home) }
 ) {
-    BackHandler {
-        onNavigate(BottomNavDestination.Home)
-    }
+    BackHandler(onBack = onBack)
 
     val upcomingAppointments = appointments
         .filter { it.status == AppointmentStatus.SCHEDULED }
@@ -68,70 +66,75 @@ fun AppointmentsScreen(
             )
         }
     ) { innerPadding ->
-        Column(
+        LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
                 .background(MaterialTheme.colorScheme.background)
                 .padding(innerPadding)
-                .padding(horizontal = 16.dp)
+                .padding(horizontal = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Text(
-                text = "Appointments",
-                style = MaterialTheme.typography.headlineLarge,
-                modifier = Modifier.padding(top = 16.dp)
-            )
+            item {
+                Column(Modifier.fillMaxWidth()) {
+                    Text(
+                        text = "Appointments",
+                        style = MaterialTheme.typography.headlineLarge,
+                        modifier = Modifier.padding(top = 16.dp)
+                    )
 
-            Text(
-                text = "View and manage your upcoming visits.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 4.dp)
-            )
+                    Text(
+                        text = "View and manage your upcoming visits.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
 
-            if (canManage) {
-                Button(
-                    onClick = {
-                        if (canManage) onAddAppointment()
-                    },
-                    modifier = Modifier
-                        .align(Alignment.CenterHorizontally)
-                        .padding(vertical = 16.dp)
-                ) {
-                    Text("Add appointment")
+                    if (canManage) {
+                        Button(
+                            onClick = {
+                                if (canManage) onAddAppointment()
+                            },
+                            modifier = Modifier
+                                .align(Alignment.CenterHorizontally)
+                                .padding(vertical = 16.dp)
+                        ) {
+                            Text("Add appointment")
+                        }
+                    } else {
+                        Text(
+                            text = "View-only access.",
+                            modifier = Modifier.padding(vertical = 16.dp)
+                        )
+                    }
+
+                    if (successMessage != null) {
+                        Text(
+                            text = successMessage,
+                            color = MaterialTheme.colorScheme.tertiary,
+                            modifier = Modifier.padding(bottom = 12.dp)
+                        )
+                    }
+
                 }
-            } else {
-                Text(
-                    text = "View-only access.",
-                    modifier = Modifier.padding(vertical = 16.dp)
-                )
             }
-
-            if (successMessage != null) {
-                Text(
-                    text = successMessage,
-                    color = MaterialTheme.colorScheme.tertiary,
-                    modifier = Modifier.padding(bottom = 12.dp)
-                )
-            }
-
             when {
-                isLoading -> {
+                isLoading -> item {
                     Box(
                         modifier = Modifier.fillMaxSize(),
                         contentAlignment = Alignment.Center
                     ) {
-                        CircularProgressIndicator()
+                        LoadingState("Loading appointments")
                     }
                 }
 
-                errorMessage != null -> {
+                errorMessage != null -> item {
                     AppointmentErrorState(
                         message = errorMessage,
                         onRetry = onRetry
                     )
                 }
 
-                appointments.isEmpty() -> {
+                appointments.isEmpty() -> item {
                     AppointmentEmptyState(
                         onAddAppointment = onAddAppointment,
                         canManage = canManage
@@ -139,51 +142,46 @@ fun AppointmentsScreen(
                 }
 
                 else -> {
-                    LazyColumn(
-                        verticalArrangement = Arrangement.spacedBy(12.dp),
-                        modifier = Modifier.fillMaxSize()
-                    ) {
-                        if (upcomingAppointments.isNotEmpty()) {
-                            item {
-                                SectionHeading("Upcoming Appointments")
-                            }
-
-                            items(upcomingAppointments) { appointment ->
-                                AppointmentCard(
-                                    appointment = appointment,
-                                    showEditButton = canManage,
-                                    onSelect = {
-                                        onAppointmentSelected(appointment)
-                                    },
-                                    onEdit = {
-                                        if (canManage) onEditAppointment(appointment)
-                                    }
-                                )
-                            }
-                        }
-
-                        if (pastAppointments.isNotEmpty()) {
-                            item {
-                                SectionHeading(
-                                    title = "Past and Cancelled Appointments",
-                                    modifier = Modifier.padding(top = 12.dp)
-                                )
-                            }
-
-                            items(pastAppointments) { appointment ->
-                                AppointmentCard(
-                                    appointment = appointment,
-                                    showEditButton = false,
-                                    onSelect = {
-                                        onAppointmentSelected(appointment)
-                                    }
-                                )
-                            }
-                        }
-
+                    if (upcomingAppointments.isNotEmpty()) {
                         item {
-                            Spacer(modifier = Modifier.padding(bottom = 8.dp))
+                            SectionHeading("Upcoming Appointments")
                         }
+
+                        items(upcomingAppointments) { appointment ->
+                            AppointmentCard(
+                                appointment = appointment,
+                                showEditButton = canManage,
+                                onSelect = {
+                                    onAppointmentSelected(appointment)
+                                },
+                                onEdit = {
+                                    if (canManage) onEditAppointment(appointment)
+                                }
+                            )
+                        }
+                    }
+
+                    if (pastAppointments.isNotEmpty()) {
+                        item {
+                            SectionHeading(
+                                title = "Past and Cancelled Appointments",
+                                modifier = Modifier.padding(top = 12.dp)
+                            )
+                        }
+
+                        items(pastAppointments) { appointment ->
+                            AppointmentCard(
+                                appointment = appointment,
+                                showEditButton = false,
+                                onSelect = {
+                                    onAppointmentSelected(appointment)
+                                }
+                            )
+                        }
+                    }
+
+                    item {
+                        Spacer(modifier = Modifier.padding(bottom = 8.dp))
                     }
                 }
             }

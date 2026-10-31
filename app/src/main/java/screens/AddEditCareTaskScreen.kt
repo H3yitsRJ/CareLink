@@ -123,7 +123,7 @@ fun AddEditCareTaskScreen(
             enabled = !isSaving,
             modifier = Modifier.fillMaxWidth()
         ) {
-            Text(if (isSaving) "Saving..." else "Save care task")
+            SaveButtonLabel(isSaving, "Save care task")
         }
 
         OutlinedButton(

@@ -8,7 +8,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -17,7 +16,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
@@ -192,35 +190,17 @@ private fun MedicationDetailsContent(
 
         Spacer(modifier = Modifier.height(18.dp))
 
-        Row(
+        Column(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(24.dp)
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                MedicationBadge(medication.strength)
-                MedicationBadge(medication.dose)
-                MedicationBadge(medication.frequency)
+            MedicationBadge(medication.strength)
+            MedicationBadge(medication.dose)
+            MedicationBadge(medication.frequency)
 
-                medication.reminderTimes.forEach { reminderTime -> MedicationBadge(formatReminderTime(reminderTime)) }
+            medication.reminderTimes.forEach { reminderTime -> MedicationBadge(formatReminderTime(reminderTime)) }
 
-                MedicationBadge(if (medication.active) "Scheduled" else "Inactive" )
-            }
-
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .height(150.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = "Medication",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
+            MedicationBadge(if (medication.active) "Scheduled" else "Inactive" )
         }
 
         Spacer(modifier = Modifier.height(28.dp))
@@ -282,7 +262,7 @@ private fun MedicationDetailsContent(
                 }
 
                 if (isSavingDose) {
-                    CircularProgressIndicator()
+                    LoadingState("Recording dose")
                 }
             }
 
@@ -337,8 +317,7 @@ private fun MedicationLoadingState() {
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            CircularProgressIndicator()
-            Text("Loading medication...")
+            LoadingState("Loading medication...")
         }
     }
 }

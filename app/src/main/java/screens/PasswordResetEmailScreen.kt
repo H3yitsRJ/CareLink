@@ -1,5 +1,6 @@
 package com.example.carelink.screens
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -41,6 +42,7 @@ fun PasswordResetEmailScreen(
     onSendResetEmail: (String) -> Unit = {},
     onBackToSignIn: () -> Unit = {}
 ) {
+    BackHandler { if (!isSubmitting) onBackToSignIn() }
     // Keep the entered email if a network error occurs so the patient can retry.
     var email by rememberSaveable { mutableStateOf("") }
     var attemptedSubmit by rememberSaveable { mutableStateOf(false) }
@@ -68,6 +70,7 @@ fun PasswordResetEmailScreen(
     ) {
         TextButton(
             onClick = onBackToSignIn,
+            enabled = !isSubmitting,
             modifier = Modifier.align(Alignment.Start)
         ) {
             Text("Back to sign in")
@@ -90,7 +93,7 @@ fun PasswordResetEmailScreen(
 
                     Button(
                         onClick = onBackToSignIn,
-                        modifier = Modifier.fillMaxWidth().height(56.dp)
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)
                     ) {
                         Text("Return to sign in")
                     }
@@ -132,7 +135,7 @@ fun PasswordResetEmailScreen(
             Button(
                 onClick = ::submit,
                 enabled = !isSubmitting,
-                modifier = Modifier.fillMaxWidth().height(56.dp),
+                modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
                 shape = RoundedCornerShape(12.dp)
             ) {
                 if (isSubmitting) CircularProgressIndicator(

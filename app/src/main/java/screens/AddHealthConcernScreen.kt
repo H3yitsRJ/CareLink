@@ -82,7 +82,8 @@ fun AddHealthConcernScreen(
 
             Card(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp)
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
             ) {
                 Column(
                     modifier = Modifier.padding(16.dp),
@@ -114,17 +115,13 @@ fun AddHealthConcernScreen(
 
                     Text("Severity")
 
-                    // Equal widths keep all three choices on small screens.
-                    Row(modifier = Modifier.fillMaxWidth()) {
+                    Column(modifier = Modifier.fillMaxWidth()) {
                         ConcernSeverity.entries.forEach { severity ->
-                            val label = when (severity) {
-                                ConcernSeverity.LOW -> "Mild"
-                                ConcernSeverity.MEDIUM -> "Moderate"
-                                ConcernSeverity.HIGH -> "Severe"
-                            }
+                            val label = severity.displayLabel
 
-                            Column(
-                                modifier = Modifier.weight(1f)
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
                             ) {
                                 RadioButton(
                                     selected =
@@ -152,7 +149,8 @@ fun AddHealthConcernScreen(
 
             Card(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp)
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
             ) {
                 Column(
                     modifier = Modifier.padding(16.dp),
@@ -193,7 +191,8 @@ fun AddHealthConcernScreen(
 
             Card(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp)
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
             ) {
                 Column(
                     modifier = Modifier.padding(16.dp),
@@ -229,6 +228,7 @@ fun AddHealthConcernScreen(
                 modifier = Modifier.fillMaxWidth(),
                 enabled = !saving,
                 onClick = {
+                    if (saving) return@Button
                     attemptedSave = true
                     saveError = null
                     if (!connectionAvailable) {
@@ -282,7 +282,7 @@ fun AddHealthConcernScreen(
                     }
                 }
             ) {
-                Text(if (saving) "Saving..." else "Save Concern")
+                SaveButtonLabel(saving, "Save Concern")
             }
 
             OutlinedButton(

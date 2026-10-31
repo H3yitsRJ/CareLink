@@ -45,7 +45,7 @@ fun HealthConcernDetailsScreen(
         Text("Health concern details", style = MaterialTheme.typography.headlineLarge)
 
         when {
-            isLoading -> Text("Loading health concern...")
+            isLoading -> LoadingState("Loading health concern...")
             error != null -> {
                 CareErrorState(
                     message = error,
@@ -57,7 +57,7 @@ fun HealthConcernDetailsScreen(
             else -> {
                 Text(concern.title, style = MaterialTheme.typography.titleLarge)
                 Text("Description: ${concern.description}")
-                Text("Severity: ${concern.severity.name.lowercase().replaceFirstChar(Char::uppercase)}")
+                Text("Severity: ${concern.severity.displayLabel}")
                 Text("Date: ${concern.recordedDate}")
                 Text("Status: ${concern.status.name.lowercase().replaceFirstChar(Char::uppercase)}")
                 val linked = appointments.find { it.id == concern.appointmentId }
@@ -120,7 +120,7 @@ fun HealthConcernDetailsScreen(
                     Text("View-only access. You cannot change this health concern.")
                 }
 
-                if (isSaving) Text("Saving changes...")
+                if (isSaving) LoadingState("Saving changes...")
 
                 saveError?.let { message ->
                     CareErrorState(message = message)
@@ -141,7 +141,7 @@ fun HealthConcernDetailsScreen(
         text = {
             Column(Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState())) {
                 when {
-                    appointmentsLoading -> Text("Loading appointments...")
+                    appointmentsLoading -> LoadingState("Loading appointments...")
                     appointmentsError != null -> {
                         CareErrorState(
                             message = appointmentsError,

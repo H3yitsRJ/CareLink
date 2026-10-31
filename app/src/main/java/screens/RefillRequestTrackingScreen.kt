@@ -40,46 +40,49 @@ fun RefillRequestTrackingScreen(
         it.requestedAt
     }
 
-    Column(
+    LazyColumn(
         modifier = Modifier
             .fillMaxSize()
             .statusBarsPadding()
-            .padding(16.dp)
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        IconButton(onClick = onBack) {
-            Icon(
-                Icons.AutoMirrored.Filled.ArrowBack,
-                contentDescription = "Back"
-            )
+        item {
+            Column {
+                IconButton(onClick = onBack) {
+                    Icon(
+                        Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = "Back"
+                    )
+                }
+
+                Text(
+                    text = "Refill Request Tracking",
+                    style = MaterialTheme.typography.headlineMedium
+                )
+
+                Spacer(Modifier.height(16.dp))
+
+                Button(onClick = onRefresh, enabled = !isLoading) {
+                    Text("Refresh")
+                }
+
+                Spacer(Modifier.height(16.dp))
+
+            }
         }
-
-        Text(
-            text = "Refill Request Tracking",
-            style = MaterialTheme.typography.headlineMedium
-        )
-
-        Spacer(Modifier.height(16.dp))
-
-        Button(onClick = onRefresh) {
-            Text("Refresh")
-        }
-
-        Spacer(Modifier.height(16.dp))
-
         when {
-            isLoading -> CircularProgressIndicator()
+            isLoading -> item { LoadingState("Loading refill requests") }
 
-            error != null -> CareErrorState(
+            error != null -> item { CareErrorState(
                 message = error,
                 onRetry = onRefresh,
                 retryEnabled = !isLoading
-            )
+            ) }
 
-            sortedRequests.isEmpty() -> Text("No refill requests found.")
+            sortedRequests.isEmpty() -> item { Text("No refill requests found.") }
 
-            else -> LazyColumn(
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
+            else -> {
                 items(sortedRequests, key = { it.id }) { request ->
                     val status = request.status
                     val completed = status == RefillRequestStatus.COMPLETED ||

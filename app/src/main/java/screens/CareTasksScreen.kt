@@ -1,6 +1,7 @@
 package com.example.carelink.screens
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.horizontalScroll
@@ -31,7 +32,8 @@ fun CareTasksScreen(
     onRetry: () -> Unit = {},
     onCompletedChange: (CareTask, Boolean) -> Unit = { _, _ -> },
     onNavigate: (BottomNavDestination) -> Unit = {},
-    onTaskSelected: (CareTask) -> Unit = {}
+    onTaskSelected: (CareTask) -> Unit = {},
+    updatingTaskIds: Set<String> = emptySet()
 ) {
     var filter by rememberSaveable { mutableStateOf("All") }
     var nowMillis by remember { mutableStateOf(System.currentTimeMillis()) }
@@ -63,66 +65,68 @@ fun CareTasksScreen(
     Scaffold(
         bottomBar = { BottomNavBar(BottomNavDestination.CareTasks, onNavigate) }
     ) { innerPadding ->
-        Column(
+        LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background)
                 .padding(innerPadding)
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Text(
-                 "Care tasks",
-                 style = MaterialTheme.typography.headlineLarge
-            )
-            Button(
-                onClick = onAdd,
-                enabled = !isLoading,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text("Add care task")
-            }
-
-            Row(
-                modifier = Modifier.horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                listOf("All", "Pending", "Completed").forEach { label ->
-                    FilterChip(
-                        selected = filter == label,
-                        onClick = { filter = label },
-                        label = { Text(label) }
+            item {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(
+                         "Care tasks",
+                         style = MaterialTheme.typography.headlineLarge
                     )
+                    Button(
+                        onClick = onAdd,
+                        enabled = !isLoading,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Add care task")
+                    }
+
+                    Row(
+                        modifier = Modifier.horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        listOf("All", "Pending", "Completed").forEach { label ->
+                            FilterChip(
+                                selected = filter == label,
+                                onClick = { filter = label },
+                                label = { Text(label) }
+                            )
+                        }
+                    }
+
+                    if (error != null && tasks.isNotEmpty()) {
+                        CareErrorState(message = error)
+                    }
+
                 }
             }
-
-            if (error != null && tasks.isNotEmpty()) {
-                CareErrorState(message = error)
-            }
-
             when {
-                isLoading -> StateMessage("Loading care tasks")
+                isLoading -> item { LoadingState("Loading care tasks") }
 
-                error != null && tasks.isEmpty() -> {
+                error != null && tasks.isEmpty() -> item {
                     CareErrorState(
                         message = error,
                         onRetry = onRetry
                     )
                 }
 
-                tasks.isEmpty() -> StateMessage("No care tasks yet.")
+                tasks.isEmpty() -> item { StateMessage("No care tasks yet.") }
 
-                visibleTasks.isEmpty() -> StateMessage("No tasks match this filter.")
+                visibleTasks.isEmpty() -> item { StateMessage("No tasks match this filter.") }
 
                 // Completion changes go back to the parent so the repository remains the source of truth.
-                else -> LazyColumn(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
+                else -> {
                     items(visibleTasks, key = { it.id }) { task ->
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clickable { onTaskSelected(task) }
+                                .clickable(enabled = task.id !in updatingTaskIds) { onTaskSelected(task) }
                         ) {
                             CareCard(task.title) {
                                 Text(
@@ -165,6 +169,7 @@ fun CareTasksScreen(
                                 Row(
                                     modifier = Modifier.toggleable(
                                         value = task.completed,
+                                        enabled = task.id !in updatingTaskIds,
                                         role = Role.Checkbox,
                                         onValueChange = { onCompletedChange(task, it) }
                                     ),
@@ -173,10 +178,12 @@ fun CareTasksScreen(
                                 ) {
                                     Checkbox(
                                         checked = task.completed,
+                                        enabled = task.id !in updatingTaskIds,
                                         onCheckedChange = null
                                     )
                                     Text("Completed")
                                 }
+                                if (task.id in updatingTaskIds) LoadingState("Saving care task")
                             }
                         }
                     }

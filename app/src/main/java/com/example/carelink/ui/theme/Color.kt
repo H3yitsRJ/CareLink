@@ -12,5 +12,10 @@ val CareLinkPrimaryAction = Color(0xFF426B36)
 
 // General UI colors
 val CareLinkSurface = Color(0xFFFFFFFF)
+val CareLinkSurfaceMuted = Color(0xFFEEF3F3)
+val CareLinkActionContainer = Color(0xFFE2EBDC)
+val CareLinkSuccessContainer = Color(0xFFDEEEE5)
+val CareLinkErrorContainer = Color(0xFFF7E2E7)
+val CareLinkOutlineMuted = Color(0xFFC9D5D5)
 val CareLinkTextPrimary = Color(0xFF1E1E1E)
 val CareLinkTextOnDark = Color(0xFFFFFFFF)

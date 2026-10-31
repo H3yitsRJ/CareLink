@@ -1,5 +1,8 @@
 package com.example.carelink.screens
 
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -24,8 +27,9 @@ import androidx.compose.ui.unit.dp
 
 @Composable
 fun LogoutScreen(onBack: () -> Unit, onLogout: () -> Unit, errorMessage: String? = null) {
+    BackHandler(onBack = onBack)
     Column(
-        Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)
+        Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).verticalScroll(rememberScrollState())
             .padding(horizontal = 16.dp, vertical = 24.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {

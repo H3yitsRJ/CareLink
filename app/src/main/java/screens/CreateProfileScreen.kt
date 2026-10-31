@@ -1,4 +1,6 @@
 package com.example.carelink.screens
+import androidx.activity.compose.BackHandler
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -6,6 +8,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
@@ -135,6 +138,7 @@ fun CreateProfileScreen(
     onSaveProfile: (PatientProfileDetails) -> Unit = {},
     onCancel: () -> Unit = {}
 ) {
+    BackHandler { if (!isSaving) onCancel() }
     // Saveable form state prevents a long profile form from resetting after rotation.
     var firstName by rememberSaveable {
         mutableStateOf(initialProfile?.firstName.orEmpty())
@@ -225,6 +229,9 @@ fun CreateProfileScreen(
             .imePadding()
             .padding(horizontal = 16.dp, vertical = 24.dp)
     ) {
+        TextButton(onClick = onCancel, enabled = !isSaving) {
+            Text(if (initialProfile == null) "Back to sign in" else "Back to profile")
+        }
         Text(
             text = "Set up your profile",
             style = MaterialTheme.typography.headlineLarge
@@ -380,7 +387,7 @@ fun CreateProfileScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(top = 16.dp)
-                .height(56.dp),
+                .heightIn(min = 56.dp),
             shape = RoundedCornerShape(12.dp)
         ) {
             if (isSaving) {
@@ -400,7 +407,7 @@ fun CreateProfileScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(top = 8.dp)
-                .height(56.dp),
+                .heightIn(min = 56.dp),
             shape = RoundedCornerShape(12.dp),
             colors = ButtonDefaults.buttonColors(
                 containerColor = MaterialTheme.colorScheme.error,

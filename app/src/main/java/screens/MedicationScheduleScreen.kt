@@ -72,7 +72,7 @@ internal fun MedicationScheduleContent(
                 Text("Select a medication to edit its frequency and reminder times.")
             }
             when {
-                loading -> item { StateMessage("Loading medications") }
+                loading -> item { LoadingState("Loading medications") }
                 error != null -> item { StateMessage(error, true); TextButton(onClick = onRetry) { Text("Retry") } }
                 medications.isEmpty() -> item {
                     StateMessage("No active medications are available.")
