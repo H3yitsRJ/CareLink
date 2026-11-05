@@ -73,6 +73,20 @@ class MedicationRepository(
             }
     }
 
+    fun saveMedicationWithHistory(
+        userId: String,
+        medication: Medication,
+        historyEntry: com.example.carelink.model.CareHistoryEntry
+    ): com.google.android.gms.tasks.Task<Void> {
+        val patient = firestore.collection("users").document(userId)
+        val data = medication.copy(patientId = userId, updatedById = userId)
+            .toFirestore() + ("updatedAt" to FieldValue.serverTimestamp())
+        return firestore.batch()
+            .set(patient.collection("medications").document(medication.id), data)
+            .set(patient.collection("careHistory").document(historyEntry.id), historyEntry.toFirestore())
+            .commit()
+    }
+
     fun deleteMedication(
         userId: String,
         medicationId: String,

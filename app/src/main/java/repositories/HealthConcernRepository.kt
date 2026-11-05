@@ -6,7 +6,8 @@ import com.google.firebase.firestore.FirebaseFirestore
 
 class HealthConcernRepository(
     private val firestore: FirebaseFirestore
-) {
+) : com.example.carelink.data.HealthConcernRepository by
+    com.example.carelink.data.FirestoreHealthConcernRepository(firestore) {
 
     fun getHealthConcerns(
         patientId: String,
