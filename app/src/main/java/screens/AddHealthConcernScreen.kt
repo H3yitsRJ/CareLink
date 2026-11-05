@@ -12,7 +12,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import com.example.carelink.data.HealthConcernRepository
+import repositories.HealthConcernRepository
 import com.example.carelink.model.ConcernSeverity
 import com.example.carelink.model.ConcernStatus
 import com.example.carelink.model.HealthConcern
@@ -259,25 +259,22 @@ fun AddHealthConcernScreen(
                                 appointmentId = null
                             )
 
-                            repository.addConcern(
+                            repository.saveHealthConcern(
                                 patientId = patientId,
-                                concern = concern
-                            ) { result ->
-                                if (alive.value) {
-                                    saving = false
-
-                                    result.fold(
-                                        onSuccess = {
-                                            savedCallback()
-                                        },
-                                        onFailure = {
-                                            saveError =
-                                                "We couldn't save the concern. " +
-                                                        "Please try again."
-                                        }
-                                    )
+                                concern = concern,
+                                onSuccess = {
+                                    if(alive.value) {
+                                        saving = false
+                                        savedCallback()
+                                    }
+                                },
+                                onError = {
+                                    if(alive.value) {
+                                        saving = false
+                                        saveError = "We couldn't save the concern. Please try again."
+                                    }
                                 }
-                            }
+                            )
                         }
                     }
                 }

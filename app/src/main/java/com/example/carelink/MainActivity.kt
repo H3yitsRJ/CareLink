@@ -97,6 +97,10 @@ import com.example.carelink.model.ConcernSeverity
 import com.example.carelink.model.ConcernStatus
 import com.example.carelink.model.DashboardMedicationAttention
 import com.example.carelink.model.HealthConcern
+import com.google.firebase.firestore.FieldValue
+import repositories.HealthConcernRepository
+import repositories.MedicationRepository
+import repositories.RefillRequestRepository
 
 private enum class AuthScreen {
     SignIn,
@@ -266,7 +270,7 @@ class MainActivity : ComponentActivity() {
                 }
 
                 val refillRequestRepository = remember {
-                    FirestoreRefillRequestRepository(firestore, readSource)
+                    RefillRequestRepository(firestore)
                 }
                 var refillRequests by remember {
                     mutableStateOf<List<RefillRequest>>(emptyList())
@@ -284,17 +288,17 @@ class MainActivity : ComponentActivity() {
                     refillLoading = true
                     refillError = null
 
-                    refillRequestRepository.load(patientId) { result ->
-                        refillLoading = false
-
-                        result.onSuccess { requests ->
+                    refillRequestRepository.getRefillRequests(
+                        patientId = patientId,
+                        onSuccess = { requests ->
+                            refillLoading = false
                             refillRequests = requests
+                        },
+                        onError = { error ->
+                            refillLoading = false
+                            refillError = error
                         }
-
-                        result.onFailure {
-                            refillError = "Unable to load refill requests. Check your connection and try again."
-                        }
-                    }
+                    )
                 }
 
                 var unreadNotificationCount by remember { mutableIntStateOf(0) }
@@ -341,8 +345,15 @@ class MainActivity : ComponentActivity() {
                         firestore
                     )
                 }
+                val medicationRepository = remember(firestore) {
+                    MedicationRepository(firestore)
+                }
                 var selectedCareRecipient by rememberSaveable(auth.currentUser?.uid) { mutableStateOf<String?>(null) }
-                val healthConcernRepository = remember(firestore) { FirestoreHealthConcernRepository(firestore) }
+                val healthConcernRepository = remember(firestore) {
+                    HealthConcernRepository(
+                        firestore
+                    )
+                }
                 val careTaskRepository = remember(firestore) { FirestoreCareTaskRepository(firestore, readSource) }
                 var dashboardCareTasks by remember {
                     mutableStateOf<List<CareTask>>(emptyList())
@@ -359,25 +370,21 @@ class MainActivity : ComponentActivity() {
                     mutableStateOf<List<HealthConcern>>(emptyList())
                 }
 
-                DisposableEffect(auth.currentUser?.uid) {
+                LaunchedEffect(auth.currentUser?.uid) {
                     val patientId = auth.currentUser?.uid
 
-                    val stopListening: () -> Unit = if (patientId != null) {
-                        healthConcernRepository.watchList(patientId) { result ->
-                            result.onSuccess { concerns ->
+                    if (patientId != null) {
+                        healthConcernRepository.getHealthConcerns(
+                            patientId = patientId,
+                            onSuccess = { concerns ->
                                 dashboardHealthConcerns = concerns
-                            }
-                            result.onFailure {
+                            },
+                            onError = {
                                 dashboardHealthConcerns = emptyList()
                             }
-                        }
+                        )
                     } else {
                         dashboardHealthConcerns = emptyList()
-                        ({})
-                    }
-
-                    onDispose {
-                        stopListening()
                     }
                 }
 
@@ -689,24 +696,18 @@ class MainActivity : ComponentActivity() {
                                                 val user = auth.currentUser
 
                                                 if (user != null) {
-                                                    FirebaseFirestore.getInstance()
-                                                        .collection("users")
-                                                        .document(user.uid)
-                                                        .collection("medications")
-                                                        .get(readSource())
-                                                        .addOnSuccessListener { result ->
-                                                            refillMedications = result.documents.mapNotNull { document ->
-                                                                Medication.fromFirestore(
-                                                                    document.id,
-                                                                    document.data.orEmpty() + ("patientId" to user.uid)
-                                                                )
-                                                            }
+                                                    medicationRepository.getMedications(
+                                                        userId = user.uid,
+                                                        connectionAvailable = connectionAvailable,
+                                                        onSuccess = { medications ->
+                                                            refillMedications = medications
                                                             medicationsLoading = false
-                                                        }
-                                                        .addOnFailureListener {
+                                                        },
+                                                        onError = { error ->
                                                             medicationsLoading = false
-                                                            medicationLoadError = "We couldn't load your medications. Check your connection and try again."
+                                                            medicationLoadError = error
                                                         }
+                                                    )
                                                 } else {
                                                     medicationsLoading = false
                                                     medicationLoadError = "Sign in to view your medications."
@@ -730,18 +731,17 @@ class MainActivity : ComponentActivity() {
                                                     if (!connectionAvailable || submittingRefill || submittedRefill) return@RefillRequestScreen
                                                     submittingRefill = true
                                                     refillSaveError = null
-                                                    refillRequestRepository.create(request) { result ->
-                                                        submittingRefill = false
-                                                        result.onSuccess {
+                                                    refillRequestRepository.createRefillRequest(
+                                                        request = request,
+                                                        onSuccess = {
+                                                            submittingRefill = false
                                                             submittedRefill = true
+                                                        },
+                                                        onError = { error ->
+                                                            submittingRefill = false
+                                                            refillSaveError = error
                                                         }
-
-                                                        result.onFailure { error ->
-                                                            refillSaveError = if (generateSequence(error) { it.cause }.any { it is RefillRequestAlreadyActiveException })
-                                                                "A refill request is already active for this medication."
-                                                            else "Couldn't submit the refill request. Check your connection and try again."
-                                                        }
-                                                    }
+                                                    )
                                                 }
                                             )
                                         }
@@ -763,19 +763,16 @@ class MainActivity : ComponentActivity() {
                                             }
                                             LaunchedEffect(patientId, connectionAvailable) {
                                                 if (patientId.isNotBlank()) {
-                                                    FirebaseFirestore.getInstance()
-                                                        .collection("users")
-                                                        .document(patientId)
-                                                        .collection("medications")
-                                                        .get(readSource())
-                                                        .addOnSuccessListener { result ->
-                                                            trackingMedications = result.documents.mapNotNull { document ->
-                                                                Medication.fromFirestore(
-                                                                    document.id,
-                                                                    document.data.orEmpty() + ("patientId" to patientId)
-                                                                )
-                                                            }
+                                                    medicationRepository.getMedications(
+                                                        userId = patientId,
+                                                        connectionAvailable = connectionAvailable,
+                                                        onSuccess = { medications ->
+                                                            trackingMedications = medications
+                                                        },
+                                                        onError = { error ->
+                                                            trackingMedications = emptyList()
                                                         }
+                                                    )
                                                 }
                                             }
 
@@ -945,6 +942,7 @@ class MainActivity : ComponentActivity() {
                                                                 patientId = patientId,
                                                                 actorId = actorId,
                                                                 repository = healthConcernRepository,
+                                                                appointmentRepository = appointmentRepository,
                                                                 accessData = caregiverMedicationData,
                                                                 onBack = {
                                                                     caregiverMode = false
@@ -972,6 +970,7 @@ class MainActivity : ComponentActivity() {
                                                             HealthConcernsFlow(
                                                                 patientId = actorId,
                                                                 repository = healthConcernRepository,
+                                                                appointmentRepository = appointmentRepository,
                                                                 onBack = {
                                                                     appScreen = AppScreen.Home
                                                                 }
@@ -1072,22 +1071,23 @@ class MainActivity : ComponentActivity() {
                                                     val user = auth.currentUser
 
                                                     if (user != null) {
-                                                        firestore
-                                                            .collection("users")
-                                                            .document(user.uid)
-                                                            .collection("medications")
-                                                            .document(medication.id)
-                                                            .delete()
-                                                            .addOnSuccessListener {
+                                                        medicationRepository.deleteMedication(
+                                                            userId = user.uid,
+                                                            medicationId = medication.id,
+                                                            onSuccess = {
                                                                 medicationReminderScheduler.cancel(medication)
+
                                                                 selectedMedication = null
                                                                 medicationSaveError = null
+
                                                                 medicationSuccessMessage = "Medication removed successfully."
+
                                                                 appScreen = AppScreen.Medications
+                                                            },
+                                                            onError = { error ->
+                                                                medicationSaveError = error
                                                             }
-                                                            .addOnFailureListener {
-                                                                medicationSaveError = "We couldn't remove the medication. Please try again."
-                                                            }
+                                                        )
                                                     }
                                                 },
                                                 onBack = {
@@ -1358,20 +1358,56 @@ class MainActivity : ComponentActivity() {
                                                         isSavingMedication = true
                                                         medicationSaveError = null
 
-                                                        val medicationData =
-                                                            hashMapOf(
-                                                                "id" to medication.id,
-                                                                "patientId" to user.uid,
-                                                                "name" to medication.name,
-                                                                "strength" to medication.strength,
-                                                                "dose" to medication.dose,
-                                                                "frequency" to medication.frequency,
-                                                                "reminderTimes" to medication.reminderTimes,
-                                                                "instructions" to medication.instructions,
-                                                                "active" to medication.active,
-                                                                "updatedById" to user.uid,
-                                                                "updatedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
-                                                            )
+                                                        medicationRepository.saveMedication(
+                                                            userId = user.uid,
+                                                            medication = medication,
+                                                            onSuccess = {
+                                                                val saved = medication.copy(
+                                                                    patientId = user.uid,
+                                                                    updatedById = user.uid
+                                                                )
+
+                                                                val reminderScheduled =
+                                                                    selectedMedication?.let {
+                                                                        medicationReminderScheduler.replace(
+                                                                            it,
+                                                                            saved
+                                                                        )
+                                                                    } ?:
+                                                                    medicationReminderScheduler.schedule(saved)
+
+                                                                if(
+                                                                    !reminderScheduled &&
+                                                                    Build.VERSION.SDK_INT >=
+                                                                    Build.VERSION_CODES.TIRAMISU &&
+
+                                                                    !NotificationPermissionManager.canPostNotifications(this@MainActivity) &&
+                                                                    !notificationPreferences.getBoolean(
+                                                                        "explanationSchown",
+                                                                        false
+                                                                    )
+                                                                ) {
+                                                                    notificationPreferences.edit()
+                                                                        .putBoolean("explanationShown", true)
+                                                                        .apply()
+                                                                }
+
+                                                                isSavingMedication = false
+                                                                selectedMedication = null
+
+                                                                medicationSuccessMessage =
+                                                                    if(reminderScheduled)
+                                                                        "Medication saved successfully"
+                                                                else
+                                                                    "Medication saved. Enable notifications to receive reminders."
+
+                                                                appScreen = AppScreen.Medications
+                                                            },
+                                                            onError = { error ->
+                                                                isSavingMedication = false
+                                                                medicationSaveError = error
+                                                            }
+                                                        )
 
                                                         val historyRef = firestore
                                                             .collection("users")
@@ -1393,6 +1429,16 @@ class MainActivity : ComponentActivity() {
                                                             relatedRecordId = medication.id
                                                         )
 
+                                                        val medicationData =
+                                                            medication.copy(
+                                                                patientId = user.uid,
+                                                                updatedById = user.uid
+                                                            )
+                                                                .toFirestore()
+                                                                .toMutableMap()
+
+                                                        medicationData["updatedAt"] =
+                                                            FieldValue.serverTimestamp()
 
                                                         val medicationRef = firestore.collection("users")
                                                             .document(user.uid).collection("medications").document(medication.id)
@@ -1508,6 +1554,7 @@ class MainActivity : ComponentActivity() {
                                                                 patientId = patientId,
                                                                 actorId = actorId,
                                                                 repository = healthConcernRepository,
+                                                                appointmentRepository = appointmentRepository,
                                                                 accessData = caregiverMedicationData,
                                                                 onBack = {
                                                                     caregiverMode = false

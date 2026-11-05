@@ -6,15 +6,17 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
-import com.example.carelink.data.HealthConcernRepository
+import repositories.HealthConcernRepository
 import com.example.carelink.model.*
 import androidx.compose.ui.unit.dp
+import com.example.carelink.repositories.AppointmentRepository
 import navigation.BottomNavDestination
 
 @Composable
 fun HealthConcernsFlow(
     patientId: String,
     repository: HealthConcernRepository,
+    appointmentRepository: AppointmentRepository,
     onBack: () -> Unit = {},
     canEdit: Boolean = true
 ) {
@@ -56,6 +58,7 @@ fun HealthConcernsFlow(
                     patientId,
                     id,
                     repository,
+                    appointmentRepository,
                     onBack = { selectedId = null },
                     canEdit = canEdit
                 )
@@ -66,22 +69,24 @@ fun HealthConcernsFlow(
                 var error by remember { mutableStateOf<String?>(null) }
                 var retry by remember { mutableIntStateOf(0) }
 
-                DisposableEffect(
+                LaunchedEffect(
                     patientId,
-                    repository,
                     retry
                 ) {
-                    var active = true
                     loading = true
                     error = null
-                    val stop = repository.watchList(patientId) { result ->
-                        if (active) {
+
+                    repository.getHealthConcerns(
+                        patientId = patientId,
+                        onSuccess = { loadedConcerns ->
                             loading = false
-                            result.onSuccess { concerns = it }
-                                .onFailure { error = "We couldn't load your health concerns." }
+                            concerns = loadedConcerns
+                        },
+                        onError = {
+                            loading = false
+                            error = "We couldn't load your health concerns. Please try again."
                         }
-                    }
-                    onDispose { active = false; stop() }
+                    )
                 }
                 Scaffold(Modifier.safeDrawingPadding(),
                     bottomBar = { TextButton(onClick = onBack) { Text("Back to home") } }
@@ -119,6 +124,7 @@ fun HealthConcernsFlow(
 private fun ConcernDetailRoute(
     patientId: String, id: String,
     repository: HealthConcernRepository,
+    appointmentRepository: AppointmentRepository,
     onBack: () -> Unit,
     canEdit: Boolean
 ) {
@@ -136,25 +142,38 @@ private fun ConcernDetailRoute(
     val currentCanEdit by rememberUpdatedState(canEdit)
 
     DisposableEffect(Unit) { alive.value = true; onDispose { alive.value = false } }
-    DisposableEffect(patientId, id, repository, retry) {
-        var active = true
+    LaunchedEffect(patientId, id, retry) {
+
         loading = true
         error = null
+
         appointmentsLoading = true
         appointmentsError = null
-        val stopConcern = repository.watchConcern(patientId, id) { result ->
-            if (active) {
+
+        repository.getSingleConcern(
+            patientId = patientId,
+            concernId = id,
+            onSuccess = { loadedConcern ->
                 loading = false
-                result.onSuccess { concern = it }.onFailure { error = "We couldn't load this health concern." }
+                concern = loadedConcern
+            },
+            onError = {
+                loading = false
+                error = "We couldn't load this health concern. Please try agian."
             }
-        }
-        val stopAppointments = repository.watchAppointments(patientId) { result ->
-            if (active) {
+        )
+
+        appointmentRepository.getAppointments(
+            userId = patientId,
+            onSuccess = { loadedAppointments ->
                 appointmentsLoading = false
-                result.onSuccess { appointments = it }.onFailure { appointmentsError = "We couldn't load appointments." }
+                appointments = loadedAppointments
+            },
+            onError = {
+                appointmentsLoading = false
+                appointmentsError = "We couldn't load your appointments. Please try agian."
             }
-        }
-        onDispose { active = false; stopConcern(); stopAppointments() }
+        )
     }
 
     fun update(operation: ((Result<Unit>) -> Unit) -> Unit) {
@@ -181,8 +200,44 @@ private fun ConcernDetailRoute(
 
     HealthConcernDetailsScreen(concern, loading, error, appointments, appointmentsLoading, appointmentsError,
         saving, saveError,
-        onStatusChange = { status -> update { repository.setStatus(patientId, id, status, it) } },
-        onLinkAppointment = { appointmentId -> update { repository.linkAppointment(patientId, id, appointmentId, it) } },
+        onStatusChange = { status ->
+            update {
+                repository.updateConcernStatus(
+                    patientId,
+                    id,
+                    status,
+                    onSuccess = {
+                        it(Result.success(Unit))
+                    },
+                    onError = { error ->
+                        it(
+                            Result.failure(
+                                Exception(error)
+                            )
+                        )
+                    }
+                )
+            }
+                         },
+        onLinkAppointment = { appointmentId ->
+            update {
+                repository.linkAppointment(
+                    patientId,
+                    id,
+                    appointmentId,
+                    onSuccess = {
+                        it(Result.success(Unit))
+                    },
+                    onError = { error ->
+                        it(
+                            Result.failure(
+                                Exception(error)
+                            )
+                        )
+                    }
+                )
+            }
+        },
         onRetry = { retry++ },
         onBack = onBack,
         canEdit = canEdit)
@@ -193,6 +248,7 @@ fun CaregiverHealthConcernsRoute(
     patientId: String,
     actorId: String,
     repository: HealthConcernRepository,
+    appointmentRepository: AppointmentRepository,
     accessData: com.example.carelink.data.CaregiverMedicationData,
     onBack: () -> Unit
 ) {
@@ -242,6 +298,7 @@ fun CaregiverHealthConcernsRoute(
             HealthConcernsFlow(
                 patientId = patientId,
                 repository = repository,
+                appointmentRepository = appointmentRepository,
                 onBack = onBack,
                 canEdit = canEdit
             )
@@ -300,6 +357,7 @@ fun CaregiverAppointmentsRoute(
     patientId: String,
     actorId: String,
     repository: HealthConcernRepository,
+    appointmentRepository: AppointmentRepository,
     accessData: com.example.carelink.data.CaregiverMedicationData,
     onBack: () -> Unit,
     onNavigate: (BottomNavDestination) -> Unit
@@ -387,30 +445,26 @@ fun CaregiverAppointmentsRoute(
             var error by remember { mutableStateOf<String?>(null) }
             var reload by remember { mutableIntStateOf(0) }
 
-            DisposableEffect(patientId, repository, reload) {
-                var active = true
+            LaunchedEffect(patientId, reload) {
+
                 loading = true
                 error = null
                 appointments = emptyList()
 
-                val stop = repository.watchAppointments(patientId) { result ->
-                    if (active) {
+                appointmentRepository.getAppointments(
+                    userId = patientId,
+                    onSuccess = { loadedAppointments ->
                         loading = false
-                        result.onSuccess {
-                            appointments = it
-                            error = null
-                        }.onFailure {
-                            appointments = emptyList()
-                            selectedId = null
-                            error = "We couldn't load this patient's appointments."
-                        }
+                        appointments = loadedAppointments
+                        error = null
+                    },
+                    onError = {
+                        loading = false
+                        appointments = emptyList()
+                        selectedId = null
+                        error = "We couldn't load appointments. Please try again."
                     }
-                }
-
-                onDispose {
-                    active = false
-                    stop()
-                }
+                )
             }
 
             if (selectedId != null) {
