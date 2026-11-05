@@ -11,7 +11,6 @@ class RefillRequestRepository(
 ) {
     fun getRefillRequests(
         patientId: String,
-        connectionAvailable: Boolean,
         onSuccess: (List<RefillRequest>) -> Unit,
         onError: (String) -> Unit
     ) {
@@ -19,12 +18,7 @@ class RefillRequestRepository(
             .collection("users")
             .document(patientId)
             .collection("refillRequests")
-            .get(
-                if(connectionAvailable)
-                    Source.DEFAULT
-                else
-                    Source.CACHE
-            )
+            .get(Source.DEFAULT)
             .addOnSuccessListener { snapshot ->
                 val requests =
                     snapshot.documents.map { document ->
