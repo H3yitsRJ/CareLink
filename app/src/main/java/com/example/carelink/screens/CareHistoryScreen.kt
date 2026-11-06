@@ -83,15 +83,15 @@ fun CareHistoryScreen(
                     OutlinedTextField(
                         start, { start = it }, label = { Text("Start date") },
                         placeholder = { Text("YYYY-MM-DD") }, singleLine = true,
-                        trailingIcon = { TextButton(onClick = { dateField = "start" }) { Text("Choose") } },
                         modifier = Modifier.fillMaxWidth()
                     )
+                    TextButton(onClick = { dateField = "start" }) { Text("Choose start date") }
                     OutlinedTextField(
                         end, { end = it }, label = { Text("End date") },
                         placeholder = { Text("YYYY-MM-DD") }, singleLine = true,
-                        trailingIcon = { TextButton(onClick = { dateField = "end" }) { Text("Choose") } },
                         modifier = Modifier.fillMaxWidth()
                     )
+                    TextButton(onClick = { dateField = "end" }) { Text("Choose end date") }
                 }
             }
 
@@ -110,7 +110,9 @@ fun CareHistoryScreen(
             }
 
             item {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
                     Button(onClick = {
                         val first = historyDateBoundary(start.trim())
                         val last = historyDateBoundary(end.trim(), endOfDay = true)
@@ -144,7 +146,7 @@ fun CareHistoryScreen(
             }
 
             when {
-                isLoading -> item { CircularProgressIndicator(); Text("Loading care history...") }
+                isLoading -> item { LoadingState("Loading care history...") }
                 loadError != null -> item {
                     CareErrorState(
                         message = loadError,
@@ -233,7 +235,7 @@ private fun CareHistoryCard(
         ).format(Date(entry.occurredAtMillis))
     }
 
-    Card(Modifier.fillMaxWidth()) {
+    Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
         Column(
             modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp)

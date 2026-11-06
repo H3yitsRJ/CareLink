@@ -28,58 +28,65 @@ fun RefillRequestTrackingScreen(
     onRefresh: () -> Unit = {},
     onBack: () -> Unit = {}
 ) {
-    var selectedRequest by remember {
-        mutableStateOf<RefillRequest?>(null)
+    var selectedRequestId by remember { mutableStateOf<String?>(null) }
+    val selectedRequest = if (!isLoading && error == null) {
+        requests.find { it.id == selectedRequestId }
+    } else null
+    LaunchedEffect(selectedRequest) {
+        if (selectedRequest == null) selectedRequestId = null
     }
 
     BackHandler {
-        if (selectedRequest != null) selectedRequest = null else onBack()
+        if (selectedRequest != null) selectedRequestId = null else onBack()
     }
 
     val sortedRequests = requests.sortedByDescending {
         it.requestedAt
     }
 
-    Column(
+    LazyColumn(
         modifier = Modifier
             .fillMaxSize()
             .statusBarsPadding()
-            .padding(16.dp)
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        IconButton(onClick = onBack) {
-            Icon(
-                Icons.AutoMirrored.Filled.ArrowBack,
-                contentDescription = "Back"
-            )
+        item {
+            Column {
+                IconButton(onClick = onBack) {
+                    Icon(
+                        Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = "Back"
+                    )
+                }
+
+                Text(
+                    text = "Refill Request Tracking",
+                    style = MaterialTheme.typography.headlineMedium
+                )
+
+                Spacer(Modifier.height(16.dp))
+
+                Button(onClick = onRefresh, enabled = !isLoading) {
+                    Text("Refresh")
+                }
+
+                Spacer(Modifier.height(16.dp))
+
+            }
         }
-
-        Text(
-            text = "Refill Request Tracking",
-            style = MaterialTheme.typography.headlineMedium
-        )
-
-        Spacer(Modifier.height(16.dp))
-
-        Button(onClick = onRefresh) {
-            Text("Refresh")
-        }
-
-        Spacer(Modifier.height(16.dp))
-
         when {
-            isLoading -> CircularProgressIndicator()
+            isLoading -> item { LoadingState("Loading refill requests") }
 
-            error != null -> CareErrorState(
+            error != null -> item { CareErrorState(
                 message = error,
                 onRetry = onRefresh,
                 retryEnabled = !isLoading
-            )
+            ) }
 
-            sortedRequests.isEmpty() -> Text("No refill requests found.")
+            sortedRequests.isEmpty() -> item { Text("No refill requests found.") }
 
-            else -> LazyColumn(
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
+            else -> {
                 items(sortedRequests, key = { it.id }) { request ->
                     val status = request.status
                     val completed = status == RefillRequestStatus.COMPLETED ||
@@ -88,7 +95,7 @@ fun RefillRequestTrackingScreen(
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable { selectedRequest = request },
+                            .clickable { selectedRequestId = request.id },
                         colors = CardDefaults.cardColors(
                             containerColor = if (completed)
                                 MaterialTheme.colorScheme.surfaceVariant
@@ -107,10 +114,10 @@ fun RefillRequestTrackingScreen(
                                 style = MaterialTheme.typography.titleMedium
                             )
                             Text(
-                                SimpleDateFormat(
+                                if (request.requestedAt > 0) SimpleDateFormat(
                                     "MMM d, yyyy",
                                     Locale.getDefault()
-                                ).format(Date(request.requestedAt))
+                                ).format(Date(request.requestedAt)) else "Date unavailable"
                             )
                             Text("Status: ${status.name}")
                         }
@@ -127,7 +134,7 @@ fun RefillRequestTrackingScreen(
 
     selectedRequest?.let { request ->
         AlertDialog(
-            onDismissRequest = { selectedRequest = null },
+            onDismissRequest = { selectedRequestId = null },
             title = { Text("Refill Request Details") },
             text = {
                 Column(Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState())) {
@@ -137,16 +144,16 @@ fun RefillRequestTrackingScreen(
                     Text("Requested by: ${request.requestedById}")
                     Text("Note: ${request.note.ifBlank { "None" }}")
                     Text(
-                        "Date: " + SimpleDateFormat(
+                        if (request.requestedAt > 0) "Date: " + SimpleDateFormat(
                             "MMM d, yyyy h:mm a",
                             Locale.getDefault()
-                        ).format(Date(request.requestedAt))
+                        ).format(Date(request.requestedAt)) else "Date unavailable"
                     )
                 }
             },
             confirmButton = {
                 TextButton(
-                    onClick = { selectedRequest = null }
+                    onClick = { selectedRequestId = null }
                 ) {
                     Text("Close")
                 }

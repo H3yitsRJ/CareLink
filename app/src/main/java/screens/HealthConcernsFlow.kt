@@ -6,17 +6,15 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
-import repositories.HealthConcernRepository
+import com.example.carelink.data.HealthConcernRepository
 import com.example.carelink.model.*
 import androidx.compose.ui.unit.dp
-import com.example.carelink.repositories.AppointmentRepository
 import navigation.BottomNavDestination
 
 @Composable
 fun HealthConcernsFlow(
     patientId: String,
     repository: HealthConcernRepository,
-    appointmentRepository: AppointmentRepository,
     onBack: () -> Unit = {},
     canEdit: Boolean = true
 ) {
@@ -58,7 +56,6 @@ fun HealthConcernsFlow(
                     patientId,
                     id,
                     repository,
-                    appointmentRepository,
                     onBack = { selectedId = null },
                     canEdit = canEdit
                 )
@@ -69,27 +66,25 @@ fun HealthConcernsFlow(
                 var error by remember { mutableStateOf<String?>(null) }
                 var retry by remember { mutableIntStateOf(0) }
 
-                LaunchedEffect(
+                DisposableEffect(
                     patientId,
+                    repository,
                     retry
                 ) {
+                    var active = true
                     loading = true
                     error = null
-
-                    repository.getHealthConcerns(
-                        patientId = patientId,
-                        onSuccess = { loadedConcerns ->
+                    val stop = repository.watchList(patientId) { result ->
+                        if (active) {
                             loading = false
-                            concerns = loadedConcerns
-                        },
-                        onError = {
-                            loading = false
-                            error = "We couldn't load your health concerns. Please try again."
+                            result.onSuccess { concerns = it }
+                                .onFailure { error = "We couldn't load your health concerns." }
                         }
-                    )
+                    }
+                    onDispose { active = false; stop() }
                 }
                 Scaffold(Modifier.safeDrawingPadding(),
-                    bottomBar = { TextButton(onClick = onBack) { Text("Back to home") } }
+                    bottomBar = { TextButton(onClick = onBack) { Text("Back") } }
                 ) { padding ->
                     Column(Modifier.padding(padding)) {
                         successMessage?.let { message ->
@@ -124,7 +119,6 @@ fun HealthConcernsFlow(
 private fun ConcernDetailRoute(
     patientId: String, id: String,
     repository: HealthConcernRepository,
-    appointmentRepository: AppointmentRepository,
     onBack: () -> Unit,
     canEdit: Boolean
 ) {
@@ -142,38 +136,25 @@ private fun ConcernDetailRoute(
     val currentCanEdit by rememberUpdatedState(canEdit)
 
     DisposableEffect(Unit) { alive.value = true; onDispose { alive.value = false } }
-    LaunchedEffect(patientId, id, retry) {
-
+    DisposableEffect(patientId, id, repository, retry) {
+        var active = true
         loading = true
         error = null
-
         appointmentsLoading = true
         appointmentsError = null
-
-        repository.getSingleConcern(
-            patientId = patientId,
-            concernId = id,
-            onSuccess = { loadedConcern ->
+        val stopConcern = repository.watchConcern(patientId, id) { result ->
+            if (active) {
                 loading = false
-                concern = loadedConcern
-            },
-            onError = {
-                loading = false
-                error = "We couldn't load this health concern. Please try agian."
+                result.onSuccess { concern = it }.onFailure { error = "We couldn't load this health concern." }
             }
-        )
-
-        appointmentRepository.getAppointments(
-            userId = patientId,
-            onSuccess = { loadedAppointments ->
+        }
+        val stopAppointments = repository.watchAppointments(patientId) { result ->
+            if (active) {
                 appointmentsLoading = false
-                appointments = loadedAppointments
-            },
-            onError = {
-                appointmentsLoading = false
-                appointmentsError = "We couldn't load your appointments. Please try agian."
+                result.onSuccess { appointments = it }.onFailure { appointmentsError = "We couldn't load appointments." }
             }
-        )
+        }
+        onDispose { active = false; stopConcern(); stopAppointments() }
     }
 
     fun update(operation: ((Result<Unit>) -> Unit) -> Unit) {
@@ -200,44 +181,8 @@ private fun ConcernDetailRoute(
 
     HealthConcernDetailsScreen(concern, loading, error, appointments, appointmentsLoading, appointmentsError,
         saving, saveError,
-        onStatusChange = { status ->
-            update {
-                repository.updateConcernStatus(
-                    patientId,
-                    id,
-                    status,
-                    onSuccess = {
-                        it(Result.success(Unit))
-                    },
-                    onError = { error ->
-                        it(
-                            Result.failure(
-                                Exception(error)
-                            )
-                        )
-                    }
-                )
-            }
-                         },
-        onLinkAppointment = { appointmentId ->
-            update {
-                repository.linkAppointment(
-                    patientId,
-                    id,
-                    appointmentId,
-                    onSuccess = {
-                        it(Result.success(Unit))
-                    },
-                    onError = { error ->
-                        it(
-                            Result.failure(
-                                Exception(error)
-                            )
-                        )
-                    }
-                )
-            }
-        },
+        onStatusChange = { status -> update { repository.setStatus(patientId, id, status, it) } },
+        onLinkAppointment = { appointmentId -> update { repository.linkAppointment(patientId, id, appointmentId, it) } },
         onRetry = { retry++ },
         onBack = onBack,
         canEdit = canEdit)
@@ -248,7 +193,6 @@ fun CaregiverHealthConcernsRoute(
     patientId: String,
     actorId: String,
     repository: HealthConcernRepository,
-    appointmentRepository: AppointmentRepository,
     accessData: com.example.carelink.data.CaregiverMedicationData,
     onBack: () -> Unit
 ) {
@@ -298,7 +242,6 @@ fun CaregiverHealthConcernsRoute(
             HealthConcernsFlow(
                 patientId = patientId,
                 repository = repository,
-                appointmentRepository = appointmentRepository,
                 onBack = onBack,
                 canEdit = canEdit
             )
@@ -318,10 +261,7 @@ fun CaregiverHealthConcernsRoute(
                 )
 
                 when {
-                    loading -> {
-                        CircularProgressIndicator()
-                        Text("Checking caregiver access...")
-                    }
+                    loading -> LoadingState("Checking caregiver access...")
 
                     !verified -> {
                         Text(
@@ -357,7 +297,6 @@ fun CaregiverAppointmentsRoute(
     patientId: String,
     actorId: String,
     repository: HealthConcernRepository,
-    appointmentRepository: AppointmentRepository,
     accessData: com.example.carelink.data.CaregiverMedicationData,
     onBack: () -> Unit,
     onNavigate: (BottomNavDestination) -> Unit
@@ -414,15 +353,17 @@ fun CaregiverAppointmentsRoute(
                     style = MaterialTheme.typography.headlineMedium
                 )
 
-                Text(
-                    when {
-                        checking -> "Checking caregiver access..."
-                        !verified ->
+                if (checking) {
+                    LoadingState("Checking caregiver access...")
+                } else {
+                    Text(
+                        if (!verified) {
                             "We couldn't verify your access. Check your connection and retry."
-                        else ->
+                        } else {
                             "Appointment access is unavailable or has been revoked."
-                    }
-                )
+                        }
+                    )
+                }
 
                 if (!checking) {
                     Button(onClick = { retry++ }) {
@@ -445,26 +386,30 @@ fun CaregiverAppointmentsRoute(
             var error by remember { mutableStateOf<String?>(null) }
             var reload by remember { mutableIntStateOf(0) }
 
-            LaunchedEffect(patientId, reload) {
-
+            DisposableEffect(patientId, repository, reload) {
+                var active = true
                 loading = true
                 error = null
                 appointments = emptyList()
 
-                appointmentRepository.getAppointments(
-                    userId = patientId,
-                    onSuccess = { loadedAppointments ->
+                val stop = repository.watchAppointments(patientId) { result ->
+                    if (active) {
                         loading = false
-                        appointments = loadedAppointments
-                        error = null
-                    },
-                    onError = {
-                        loading = false
-                        appointments = emptyList()
-                        selectedId = null
-                        error = "We couldn't load appointments. Please try again."
+                        result.onSuccess {
+                            appointments = it
+                            error = null
+                        }.onFailure {
+                            appointments = emptyList()
+                            selectedId = null
+                            error = "We couldn't load this patient's appointments."
+                        }
                     }
-                )
+                }
+
+                onDispose {
+                    active = false
+                    stop()
+                }
             }
 
             if (selectedId != null) {
@@ -482,6 +427,7 @@ fun CaregiverAppointmentsRoute(
                     onAppointmentSelected = { selectedId = it.id },
                     onRetry = { reload++ },
                     onNavigate = onNavigate,
+                    onBack = onBack,
                     canManage = false
                 )
             }

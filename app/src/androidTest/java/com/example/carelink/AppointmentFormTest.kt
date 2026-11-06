@@ -33,4 +33,14 @@ class AppointmentFormTest {
         compose.onNodeWithText("Save appointment").performScrollTo().performClick()
         compose.runOnIdle { assertEquals(original, saved) }
     }
+    @Test fun savingLocksEveryFieldAndFailureAllowsEditingAgain() {
+        val saving = androidx.compose.runtime.mutableStateOf(true)
+        compose.setContent { AddEditAppointmentScreen(original, isSaving = saving.value) }
+        val labels = listOf("Appointment title", "Provider", "Date", "Time", "Location", "Notes")
+        labels.forEach { compose.onNodeWithText(it).assertIsNotEnabled() }
+        compose.runOnIdle { saving.value = false }
+        labels.forEach { compose.onNodeWithText(it).assertIsEnabled() }
+        compose.onNodeWithText("Appointment title").performScrollTo().performTextReplacement("Updated checkup")
+        compose.onNodeWithText("Updated checkup").assertExists()
+    }
 }

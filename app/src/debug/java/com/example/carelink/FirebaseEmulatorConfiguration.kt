@@ -10,6 +10,6 @@ private const val ANDROID_EMULATOR_HOST = "10.0.2.2"
 fun configureFirebaseEmulators() {
     if (BuildConfig.USE_FIREBASE_EMULATORS) {
         FirebaseAuth.getInstance().useEmulator(ANDROID_EMULATOR_HOST, 9099)
-        FirebaseFirestore.getInstance().useEmulator(ANDROID_EMULATOR_HOST, 8080)
+        FirebaseFirestore.getInstance().useEmulator(ANDROID_EMULATOR_HOST, 8180)
     }
 }

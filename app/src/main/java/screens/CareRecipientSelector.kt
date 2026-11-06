@@ -62,20 +62,25 @@ fun CareRecipientSelector(
             Column(
                 Modifier.fillMaxSize()
             ) {
-                Row(
+                Column(
                     Modifier
                         .statusBarsPadding()
-                        .padding(horizontal = 16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        .padding(horizontal = 16.dp)
                 ) {
-                    Text(
-                        "Current care recipient: ${selected.name}",
-                        Modifier.weight(1f)
-                    )
-                    TextButton(
-                        onClick = { choosing = true }
+                    TextButton(onClick = onBack) { Text("Back to my care") }
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Text("Change recipient")
+                        Text(
+                            "Current care recipient: ${selected.name}",
+                            Modifier.weight(1f)
+                        )
+                        TextButton(
+                            onClick = { choosing = true }
+                        ) {
+                            Text("Change recipient")
+                        }
                     }
 
                 }
@@ -111,7 +116,7 @@ fun CareRecipientSelector(
                 )
 
                 when {
-                    loading -> Text("Loading care recipients...")
+                    loading -> LoadingState("Loading care recipients...")
                     error != null -> {
                         CareErrorState(
                             message = error!!,

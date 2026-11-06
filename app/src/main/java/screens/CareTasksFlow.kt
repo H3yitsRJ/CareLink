@@ -76,13 +76,15 @@ fun CareTasksFlow(
             }
         }
 
-        BackHandler(enabled = adding) {
-            if (!saving) cancel()
+        BackHandler {
+            if (!saving) {
+                if (adding) cancel() else onNavigate(BottomNavDestination.Home)
+            }
         }
 
         // Wait for a restored edit selection to finish loading.
         if (adding && selectedTaskId != null && loading) {
-            StateMessage("Loading care task")
+            LoadingState("Loading care task")
         } else if (
             adding &&
             selectedTaskId != null &&
@@ -197,6 +199,7 @@ fun CareTasksFlow(
 
             CareTasksScreen(
                 tasks = tasks,
+                updatingTaskIds = updatingIds,
                 isLoading = loading,
                 error = error,
                 onRetry = { refresh() },

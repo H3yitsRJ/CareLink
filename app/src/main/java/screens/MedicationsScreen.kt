@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -176,7 +177,7 @@ internal fun MedicationsContent(
                 ) {
                     Button(
                         onClick = onAddMedication,
-                        modifier = Modifier.weight(1f).height(63.dp)
+                        modifier = Modifier.weight(1f).heightIn(min = 63.dp)
                     ) {
                         Text("Add Medication")
 
@@ -207,7 +208,7 @@ internal fun MedicationsContent(
 
             when {
                 loading -> item {
-                    StateMessage("Loading medications")
+                    LoadingState("Loading medications")
                 }
                 loadError != null -> item {
                     CareErrorState(
@@ -245,6 +246,7 @@ fun MedicationCard(
         onClick = onClick,
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
     ) {
         Column(

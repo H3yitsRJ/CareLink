@@ -62,7 +62,7 @@ fun CaregiverAccessScreen(access: CaregiverAccess? = null, caregiverName: String
             if (!canEdit) StateMessage("Only the patient can change caregiver access.")
             if (access.revoked) StateMessage("Access has been revoked.")
             if (error != null) Column(Modifier.semantics { liveRegion = LiveRegionMode.Polite }) { StateMessage(error, true) }
-            Button(onClick = { onSave(access.copy(permissions = selected)) }, enabled = editable, modifier = Modifier.fillMaxWidth()) { Text(if (isSaving) "Saving access" else "Save access") }
+            Button(onClick = { onSave(access.copy(permissions = selected)) }, enabled = editable, modifier = Modifier.fillMaxWidth()) { SaveButtonLabel(isSaving, "Save access", "Saving access") }
             OutlinedButton(onClick = onCancel, enabled = !isSaving, modifier = Modifier.fillMaxWidth()) { Text("Cancel") }
         }
         if (access == null) OutlinedButton(onClick = onCancel, modifier = Modifier.fillMaxWidth()) { Text("Back") }

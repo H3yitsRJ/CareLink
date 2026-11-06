@@ -66,7 +66,7 @@ fun AppointmentDetailsScreen(
         Text("Appointment details", style = MaterialTheme.typography.headlineLarge)
 
         when {
-            isLoading -> StateMessage("Loading appointment")
+            isLoading -> LoadingState("Loading appointment")
             appointment == null -> StateMessage("This appointment could not be found.", true)
 
             else -> {

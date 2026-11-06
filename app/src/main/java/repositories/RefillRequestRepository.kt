@@ -1,41 +1,27 @@
 package repositories
 
-import com.example.carelink.data.refillRequestFromFirestore
+import com.example.carelink.data.FirestoreRefillRequestRepository
+import com.example.carelink.data.RefillRequestAlreadyActiveException
 import com.example.carelink.model.RefillRequest
-import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Source
 
 class RefillRequestRepository(
-    private val firestore: FirebaseFirestore
+    firestore: FirebaseFirestore,
+    readSource: () -> Source = { Source.DEFAULT }
 ) {
+    private val storage = FirestoreRefillRequestRepository(firestore, readSource)
+
     fun getRefillRequests(
         patientId: String,
         onSuccess: (List<RefillRequest>) -> Unit,
         onError: (String) -> Unit
     ) {
-        firestore
-            .collection("users")
-            .document(patientId)
-            .collection("refillRequests")
-            .get(Source.DEFAULT)
-            .addOnSuccessListener { snapshot ->
-                val requests =
-                    snapshot.documents.map { document ->
-                        refillRequestFromFirestore(
-                            document.id,
-                            patientId,
-                            document.data.orEmpty()
-                        )
-                    }.sortedByDescending {
-                        it.requestedAt
-                    }
-
-                onSuccess(requests)
-            }
-            .addOnFailureListener {
+        storage.load(patientId) { result ->
+            result.onSuccess(onSuccess).onFailure {
                 onError("Couldn't load your refill requests. Please try again.")
             }
+        }
     }
 
     fun createRefillRequest(
@@ -43,26 +29,12 @@ class RefillRequestRepository(
         onSuccess: () -> Unit,
         onError: (String) -> Unit
     ) {
-        val requestRef =
-            firestore
-                .collection("users")
-                .document(request.patientId)
-                .collection("refillRequests")
-                .document(request.medicationId)
-
-        requestRef
-            .set(
-                request.toFirestore() +
-                        (
-                                "requestedAt" to
-                                        FieldValue.serverTimestamp()
-                                )
-            )
-            .addOnSuccessListener {
-                onSuccess()
+        storage.create(request) { result ->
+            result.onSuccess { onSuccess() }.onFailure { error ->
+                onError(if (generateSequence(error) { it.cause }.any { it is RefillRequestAlreadyActiveException })
+                    "A refill request is already active for this medication."
+                else "Couldn't submit refill request. Please try again.")
             }
-            .addOnFailureListener {
-                onError("Couldn't submit refill request. Please try again.")
-            }
+        }
     }
 }

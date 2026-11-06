@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
@@ -251,9 +252,9 @@ fun AddEditMedicationScreen(
         Button(
             onClick = ::save,
             enabled = !isSaving && canSave,
-            modifier = Modifier.fillMaxWidth().height(56.dp)
+            modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)
         ) {
-            Text(if (isSaving) "Saving medication" else "Save medication")
+            SaveButtonLabel(isSaving, "Save medication", "Saving medication")
         }
 
         if (medication != null && canDelete) {
@@ -262,7 +263,7 @@ fun AddEditMedicationScreen(
                 enabled = !isSaving,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(56.dp)
+                    .heightIn(min = 56.dp)
             ) {
                 Text(
                     text = "Remove medication",
@@ -274,7 +275,7 @@ fun AddEditMedicationScreen(
         OutlinedButton(
             onClick = onCancel,
             enabled = !isSaving,
-            modifier = Modifier.fillMaxWidth().height(56.dp)
+            modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)
         ) {
             Text("Cancel")
         }

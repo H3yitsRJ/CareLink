@@ -1,5 +1,6 @@
 package com.example.carelink.screens
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
@@ -9,6 +10,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
@@ -112,6 +114,10 @@ fun CreateAccountScreen(
     var showConfirmPassword by rememberSaveable { mutableStateOf(false) }
     var attemptedSubmit by rememberSaveable { mutableStateOf(false) }
 
+    BackHandler(enabled = !accountCreated) {
+        if (!isSubmitting) onSignIn()
+    }
+
     // Delay validation messages until the patient has tried to submit once.
     val errors = remember(email, password, confirmPassword, attemptedSubmit) {
         if (attemptedSubmit) {
@@ -144,7 +150,7 @@ fun CreateAccountScreen(
         if (accountCreated) {
             RegistrationSuccess(
                 onContinue = onContinueToProfile,
-                modifier = Modifier.align(Alignment.Center)
+                modifier = Modifier.align(Alignment.Center).verticalScroll(rememberScrollState())
             )
         } else {
             Column(
@@ -155,6 +161,14 @@ fun CreateAccountScreen(
                     .padding(horizontal = 16.dp, vertical = 24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
+                TextButton(
+                    onClick = onSignIn,
+                    enabled = !isSubmitting,
+                    modifier = Modifier.align(Alignment.Start)
+                ) {
+                    Text("Back to sign in")
+                }
+
                 Column(
                     modifier = Modifier.fillMaxWidth(),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -249,7 +263,7 @@ fun CreateAccountScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(top = 16.dp)
-                        .height(56.dp),
+                        .heightIn(min = 56.dp),
                     shape = RoundedCornerShape(12.dp)
                 ) {
                     if (isSubmitting) {
@@ -273,7 +287,7 @@ fun CreateAccountScreen(
                         style = MaterialTheme.typography.bodyMedium
                     )
 
-                    TextButton(onClick = onSignIn) {
+                    TextButton(onClick = onSignIn, enabled = !isSubmitting) {
                         Text("Sign in")
                     }
                 }
@@ -364,7 +378,7 @@ private fun RegistrationSuccess(
                 onClick = onContinue,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(56.dp)
+                    .heightIn(min = 56.dp)
             ) {
                 Text("Continue")
             }

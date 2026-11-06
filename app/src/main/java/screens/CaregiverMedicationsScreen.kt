@@ -47,8 +47,10 @@ fun CaregiverMedicationsScreen(actorId: String, onBack: () -> Unit, data: Caregi
         original = null
         error = null
     }
-    BackHandler(enabled = !saving) {
-        when { requestingRefill -> { requestingRefill = false; error = null }; original != null -> cancelEdit(); selected != null -> selected = null; else -> onBack() }
+    BackHandler {
+        if (!saving) {
+            when { requestingRefill -> { requestingRefill = false; error = null }; original != null -> cancelEdit(); selected != null -> selected = null; else -> onBack() }
+        }
     }
 
     DisposableEffect(patientId, actorId, retry) {
@@ -242,7 +244,7 @@ fun CaregiverMedicationsScreen(actorId: String, onBack: () -> Unit, data: Caregi
                     }
                 }, enabled = !loading && !saving, modifier = Modifier.fillMaxWidth()) { Text("Open patient medications") }
                 }
-                if (loading) Text("Loading medications")
+                if (loading) LoadingState("Loading medications")
                 if (error != null) StateMessage(error!!, true)
                 if (access?.allows(CarePermission.VIEW) == true && !loading) {
                     if (!access!!.allows(CarePermission.EDIT)) Text("View-only access")
@@ -270,8 +272,10 @@ fun MedicationCaregiverAccessScreen(patientId: String, patientName: String, onBa
     var success by remember { mutableStateOf<String?>(null) }
     var retry by remember { mutableIntStateOf(0) }
     var connected by remember { mutableStateOf(false) }
-    BackHandler(enabled = !saving) {
-        when { revoke != null -> revoke = null; selected != null -> { selected = null; error = null }; else -> onBack() }
+    BackHandler {
+        if (!saving) {
+            when { revoke != null -> revoke = null; selected != null -> { selected = null; error = null }; else -> onBack() }
+        }
     }
 
     DisposableEffect(patientId, retry) {
@@ -312,12 +316,12 @@ fun MedicationCaregiverAccessScreen(patientId: String, patientName: String, onBa
             if (!MedicationCaregiverStore.validId(id) || id == patientId) error = "Enter a different person's CareLink ID."
             else { error = null; baseline = grants.find { it.caregiverId == id }; selected = baseline?.copy(revoked = false) ?: CaregiverAccess(id, patientId, id, setOf(CarePermission.VIEW)) }
         }, enabled = !saving && connected && connectionAvailable && !loading, modifier = Modifier.fillMaxWidth()) { Text("Choose medication access") }
-        if (loading) Text("Loading caregiver access")
+        if (loading) LoadingState("Loading caregiver access")
         if (!connectionAvailable) StateMessage(OFFLINE_ACTION_MESSAGE, true)
         if (error != null) { StateMessage(error!!, true); TextButton(onClick = { retry++ }) { Text("Retry") } }
         if (success != null) Text(success!!)
         grants.filter { !it.revoked }.forEach { grant ->
-            Card(Modifier.fillMaxWidth()) { Column(Modifier.padding(16.dp)) {
+            Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) { Column(Modifier.padding(16.dp)) {
                 Text(grant.caregiverId)
                 Text(if (grant.allows(CarePermission.EDIT)) "View and edit medications" else if (grant.allows(CarePermission.VIEW)) "View medications" else "No medication access")
                 TextButton(onClick = { baseline = grant; selected = grant }, enabled = !saving && connected && connectionAvailable) { Text("Edit access") }

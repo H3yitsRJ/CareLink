@@ -12,7 +12,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import repositories.HealthConcernRepository
+import com.example.carelink.data.HealthConcernRepository
 import com.example.carelink.model.ConcernSeverity
 import com.example.carelink.model.ConcernStatus
 import com.example.carelink.model.HealthConcern
@@ -82,7 +82,8 @@ fun AddHealthConcernScreen(
 
             Card(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp)
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
             ) {
                 Column(
                     modifier = Modifier.padding(16.dp),
@@ -114,17 +115,13 @@ fun AddHealthConcernScreen(
 
                     Text("Severity")
 
-                    // Equal widths keep all three choices on small screens.
-                    Row(modifier = Modifier.fillMaxWidth()) {
+                    Column(modifier = Modifier.fillMaxWidth()) {
                         ConcernSeverity.entries.forEach { severity ->
-                            val label = when (severity) {
-                                ConcernSeverity.LOW -> "Mild"
-                                ConcernSeverity.MEDIUM -> "Moderate"
-                                ConcernSeverity.HIGH -> "Severe"
-                            }
+                            val label = severity.displayLabel
 
-                            Column(
-                                modifier = Modifier.weight(1f)
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
                             ) {
                                 RadioButton(
                                     selected =
@@ -152,7 +149,8 @@ fun AddHealthConcernScreen(
 
             Card(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp)
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
             ) {
                 Column(
                     modifier = Modifier.padding(16.dp),
@@ -193,7 +191,8 @@ fun AddHealthConcernScreen(
 
             Card(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp)
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
             ) {
                 Column(
                     modifier = Modifier.padding(16.dp),
@@ -229,6 +228,7 @@ fun AddHealthConcernScreen(
                 modifier = Modifier.fillMaxWidth(),
                 enabled = !saving,
                 onClick = {
+                    if (saving) return@Button
                     attemptedSave = true
                     saveError = null
                     if (!connectionAvailable) {
@@ -259,27 +259,30 @@ fun AddHealthConcernScreen(
                                 appointmentId = null
                             )
 
-                            repository.saveHealthConcern(
+                            repository.addConcern(
                                 patientId = patientId,
-                                concern = concern,
-                                onSuccess = {
-                                    if(alive.value) {
-                                        saving = false
-                                        savedCallback()
-                                    }
-                                },
-                                onError = {
-                                    if(alive.value) {
-                                        saving = false
-                                        saveError = "We couldn't save the concern. Please try again."
-                                    }
+                                concern = concern
+                            ) { result ->
+                                if (alive.value) {
+                                    saving = false
+
+                                    result.fold(
+                                        onSuccess = {
+                                            savedCallback()
+                                        },
+                                        onFailure = {
+                                            saveError =
+                                                "We couldn't save the concern. " +
+                                                        "Please try again."
+                                        }
+                                    )
                                 }
-                            )
+                            }
                         }
                     }
                 }
             ) {
-                Text(if (saving) "Saving..." else "Save Concern")
+                SaveButtonLabel(saving, "Save Concern")
             }
 
             OutlinedButton(
