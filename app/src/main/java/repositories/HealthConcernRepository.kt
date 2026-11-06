@@ -129,20 +129,10 @@ class HealthConcernRepository(
         onSuccess: () -> Unit,
         onError: (String) -> Unit
     ) {
-        firestore
-            .collection("users")
-            .document(patientId)
-            .collection("healthConcerns")
-            .document(concernId)
-            .update(
-                "appointmentId",
-                appointmentId
-            )
-            .addOnSuccessListener {
-                onSuccess()
-            }
-            .addOnFailureListener {
+        linkAppointment(patientId, concernId, appointmentId) { result ->
+            result.onSuccess { onSuccess() }.onFailure {
                 onError("Unable to link appointment. Please try again.")
             }
+        }
     }
 }

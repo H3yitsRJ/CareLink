@@ -28,12 +28,16 @@ fun RefillRequestTrackingScreen(
     onRefresh: () -> Unit = {},
     onBack: () -> Unit = {}
 ) {
-    var selectedRequest by remember {
-        mutableStateOf<RefillRequest?>(null)
+    var selectedRequestId by remember { mutableStateOf<String?>(null) }
+    val selectedRequest = if (!isLoading && error == null) {
+        requests.find { it.id == selectedRequestId }
+    } else null
+    LaunchedEffect(selectedRequest) {
+        if (selectedRequest == null) selectedRequestId = null
     }
 
     BackHandler {
-        if (selectedRequest != null) selectedRequest = null else onBack()
+        if (selectedRequest != null) selectedRequestId = null else onBack()
     }
 
     val sortedRequests = requests.sortedByDescending {
@@ -91,7 +95,7 @@ fun RefillRequestTrackingScreen(
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable { selectedRequest = request },
+                            .clickable { selectedRequestId = request.id },
                         colors = CardDefaults.cardColors(
                             containerColor = if (completed)
                                 MaterialTheme.colorScheme.surfaceVariant
@@ -110,10 +114,10 @@ fun RefillRequestTrackingScreen(
                                 style = MaterialTheme.typography.titleMedium
                             )
                             Text(
-                                SimpleDateFormat(
+                                if (request.requestedAt > 0) SimpleDateFormat(
                                     "MMM d, yyyy",
                                     Locale.getDefault()
-                                ).format(Date(request.requestedAt))
+                                ).format(Date(request.requestedAt)) else "Date unavailable"
                             )
                             Text("Status: ${status.name}")
                         }
@@ -130,7 +134,7 @@ fun RefillRequestTrackingScreen(
 
     selectedRequest?.let { request ->
         AlertDialog(
-            onDismissRequest = { selectedRequest = null },
+            onDismissRequest = { selectedRequestId = null },
             title = { Text("Refill Request Details") },
             text = {
                 Column(Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState())) {
@@ -140,16 +144,16 @@ fun RefillRequestTrackingScreen(
                     Text("Requested by: ${request.requestedById}")
                     Text("Note: ${request.note.ifBlank { "None" }}")
                     Text(
-                        "Date: " + SimpleDateFormat(
+                        if (request.requestedAt > 0) "Date: " + SimpleDateFormat(
                             "MMM d, yyyy h:mm a",
                             Locale.getDefault()
-                        ).format(Date(request.requestedAt))
+                        ).format(Date(request.requestedAt)) else "Date unavailable"
                     )
                 }
             },
             confirmButton = {
                 TextButton(
-                    onClick = { selectedRequest = null }
+                    onClick = { selectedRequestId = null }
                 ) {
                     Text("Close")
                 }

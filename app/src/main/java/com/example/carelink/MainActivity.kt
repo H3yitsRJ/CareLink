@@ -208,6 +208,7 @@ class MainActivity : ComponentActivity() {
                         dashboardDoseHistoryLoading = false
                     } else {
                         DoseHistoryStore(firestore, readSource).load(patientId) { result ->
+                            if (auth.currentUser?.uid != patientId) return@load
                             result.onSuccess { items ->
                                 dashboardDoseHistory = items
                                 dashboardDoseHistoryError = null
@@ -272,29 +273,32 @@ class MainActivity : ComponentActivity() {
                 val refillRequestRepository = remember {
                     RefillRequestRepository(firestore, readSource)
                 }
-                var refillRequests by remember {
+                var refillRequests by remember(auth.currentUser?.uid) {
                     mutableStateOf<List<RefillRequest>>(emptyList())
                 }
-                var refillLoading by remember {
+                var refillLoading by remember(auth.currentUser?.uid) {
                     mutableStateOf(false)
                 }
-                var refillError by remember {
+                var refillError by remember(auth.currentUser?.uid) {
                     mutableStateOf<String?>(null)
                 }
 
                 fun loadRefillRequests(patientId: String) {
                     if (patientId.isBlank()) return
 
+                    refillRequests = emptyList()
                     refillLoading = true
                     refillError = null
 
                     refillRequestRepository.getRefillRequests(
                         patientId = patientId,
                         onSuccess = { requests ->
+                            if (auth.currentUser?.uid != patientId) return@getRefillRequests
                             refillLoading = false
                             refillRequests = requests
                         },
                         onError = { error ->
+                            if (auth.currentUser?.uid != patientId) return@getRefillRequests
                             refillLoading = false
                             refillError = error
                         }
@@ -452,6 +456,7 @@ class MainActivity : ComponentActivity() {
                         dashboardCareTasksError = null
 
                         careTaskRepository.list(patientId) { result ->
+                            if (auth.currentUser?.uid != patientId) return@list
                             result.onSuccess { tasks ->
                                 dashboardCareTasks = tasks
                                 dashboardCareTasksLoading = false
@@ -503,6 +508,7 @@ class MainActivity : ComponentActivity() {
                     appointmentRepository.getAppointments(
                         userId = user.uid,
                         onSuccess = { loadedAppointments ->
+                            if (auth.currentUser?.uid != user.uid) return@getAppointments
                             appointments = loadedAppointments
 
                             loadedAppointments.forEach { appointment ->
@@ -516,6 +522,7 @@ class MainActivity : ComponentActivity() {
                             appointmentsLoading = false
                         },
                         onError = { error->
+                            if (auth.currentUser?.uid != user.uid) return@getAppointments
                             appointmentsLoading = false
                             appointmentLoadError = error
                         }
@@ -582,11 +589,10 @@ class MainActivity : ComponentActivity() {
 
                 fun signOut(): String? {
                     val secureStorage = SecureStorageManager(this@MainActivity)
-                    if (!secureStorage.clearAll()) {
+                    if (!com.example.carelink.security.clearLocalSession(medicationReminderScheduler, secureStorage)) {
                         android.util.Log.e("CareLinkLogout", "Secure storage cleanup failed; logout cancelled")
                         return secureStorage.lastError + " You're still signed in. Try again."
                     }
-                    medicationReminderScheduler.clear()
                     auth.signOut()
                     appScreen = AppScreen.Home
                     navigate(AuthScreen.SignIn)
@@ -746,7 +752,6 @@ class MainActivity : ComponentActivity() {
                                                 eligibleMedications = refillMedications,
                                                 patientId = auth.currentUser?.uid.orEmpty(),
                                                 requestedById = auth.currentUser?.uid.orEmpty(),
-                                                activeRequests = refillRequests,
                                                 isSaving = submittingRefill,
                                                 saved = submittedRefill,
                                                 saveError = refillSaveError,

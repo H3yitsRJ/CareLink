@@ -119,6 +119,7 @@ fun AddEditAppointmentScreen(
         OutlinedTextField(
             value = title,
             onValueChange = { title = it },
+            enabled = !isSaving,
             label = { Text("Appointment title") },
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
@@ -134,6 +135,7 @@ fun AddEditAppointmentScreen(
         OutlinedTextField(
             value = provider,
             onValueChange = { provider = it },
+            enabled = !isSaving,
             label = { Text("Provider") },
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
@@ -186,6 +188,7 @@ fun AddEditAppointmentScreen(
         OutlinedTextField(
             value = location,
             onValueChange = { location = it },
+            enabled = !isSaving,
             label = { Text("Location") },
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
@@ -195,6 +198,7 @@ fun AddEditAppointmentScreen(
         OutlinedTextField(
             value = notes,
             onValueChange = { notes = it },
+            enabled = !isSaving,
             label = { Text("Notes") },
             modifier = Modifier.fillMaxWidth(),
             minLines = 3,

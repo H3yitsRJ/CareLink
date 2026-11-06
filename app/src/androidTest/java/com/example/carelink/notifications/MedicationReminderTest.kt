@@ -88,4 +88,33 @@ class MedicationReminderTest {
         scheduler.restore(medication.patientId)
         assertNotNull(PendingIntent.getBroadcast(context, 0, intent, PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE))
     }
+    @Test fun logoutCleanupCancelsEncryptedRemindersAndVisibleNotifications() {
+        assertTrue(scheduler.schedule(medication))
+        val revision = scheduler.stored(medication.patientId, medication.id)!!.second
+        val at = System.currentTimeMillis() - 1_000
+        val intent = scheduler.alarmIntent(medication, "08:00", at, revision)
+        assertNotNull(PendingIntent.getBroadcast(context, 0, intent,
+            PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE))
+        MedicationReminderReceiver().handle(context, intent, medication.patientId)
+        val manager = context.getSystemService(NotificationManager::class.java)
+        val deadline = SystemClock.elapsedRealtime() + 3_000
+        while (manager.activeNotifications.none { it.tag == AndroidMedicationReminderScheduler.key(medication) } && SystemClock.elapsedRealtime() < deadline) {
+            SystemClock.sleep(25)
+        }
+        assertTrue(manager.activeNotifications.any { it.tag == AndroidMedicationReminderScheduler.key(medication) })
+        val storage = com.example.carelink.security.SecureStorageManager(context)
+        assertTrue(com.example.carelink.security.clearLocalSession(scheduler, storage))
+        assertNull(PendingIntent.getBroadcast(context, 0, intent,
+            PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE))
+        assertTrue(storage.getAllKeys().isEmpty())
+        waitForNotificationRemoval(manager)
+    }
+
+    private fun waitForNotificationRemoval(manager: NotificationManager) {
+        val deadline = SystemClock.elapsedRealtime() + 3_000
+        while (manager.activeNotifications.any { it.tag == AndroidMedicationReminderScheduler.key(medication) } && SystemClock.elapsedRealtime() < deadline) {
+            SystemClock.sleep(25)
+        }
+        assertFalse(manager.activeNotifications.any { it.tag == AndroidMedicationReminderScheduler.key(medication) })
+    }
 }
