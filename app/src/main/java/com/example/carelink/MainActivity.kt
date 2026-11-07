@@ -28,6 +28,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -35,6 +36,7 @@ import androidx.compose.ui.Modifier
 import com.example.carelink.data.CareHistoryStore
 import com.example.carelink.data.ConnectivityMonitor
 import com.example.carelink.data.canReachFirebase
+import com.example.carelink.data.showOfflineWarning
 import com.example.carelink.screens.LocalConnectionAvailable
 import com.example.carelink.screens.OfflineBanner
 import com.example.carelink.screens.OFFLINE_ACTION_MESSAGE
@@ -167,11 +169,17 @@ class MainActivity : ComponentActivity() {
                     // Permission result handled here
                 }
                 val firestore = remember { FirebaseFirestore.getInstance() }
-                var networkAvailable by remember { mutableStateOf(false) }
-                var firebaseAvailable by remember { mutableStateOf(false) }
-                val readSource = remember {
-                    { if (networkAvailable && firebaseAvailable) Source.DEFAULT else Source.CACHE }
+                var networkAvailable by remember {
+                    mutableStateOf(ConnectivityMonitor(this@MainActivity) {}.isOnline())
                 }
+                // null means the first check is pending, not a confirmed connection failure.
+                var firebaseAvailable by remember(networkAvailable, auth.currentUser?.uid) {
+                    mutableStateOf<Boolean?>(null)
+                }
+                val currentReadSource by rememberUpdatedState(
+                    if (networkAvailable && firebaseAvailable == true) Source.DEFAULT else Source.CACHE
+                )
+                val readSource = remember { { currentReadSource } }
                 var dashboardMedications by remember {
                     mutableStateOf<List<Medication>>(emptyList())
                 }
@@ -391,7 +399,7 @@ class MainActivity : ComponentActivity() {
                 }
 
                 var isAuthenticated by remember { mutableStateOf(auth.currentUser != null) }
-                val connectionAvailable = networkAvailable && (!isAuthenticated || firebaseAvailable)
+                val connectionAvailable = networkAvailable && (!isAuthenticated || firebaseAvailable == true)
 
                 DisposableEffect(Unit) {
                     val monitor = ConnectivityMonitor(this@MainActivity) { available ->
@@ -402,7 +410,6 @@ class MainActivity : ComponentActivity() {
                 }
 
                 LaunchedEffect(networkAvailable, isAuthenticated, auth.currentUser?.uid) {
-                    firebaseAvailable = false
                     val patientId = auth.currentUser?.uid
                     if (networkAvailable && isAuthenticated && patientId != null) {
                         while (true) {
@@ -607,7 +614,7 @@ class MainActivity : ComponentActivity() {
                         .background(MaterialTheme.colorScheme.background)
                         .safeDrawingPadding()
                     ) {
-                        OfflineBanner(!connectionAvailable)
+                        OfflineBanner(showOfflineWarning(networkAvailable, isAuthenticated, firebaseAvailable))
 
                         Box(Modifier.weight(1f)) {
 
