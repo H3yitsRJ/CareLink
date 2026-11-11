@@ -1,7 +1,10 @@
 package com.example.carelink.screens
-import androidx.activity.compose.BackHandler
-import androidx.compose.material3.TextButton
 
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.background
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -13,7 +16,10 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -28,8 +34,7 @@ import com.example.carelink.model.Appointment
 import androidx.compose.foundation.layout.statusBarsPadding
 import android.app.DatePickerDialog
 import android.app.TimePickerDialog
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Box
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import java.util.Calendar
 
@@ -98,23 +103,9 @@ fun AddEditAppointmentScreen(
     val titleError = attemptedSave && title.isBlank()
     val dateError = if (attemptedSave) appointmentDateError(date) else null
     val timeError = attemptedSave && !isValidTime(time.trim())
+    val isAddingAppointment = appointment == null
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .statusBarsPadding()
-            .verticalScroll(rememberScrollState())
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        Text(
-            text = if (appointment == null) {
-                "Add appointment"
-            } else {
-                "Edit appointment"
-            }
-        )
-
+    val titleField: @Composable () -> Unit = {
         OutlinedTextField(
             value = title,
             onValueChange = { title = it },
@@ -129,7 +120,9 @@ fun AddEditAppointmentScreen(
             },
             shape = RoundedCornerShape(12.dp)
         )
+    }
 
+    val providerField: @Composable () -> Unit = {
         OutlinedTextField(
             value = provider,
             onValueChange = { provider = it },
@@ -138,14 +131,26 @@ fun AddEditAppointmentScreen(
             singleLine = true,
             shape = RoundedCornerShape(12.dp)
         )
+    }
 
+    val locationField: @Composable () -> Unit = {
+        OutlinedTextField(
+            value = location,
+            onValueChange = { location = it },
+            label = { Text("Location") },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+            shape = RoundedCornerShape(12.dp)
+        )
+    }
+
+    val dateField: @Composable () -> Unit = {
         OutlinedTextField(
             value = date,
             onValueChange = { date = it },
             label = { Text("Date") },
             placeholder = { Text("YYYY-MM-DD") },
-            modifier = Modifier
-                .fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth(),
             singleLine = true,
             enabled = !isSaving,
             trailingIcon = { TextButton(onClick = { showDatePicker() }, enabled = !isSaving) { Text("Choose date") } },
@@ -157,7 +162,9 @@ fun AddEditAppointmentScreen(
             },
             shape = RoundedCornerShape(12.dp)
         )
+    }
 
+    val timeField: @Composable () -> Unit = {
         OutlinedTextField(
             value = time,
             onValueChange = { time = it },
@@ -175,24 +182,107 @@ fun AddEditAppointmentScreen(
             },
             shape = RoundedCornerShape(12.dp)
         )
+    }
 
-        OutlinedTextField(
-            value = location,
-            onValueChange = { location = it },
-            label = { Text("Location") },
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true,
-            shape = RoundedCornerShape(12.dp)
-        )
-
+    val notesField: @Composable () -> Unit = {
         OutlinedTextField(
             value = notes,
             onValueChange = { notes = it },
-            label = { Text("Notes") },
+            label = { Text("What would you like to discuss?") },
             modifier = Modifier.fillMaxWidth(),
             minLines = 3,
             shape = RoundedCornerShape(12.dp)
         )
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(if (appointment == null) Color(0xFFDCEEEF) else Color.Transparent)
+            .statusBarsPadding()
+            .verticalScroll(rememberScrollState())
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        if (appointment == null) {
+            Text(
+                text = "Add Appointment",
+                style = MaterialTheme.typography.titleLarge,
+                color = Color(0xFF172426)
+            )
+
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                color = Color.White,
+                contentColor = Color(0xFF172426),
+                border = BorderStroke(1.dp, Color(0xFFADB7B7))
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        text = "Visit details",
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                    titleField()
+                    providerField()
+                    locationField()
+                }
+            }
+
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                color = Color.White,
+                contentColor = Color(0xFF172426),
+                border = BorderStroke(1.dp, Color(0xFFADB7B7))
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        text = "Date and time",
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                    dateField()
+                    timeField()
+                }
+            }
+
+        } else {
+            Text("Edit appointment")
+            titleField()
+            providerField()
+            dateField()
+            timeField()
+            locationField()
+        }
+
+        if (isAddingAppointment) {
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                color = Color.White,
+                contentColor = Color(0xFF172426),
+                border = BorderStroke(1.dp, Color(0xFFADB7B7))
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        text = "Reason for visit",
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                    notesField()
+                }
+            }
+        } else {
+            notesField()
+        }
 
         if (saveError != null) {
             CareErrorState(message = saveError)
