@@ -1,39 +1,48 @@
 package com.example.carelink.screens
-import androidx.activity.compose.BackHandler
-import androidx.compose.material3.TextButton
 
+import android.app.DatePickerDialog
+import android.app.TimePickerDialog
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import com.example.carelink.model.Appointment
+import com.example.carelink.model.AppointmentStatus
 import java.text.SimpleDateFormat
+import java.util.Calendar
 import java.util.Date
 import java.util.Locale
-import com.example.carelink.model.Appointment
-import androidx.compose.foundation.layout.statusBarsPadding
-import android.app.DatePickerDialog
-import android.app.TimePickerDialog
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Box
-import androidx.compose.ui.platform.LocalContext
-import java.util.Calendar
-
 
 @Composable
 fun AddEditAppointmentScreen(
@@ -47,17 +56,39 @@ fun AddEditAppointmentScreen(
         if (!isSaving) onCancel()
     }
 
-    var title by rememberSaveable(appointment?.id) { mutableStateOf(appointment?.title.orEmpty()) }
-    var provider by rememberSaveable(appointment?.id) { mutableStateOf(appointment?.provider.orEmpty()) }
-    var date by rememberSaveable(appointment?.id) { mutableStateOf(appointment?.date.orEmpty()) }
-    var time by rememberSaveable(appointment?.id) { mutableStateOf(appointment?.time.orEmpty()) }
-    var location by rememberSaveable(appointment?.id) { mutableStateOf(appointment?.location.orEmpty()) }
-    var notes by rememberSaveable(appointment?.id) { mutableStateOf(appointment?.notes.orEmpty()) }
-    var attemptedSave by rememberSaveable(appointment?.id) { mutableStateOf(false) }
+    var title by rememberSaveable(appointment?.id) {
+        mutableStateOf(appointment?.title.orEmpty())
+    }
+    var provider by rememberSaveable(appointment?.id) {
+        mutableStateOf(appointment?.provider.orEmpty())
+    }
+    var date by rememberSaveable(appointment?.id) {
+        mutableStateOf(appointment?.date.orEmpty())
+    }
+    var time by rememberSaveable(appointment?.id) {
+        mutableStateOf(appointment?.time.orEmpty())
+    }
+    var location by rememberSaveable(appointment?.id) {
+        mutableStateOf(appointment?.location.orEmpty())
+    }
+    var notes by rememberSaveable(appointment?.id) {
+        mutableStateOf(appointment?.notes.orEmpty())
+    }
+    var attemptedSave by rememberSaveable(appointment?.id) {
+        mutableStateOf(false)
+    }
+
     val context = LocalContext.current
-    val calendar = Calendar.getInstance()
+    val isAddingAppointment = appointment == null
+    val actionShape = if (isAddingAppointment) {
+        ButtonDefaults.shape
+    } else {
+        RoundedCornerShape(8.dp)
+    }
 
     fun showDatePicker() {
+        val calendar = Calendar.getInstance()
+
         DatePickerDialog(
             context,
             { _, year, month, dayOfMonth ->
@@ -83,12 +114,7 @@ fun AddEditAppointmentScreen(
         TimePickerDialog(
             context,
             { _, hourOfDay, minute ->
-                time = String.format(
-                    Locale.US,
-                    "%02d:%02d",
-                    hourOfDay,
-                    minute
-                )
+                time = String.format(Locale.US, "%02d:%02d", hourOfDay, minute)
             },
             calendar.get(Calendar.HOUR_OF_DAY),
             calendar.get(Calendar.MINUTE),
@@ -100,38 +126,25 @@ fun AddEditAppointmentScreen(
     val dateError = if (attemptedSave) appointmentDateError(date) else null
     val timeError = attemptedSave && !isValidTime(time.trim())
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .statusBarsPadding()
-            .imePadding().verticalScroll(rememberScrollState())
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        Text(
-            text = if (appointment == null) {
-                "Add appointment"
-            } else {
-                "Edit appointment"
-            }
-        )
-
+    val titleField: @Composable () -> Unit = {
         OutlinedTextField(
-            value = title,
-            onValueChange = { title = it },
-            enabled = !isSaving,
-            label = { Text("Appointment title") },
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true,
-            isError = titleError,
-            supportingText = {
-                if (titleError) {
-                    Text("Enter an appointment title")
-                }
-            },
-            shape = RoundedCornerShape(12.dp)
-        )
+          value = title,
+          onValueChange = { title = it },
+          enabled = !isSaving,
+          label = { Text("Appointment title") },
+          modifier = Modifier.fillMaxWidth(),
+          singleLine = true,
+          isError = titleError,
+          supportingText = {
+            if (titleError) {
+                Text("Enter an appointment title")
+            }
+         },
+          shape = RoundedCornerShape(12.dp)
+      )
+    }
 
+    val providerField: @Composable () -> Unit = {
         OutlinedTextField(
             value = provider,
             onValueChange = { provider = it },
@@ -141,16 +154,33 @@ fun AddEditAppointmentScreen(
             singleLine = true,
             shape = RoundedCornerShape(12.dp)
         )
+    }
 
+    val locationField: @Composable () -> Unit = {
+        OutlinedTextField(
+            value = location,
+            onValueChange = { location = it },
+            label = { Text("Location") },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+            shape = RoundedCornerShape(12.dp)
+        )
+    }
+
+    val dateField: @Composable () -> Unit = {
         OutlinedTextField(
             value = date,
             onValueChange = { date = it },
             label = { Text("Date") },
             placeholder = { Text("YYYY-MM-DD") },
-            modifier = Modifier
-                .fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth(),
             singleLine = true,
             enabled = !isSaving,
+            trailingIcon = {
+                TextButton(onClick = { showDatePicker() }, enabled = !isSaving) {
+                    Text("Choose date")
+                }
+            },
             isError = dateError != null,
             supportingText = {
                 if (dateError != null) {
@@ -159,11 +189,9 @@ fun AddEditAppointmentScreen(
             },
             shape = RoundedCornerShape(12.dp)
         )
+    }
 
-        TextButton(onClick = { showDatePicker() }, enabled = !isSaving) {
-            Text("Choose date")
-        }
-
+    val timeField: @Composable () -> Unit = {
         OutlinedTextField(
             value = time,
             onValueChange = { time = it },
@@ -172,6 +200,11 @@ fun AddEditAppointmentScreen(
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
             enabled = !isSaving,
+            trailingIcon = {
+                TextButton(onClick = { showTimePicker() }, enabled = !isSaving) {
+                    Text("Choose time")
+                }
+            },
             isError = timeError,
             supportingText = {
                 if (timeError) {
@@ -180,35 +213,21 @@ fun AddEditAppointmentScreen(
             },
             shape = RoundedCornerShape(12.dp)
         )
+    }
 
-        TextButton(onClick = { showTimePicker() }, enabled = !isSaving) {
-            Text("Choose time")
-        }
-
-        OutlinedTextField(
-            value = location,
-            onValueChange = { location = it },
-            enabled = !isSaving,
-            label = { Text("Location") },
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true,
-            shape = RoundedCornerShape(12.dp)
-        )
-
+    val notesField: @Composable () -> Unit = {
         OutlinedTextField(
             value = notes,
             onValueChange = { notes = it },
             enabled = !isSaving,
-            label = { Text("Notes") },
+            label = { Text("What would you like to discuss?") },
             modifier = Modifier.fillMaxWidth(),
             minLines = 3,
             shape = RoundedCornerShape(12.dp)
         )
+    }
 
-        if (saveError != null) {
-            CareErrorState(message = saveError)
-        }
-
+    val saveButton: @Composable (Modifier) -> Unit = { buttonModifier ->
         Button(
             onClick = {
                 attemptedSave = true
@@ -219,7 +238,7 @@ fun AddEditAppointmentScreen(
                     isValidTime(time.trim())
                 ) {
                     onSave(
-                        Appointment (
+                        Appointment(
                             id = appointment?.id.orEmpty(),
                             patientId = appointment?.patientId.orEmpty(),
                             title = title.trim(),
@@ -228,27 +247,136 @@ fun AddEditAppointmentScreen(
                             provider = provider.trim(),
                             location = location.trim(),
                             notes = notes.trim(),
-                            status = appointment?.status
-                                ?: com.example.carelink.model.AppointmentStatus.SCHEDULED
-
+                            status = appointment?.status ?: AppointmentStatus.SCHEDULED
                         )
                     )
                 }
             },
             enabled = !isSaving,
-            modifier = Modifier.fillMaxWidth()
+            modifier = buttonModifier,
+            shape = actionShape
         ) {
-            SaveButtonLabel(isSaving, "Save appointment")
+           SaveButtonLabel(
+                isSaving,
+                if (isAddingAppointment) "Save appointment" else "Save Changes"
+            )
         }
+    }
 
+    val cancelButton: @Composable (Modifier) -> Unit = { buttonModifier ->
         OutlinedButton(
             onClick = onCancel,
             enabled = !isSaving,
-            modifier = Modifier.fillMaxWidth()
+            modifier = buttonModifier,
+            shape = actionShape
         ) {
             Text("Cancel")
         }
+    }
 
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xFFDCEEEF))
+            .statusBarsPadding()
+            .imePadding()
+            .verticalScroll(rememberScrollState())
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Column {
+            if (!isAddingAppointment) {
+                IconButton(onClick = onCancel, enabled = !isSaving) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = "Cancel appointment editing"
+                    )
+                }
+            }
+
+            Text(
+                text = if (isAddingAppointment) "Add Appointment" else "Edit Appointment",
+                style = MaterialTheme.typography.titleLarge,
+                color = Color(0xFF172426)
+            )
+        }
+
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(12.dp),
+            color = Color.White,
+            contentColor = Color(0xFF172426),
+            border = BorderStroke(1.dp, Color(0xFFADB7B7))
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text(
+                    text = "Visit details",
+                    style = MaterialTheme.typography.titleMedium
+                )
+                titleField()
+                providerField()
+                locationField()
+            }
+        }
+
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(12.dp),
+            color = Color.White,
+            contentColor = Color(0xFF172426),
+            border = BorderStroke(1.dp, Color(0xFFADB7B7))
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text(
+                    text = "Date and time",
+                    style = MaterialTheme.typography.titleMedium
+                )
+                dateField()
+                timeField()
+            }
+        }
+
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(12.dp),
+            color = Color.White,
+            contentColor = Color(0xFF172426),
+            border = BorderStroke(1.dp, Color(0xFFADB7B7))
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text(
+                    text = "Reason for visit",
+                    style = MaterialTheme.typography.titleMedium
+                )
+                notesField()
+            }
+        }
+
+        if (saveError != null) {
+            CareErrorState(message = saveError)
+        }
+
+        if (isAddingAppointment) {
+            saveButton(Modifier.fillMaxWidth())
+            cancelButton(Modifier.fillMaxWidth())
+        } else {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                cancelButton(Modifier.weight(1f))
+                saveButton(Modifier.weight(2f))
+            }
+        }
     }
 }
 

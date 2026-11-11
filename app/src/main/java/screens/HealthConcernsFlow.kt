@@ -16,7 +16,8 @@ fun HealthConcernsFlow(
     patientId: String,
     repository: HealthConcernRepository,
     onBack: () -> Unit = {},
-    canEdit: Boolean = true
+    canEdit: Boolean = true,
+    onOpenCareRecipientConcerns: (() -> Unit)? = null
 ) {
     key(patientId) {
         var selectedId by rememberSaveable { mutableStateOf<String?>(null) }
@@ -83,9 +84,9 @@ fun HealthConcernsFlow(
                     }
                     onDispose { active = false; stop() }
                 }
-                Scaffold(Modifier.safeDrawingPadding(),
-                    bottomBar = { TextButton(onClick = onBack) { Text("Back") } }
-                ) { padding ->
+
+
+                Scaffold(Modifier.safeDrawingPadding()) { padding ->
                     Column(Modifier.padding(padding)) {
                         successMessage?.let { message ->
                             Text(
@@ -95,6 +96,7 @@ fun HealthConcernsFlow(
                         }
 
                         if (error != null) TextButton(onClick = { retry++ }) { Text("Retry") }
+
                         HealthConcernsScreen(
                             concerns = concerns,
                             isLoading = loading,
@@ -107,7 +109,11 @@ fun HealthConcernsFlow(
                             } else {
                                 null
                             },
-                            onSelect = { selectedId = it.id })
+                            onSelect = { selectedId = it.id },
+                            onBack = onBack,
+                            onOpenCareRecipientConcerns = onOpenCareRecipientConcerns
+                        )
+
                     }
                 }
             }
