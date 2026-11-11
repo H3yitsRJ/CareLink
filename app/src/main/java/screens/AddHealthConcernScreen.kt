@@ -2,15 +2,24 @@ package com.example.carelink.screens
 
 import android.app.DatePickerDialog
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.example.carelink.data.HealthConcernRepository
 import com.example.carelink.model.ConcernSeverity
@@ -18,6 +27,7 @@ import com.example.carelink.model.ConcernStatus
 import com.example.carelink.model.HealthConcern
 import java.text.SimpleDateFormat
 import java.util.Calendar
+import java.util.Date
 import java.util.Locale
 
 @Composable
@@ -32,8 +42,12 @@ fun AddHealthConcernScreen(
 
     var title by rememberSaveable(patientId) { mutableStateOf("") }
     var notes by rememberSaveable(patientId) { mutableStateOf("") }
-    var severityName by rememberSaveable(patientId) { mutableStateOf(ConcernSeverity.MEDIUM.name) }
-    var dateMillis by rememberSaveable(patientId) { mutableStateOf(Calendar.getInstance().timeInMillis) }
+    var severityName by rememberSaveable(patientId) {
+        mutableStateOf(ConcernSeverity.MEDIUM.name)
+    }
+    var dateMillis by rememberSaveable(patientId) {
+        mutableStateOf(Calendar.getInstance().timeInMillis)
+    }
     var attemptedSave by rememberSaveable(patientId) { mutableStateOf(false) }
     var saving by remember { mutableStateOf(false) }
     var saveError by remember { mutableStateOf<String?>(null) }
@@ -51,46 +65,127 @@ fun AddHealthConcernScreen(
     }
 
     val titleInvalid = attemptedSave && title.isBlank()
-    val dateLabel = SimpleDateFormat(
-        "MMM d, yyyy",
-        Locale.getDefault()
-    ).format(java.util.Date(dateMillis))
+    val onsetDate = Date(dateMillis)
+    val dateParts = listOf("d", "MMM", "yyyy").map { pattern ->
+        SimpleDateFormat(pattern, Locale.getDefault()).format(onsetDate)
+    }
 
     Scaffold(
-        modifier = Modifier.safeDrawingPadding()
+        modifier = Modifier
+            .safeDrawingPadding()
+            .imePadding(),
+        bottomBar = {
+            Surface(color = MaterialTheme.colorScheme.background) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                ) {
+                    Button(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(8.dp),
+                        enabled = !saving,
+                        onClick = {
+                            attemptedSave = true
+                            saveError = null
+                            if (!connectionAvailable) {
+                                saveError = OFFLINE_ACTION_MESSAGE
+                                return@Button
+                            }
+
+                            if (title.isNotBlank()) {
+                                if (patientId.isBlank()) {
+                                    saveError = "Select a care recipient before saving."
+                                } else {
+                                    saving = true
+
+                                    val recordedDate = SimpleDateFormat(
+                                        "yyyy-MM-dd",
+                                        Locale.US
+                                    ).format(Date(dateMillis))
+
+                                    val concern = HealthConcern(
+                                        id = "",
+                                        patientId = patientId,
+                                        title = title.trim(),
+                                        severity = ConcernSeverity.valueOf(severityName),
+                                        recordedDate = recordedDate,
+                                        description = notes.trim(),
+                                        status = ConcernStatus.ACTIVE,
+                                        appointmentId = null
+                                    )
+
+                                    repository.addConcern(
+                                        patientId = patientId,
+                                        concern = concern
+                                    ) { result ->
+                                        if (alive.value) {
+                                            saving = false
+
+                                            result.fold(
+                                                onSuccess = {
+                                                    savedCallback()
+                                                },
+                                                onFailure = {
+                                                    saveError =
+                                                        "We couldn't save the concern. " +
+                                                                "Please try again."
+                                                }
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    ) {
+                        Text(if (saving) "Saving..." else "Save Concern")
+                    }
+                }
+            }
+        }
     ) { padding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .imePadding()
                 .verticalScroll(rememberScrollState())
                 .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            TextButton(
-                onClick = onCancel,
-                enabled = !saving
-            ) {
-                Text("‹ Back")
-            }
+            Column(modifier = Modifier.fillMaxWidth()) {
+                IconButton(onClick = onCancel, enabled = !saving) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = "Cancel adding health concern"
+                    )
+                }
 
-            Text(
-                text = "Add Health Concern",
-                style = MaterialTheme.typography.headlineMedium
-            )
+                Text(
+                    text = "Add Health Concern",
+                    modifier = Modifier.fillMaxWidth(),
+                    textAlign = TextAlign.Center,
+                    style = MaterialTheme.typography.titleLarge
+                )
+            }
 
             Card(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp)
+                shape = RoundedCornerShape(12.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                border = BorderStroke(1.dp, Color(0xFFADB7B7))
             ) {
                 Column(
                     modifier = Modifier.padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Text(
-                        "Concern details",
+                        text = "Concern details",
                         style = MaterialTheme.typography.titleMedium
+                    )
+
+                    Text(
+                        text = "Concern or symptom",
+                        style = MaterialTheme.typography.labelLarge
                     )
 
                     OutlinedTextField(
@@ -99,51 +194,57 @@ fun AddHealthConcernScreen(
                             title = it
                             saveError = null
                         },
-                        label = { Text("Concern or symptom") },
                         placeholder = { Text("Enter concern or symptom") },
                         modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(8.dp),
                         enabled = !saving,
                         singleLine = true,
                         isError = titleInvalid,
-                        supportingText = {
-                            if (titleInvalid) {
-                                Text("Enter a concern or symptom.")
-                            }
+                        supportingText = if (titleInvalid) {
+                            { Text("Enter a concern or symptom.") }
+                        } else {
+                            null
                         }
                     )
 
                     Text("Severity")
 
-                    // Equal widths keep all three choices on small screens.
-                    Row(modifier = Modifier.fillMaxWidth()) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .selectableGroup(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
                         ConcernSeverity.entries.forEach { severity ->
                             val label = when (severity) {
                                 ConcernSeverity.LOW -> "Mild"
                                 ConcernSeverity.MEDIUM -> "Moderate"
                                 ConcernSeverity.HIGH -> "Severe"
                             }
+                            val selected = severityName == severity.name
 
-                            Column(
-                                modifier = Modifier.weight(1f)
+                            Row(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .heightIn(min = 48.dp)
+                                    .selectable(
+                                        selected = selected,
+                                        enabled = !saving,
+                                        role = Role.RadioButton,
+                                        onClick = { severityName = severity.name }
+                                    ),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
                                 RadioButton(
-                                    selected =
-                                        severityName == severity.name,
-                                    onClick = {
-                                        severityName = severity.name
-                                    },
+                                    selected = selected,
+                                    onClick = null,
                                     enabled = !saving
                                 )
-
-                                TextButton(
-                                    onClick = {
-                                        severityName = severity.name
-                                    },
-                                    enabled = !saving,
-                                    contentPadding = PaddingValues(0.dp)
-                                ) {
-                                    Text(label)
-                                }
+                                Text(
+                                    text = label,
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
                             }
                         }
                     }
@@ -152,56 +253,78 @@ fun AddHealthConcernScreen(
 
             Card(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp)
+                shape = RoundedCornerShape(12.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                border = BorderStroke(1.dp, Color(0xFFADB7B7))
             ) {
                 Column(
                     modifier = Modifier.padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Text(
-                        "Onset date",
+                        text = "Onset date",
                         style = MaterialTheme.typography.titleMedium
                     )
 
-                    OutlinedButton(
-                        enabled = !saving,
-                        modifier = Modifier.fillMaxWidth(),
-                        onClick = {
-                            val calendar = Calendar.getInstance().apply {
-                                timeInMillis = dateMillis
-                            }
-
-                            DatePickerDialog(
-                                context,
-                                { _, year, month, day ->
-                                    dateMillis =
-                                        Calendar.getInstance().apply {
-                                            clear()
-                                            set(year, month, day)
-                                        }.timeInMillis
-                                },
-                                calendar.get(Calendar.YEAR),
-                                calendar.get(Calendar.MONTH),
-                                calendar.get(Calendar.DAY_OF_MONTH)
-                            ).show()
+                    val openDatePicker: () -> Unit = {
+                        val calendar = Calendar.getInstance().apply {
+                            timeInMillis = dateMillis
                         }
+
+                        DatePickerDialog(
+                            context,
+                            { _, year, month, day ->
+                                dateMillis = Calendar.getInstance().apply {
+                                    clear()
+                                    set(year, month, day)
+                                }.timeInMillis
+                            },
+                            calendar.get(Calendar.YEAR),
+                            calendar.get(Calendar.MONTH),
+                            calendar.get(Calendar.DAY_OF_MONTH)
+                        ).show()
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Text(dateLabel)
+                        dateParts.forEach { part ->
+                            OutlinedButton(
+                                onClick = openDatePicker,
+                                enabled = !saving,
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(8.dp),
+                                colors = ButtonDefaults.outlinedButtonColors(
+                                    contentColor = MaterialTheme.colorScheme.onSurface
+                                ),
+                                contentPadding = PaddingValues(horizontal = 4.dp)
+                            ) {
+                                Text(part)
+                            }
+                        }
                     }
                 }
             }
 
             Card(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp)
+                shape = RoundedCornerShape(12.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                border = BorderStroke(1.dp, Color(0xFFADB7B7))
             ) {
                 Column(
                     modifier = Modifier.padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Text(
-                        "Notes",
+                        text = "Notes",
                         style = MaterialTheme.typography.titleMedium
+                    )
+
+                    Text(
+                        text = "Optional details",
+                        style = MaterialTheme.typography.labelLarge
                     )
 
                     OutlinedTextField(
@@ -210,8 +333,8 @@ fun AddHealthConcernScreen(
                             notes = it
                             saveError = null
                         },
-                        label = { Text("Optional details") },
                         modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(8.dp),
                         enabled = !saving,
                         minLines = 3
                     )
@@ -223,74 +346,6 @@ fun AddHealthConcernScreen(
                     text = message,
                     color = MaterialTheme.colorScheme.error
                 )
-            }
-
-            Button(
-                modifier = Modifier.fillMaxWidth(),
-                enabled = !saving,
-                onClick = {
-                    attemptedSave = true
-                    saveError = null
-                    if (!connectionAvailable) {
-                        saveError = OFFLINE_ACTION_MESSAGE
-                        return@Button
-                    }
-
-                    if (title.isNotBlank()) {
-                        if (patientId.isBlank()) {
-                            saveError =
-                                "Select a care recipient before saving."
-                        } else {
-                            saving = true
-
-                            val recordedDate = SimpleDateFormat(
-                                "yyyy-MM-dd",
-                                Locale.US
-                            ).format(java.util.Date(dateMillis))
-
-                            val concern = HealthConcern(
-                                id = "",
-                                patientId = patientId,
-                                title = title.trim(),
-                                severity = ConcernSeverity.valueOf(severityName),
-                                recordedDate = recordedDate,
-                                description = notes.trim(),
-                                status = ConcernStatus.ACTIVE,
-                                appointmentId = null
-                            )
-
-                            repository.addConcern(
-                                patientId = patientId,
-                                concern = concern
-                            ) { result ->
-                                if (alive.value) {
-                                    saving = false
-
-                                    result.fold(
-                                        onSuccess = {
-                                            savedCallback()
-                                        },
-                                        onFailure = {
-                                            saveError =
-                                                "We couldn't save the concern. " +
-                                                        "Please try again."
-                                        }
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-            ) {
-                Text(if (saving) "Saving..." else "Save Concern")
-            }
-
-            OutlinedButton(
-                onClick = onCancel,
-                enabled = !saving,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text("Cancel")
             }
         }
     }

@@ -958,14 +958,6 @@ class MainActivity : ComponentActivity() {
                                                             .fillMaxSize()
                                                             .safeDrawingPadding()
                                                     ) {
-                                                        TextButton(
-                                                            onClick = {
-                                                                caregiverMode = true
-                                                            }
-                                                        ) {
-                                                            Text("Care recipient health concerns")
-                                                        }
-
                                                         androidx.compose.foundation.layout.Box(
                                                             modifier = Modifier.weight(1f)
                                                         ) {
@@ -974,6 +966,9 @@ class MainActivity : ComponentActivity() {
                                                                 repository = healthConcernRepository,
                                                                 onBack = {
                                                                     appScreen = AppScreen.Home
+                                                                },
+                                                                onOpenCareRecipientConcerns = {
+                                                                    caregiverMode = true
                                                                 }
                                                             )
                                                         }
