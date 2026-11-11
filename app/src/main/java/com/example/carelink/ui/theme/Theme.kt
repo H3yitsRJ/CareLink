@@ -8,21 +8,44 @@ import androidx.compose.runtime.Composable
 private val CareLinkColorScheme = lightColorScheme(
     primary = CareLinkPrimaryAction,
     onPrimary = CareLinkTextOnDark,
+    primaryContainer = CareLinkActionContainer,
+    onPrimaryContainer = CareLinkTextPrimary,
 
     secondary = CareLinkPrompt,
     onSecondary = CareLinkTextOnDark,
+    secondaryContainer = CareLinkSurfaceMuted,
+    onSecondaryContainer = CareLinkTextPrimary,
 
     tertiary = CareLinkSuccess,
     onTertiary = CareLinkTextOnDark,
+    tertiaryContainer = CareLinkSuccessContainer,
+    onTertiaryContainer = CareLinkTextPrimary,
 
     background = CareLinkBackground,
     onBackground = CareLinkTextPrimary,
 
     surface = CareLinkSurface,
     onSurface = CareLinkTextPrimary,
+    surfaceVariant = CareLinkSurfaceMuted,
+    onSurfaceVariant = CareLinkPrompt,
+    surfaceTint = CareLinkPrimaryAction,
+    outline = CareLinkPrompt,
+    outlineVariant = CareLinkOutlineMuted,
+    surfaceBright = CareLinkSurface,
+    surfaceDim = CareLinkSurfaceMuted,
+    surfaceContainerLowest = CareLinkSurface,
+    surfaceContainerLow = CareLinkSurface,
+    surfaceContainer = CareLinkSurface,
+    surfaceContainerHigh = CareLinkSurface,
+    surfaceContainerHighest = CareLinkSurfaceMuted,
+    inverseSurface = CareLinkTextPrimary,
+    inverseOnSurface = CareLinkTextOnDark,
+    inversePrimary = CareLinkActionContainer,
 
     error = CareLinkError,
-    onError = CareLinkTextOnDark
+    onError = CareLinkTextOnDark,
+    errorContainer = CareLinkErrorContainer,
+    onErrorContainer = CareLinkError
 )
 
 @Composable

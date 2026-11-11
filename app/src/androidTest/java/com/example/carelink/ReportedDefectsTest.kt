@@ -55,4 +55,39 @@ class ReportedDefectsTest {
         compose.onNodeWithText("Original medicine").performClick()
         compose.onNodeWithText("Medication: Original medicine").assertExists()
     }
+    @Test fun openRefillDetailsFollowUpdatesAndDismissRemovedRecords() {
+        val original = RefillRequest("one", "patient", "one", "patient", note = "Original note", medicationName = "Medicine")
+        val requests = androidx.compose.runtime.mutableStateOf(listOf(original))
+        compose.setContent { RefillRequestTrackingScreen(requests = requests.value) }
+        compose.onNodeWithText("Medicine").performClick()
+        compose.onNodeWithText("Note: Original note").assertExists()
+        compose.runOnIdle {
+            requests.value = listOf(original.copy(status = com.example.carelink.model.RefillRequestStatus.COMPLETED, note = "Updated note"))
+        }
+        compose.onNodeWithText("Note: Updated note").assertExists()
+        compose.onNode(hasText("Status: COMPLETED") and hasAnyAncestor(isDialog())).assertExists()
+        compose.onNodeWithText("Note: Original note").assertDoesNotExist()
+        compose.runOnIdle { requests.value = emptyList() }
+        compose.onNodeWithText("Refill Request Details").assertDoesNotExist()
+    }
+
+    @Test fun refillDetailsCloseWhenLoadingFails() {
+        val error = androidx.compose.runtime.mutableStateOf<String?>(null)
+        compose.setContent { RefillRequestTrackingScreen(requests = listOf(
+            RefillRequest("one", "patient", "one", "patient", medicationName = "Medicine")
+        ), error = error.value) }
+        compose.onNodeWithText("Medicine").performClick()
+        compose.onNodeWithText("Refill Request Details").assertExists()
+        compose.runOnIdle { error.value = "Couldn't load requests" }
+        compose.onNodeWithText("Refill Request Details").assertDoesNotExist()
+        compose.onNodeWithText("Couldn't load requests").assertExists()
+    }
+    @Test fun missingRefillTimestampShowsDateUnavailable() {
+        compose.setContent { RefillRequestTrackingScreen(requests = listOf(
+            RefillRequest("one", "patient", "one", "patient", requestedAt = 0, medicationName = "Medicine")
+        )) }
+        compose.onNodeWithText("Date unavailable").assertExists()
+        compose.onNodeWithText("Medicine").performClick()
+        compose.onNode(hasText("Date unavailable") and hasAnyAncestor(isDialog())).assertExists()
+    }
 }

@@ -64,149 +64,145 @@ fun HealthConcernsScreen(
                 (severity == null || it.severity == severity)
     }
 
-    Column(Modifier
+    LazyColumn(Modifier
         .fillMaxSize()
         .background(MaterialTheme.colorScheme.background)
         .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            if (onBack != null) {
-                IconButton(onClick = onBack) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "Back to home"
+        item {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    if (onBack != null) {
+                        IconButton(onClick = onBack) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = "Back to home"
+                            )
+                        }
+                    }
+
+                    Box(
+                        modifier = Modifier.weight(1f),
+                        contentAlignment = Alignment.CenterEnd
+                    ) {
+                        if (onOpenCareRecipientConcerns != null) {
+                            IconButton(onClick = onOpenCareRecipientConcerns) {
+                                Icon(
+                                    imageVector = Icons.Filled.Person,
+                                    contentDescription = "Open care recipient health concerns",
+                                    modifier = Modifier.size(24.dp),
+                                    tint = MaterialTheme.colorScheme.onBackground
+                                )
+                            }
+                        }
+                    }
+                }
+
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(
+                        text = "Health Concerns",
+                        style = MaterialTheme.typography.titleLarge
+                    )
+                    Text(
+                        text = "Manage & view healthcare concerns",
+                        style = MaterialTheme.typography.bodyMedium
                     )
                 }
-            }
 
-            Box(
-                modifier = Modifier.weight(1f),
-                contentAlignment = Alignment.CenterEnd
-            ) {
-                if (onOpenCareRecipientConcerns != null) {
-                    IconButton(onClick = onOpenCareRecipientConcerns) {
-                        Icon(
-                            imageVector = Icons.Filled.Person,
-                            contentDescription = "Open care recipient health concerns",
-                            modifier = Modifier.size(24.dp),
-                            tint = MaterialTheme.colorScheme.onBackground
+                if (onAdd != null)
+                    Button(
+                        onClick = onAdd,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Text("+ Add concern")
+                    }
+
+                val statusChipColors = FilterChipDefaults.filterChipColors(
+                    containerColor = Color(0xFF305D60),
+                    labelColor = Color.White,
+                    selectedContainerColor = Color(0xFF204548),
+                    selectedLabelColor = Color.White
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    FilterChip(
+                        selected = status == null,
+                        onClick = { status = null },
+                        label = {
+                            Box(
+                                modifier = Modifier.fillMaxWidth(),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text("All")
+                            }
+                        },
+                        modifier = Modifier.weight(1f),
+                        colors = statusChipColors,
+                        border = null
+                    )
+                    FilterChip(
+                        selected = status == ConcernStatus.ACTIVE,
+                        onClick = { status = ConcernStatus.ACTIVE },
+                        label = {
+                            Box(
+                                modifier = Modifier.fillMaxWidth(),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text("Active")
+                            }
+                        },
+                        modifier = Modifier.weight(1f),
+                        colors = statusChipColors,
+                        border = null
+                    )
+                    FilterChip(
+                        selected = status == ConcernStatus.DISCUSSED,
+                        onClick = { status = ConcernStatus.DISCUSSED },
+                        label = {
+                            Box(
+                                modifier = Modifier.fillMaxWidth(),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text("Discussed")
+                            }
+                        },
+                        modifier = Modifier.weight(1f),
+                        colors = statusChipColors,
+                        border = null
+                    )
+                }
+
+                Row(
+                    Modifier.horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    ConcernSeverity.entries.forEach { item ->
+                        FilterChip(
+                            selected = severity == item,
+                            onClick = { severity = if (severity == item) null else item },
+                            label = { Text(item.displayLabel) }
                         )
                     }
                 }
             }
         }
-
-        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(
-                text = "Health Concerns",
-                style = MaterialTheme.typography.titleLarge
-            )
-            Text(
-                text = "Manage & view healthcare concerns",
-                style = MaterialTheme.typography.bodyMedium
-            )
-        }
-
-        if (onAdd != null)
-            Button(
-                onClick = onAdd,
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(8.dp)
-            ) {
-                Text("+ Add concern")
-            }
-
-        val statusChipColors = FilterChipDefaults.filterChipColors(
-            containerColor = Color(0xFF305D60),
-            labelColor = Color.White,
-            selectedContainerColor = Color(0xFF204548),
-            selectedLabelColor = Color.White
-        )
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            FilterChip(
-                selected = status == null,
-                onClick = { status = null },
-                label = {
-                    Box(
-                        modifier = Modifier.fillMaxWidth(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text("All")
-                    }
-                },
-                modifier = Modifier.weight(1f),
-                colors = statusChipColors,
-                border = null
-            )
-            FilterChip(
-                selected = status == ConcernStatus.ACTIVE,
-                onClick = { status = ConcernStatus.ACTIVE },
-                label = {
-                    Box(
-                        modifier = Modifier.fillMaxWidth(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text("Active")
-                    }
-                },
-                modifier = Modifier.weight(1f),
-                colors = statusChipColors,
-                border = null
-            )
-            FilterChip(
-                selected = status == ConcernStatus.DISCUSSED,
-                onClick = { status = ConcernStatus.DISCUSSED },
-                label = {
-                    Box(
-                        modifier = Modifier.fillMaxWidth(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text("Discussed")
-                    }
-                },
-                modifier = Modifier.weight(1f),
-                colors = statusChipColors,
-                border = null
-            )
-        }
-
-        Row(
-            Modifier.horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            ConcernSeverity.entries.forEach { item ->
-                FilterChip(
-                    selected = severity == item,
-                    onClick = { severity = if (severity == item) null else item },
-                    label = {
-                        Text(
-                            item.name
-                                .lowercase()
-                                .replaceFirstChar(Char::uppercase)
-                        )
-                    }
-                )
-            }
-        }
-
+        
         when {
-            isLoading -> StateMessage("Loading health concerns")
-            error != null -> CareErrorState(message = error)
-            concerns.isEmpty() -> StateMessage("No health concerns recorded.")
-            visible.isEmpty() -> StateMessage("No health concerns match these filters.")
+            isLoading -> item { LoadingState("Loading health concerns") }
+            error != null -> item { CareErrorState(message = error) }
+            concerns.isEmpty() -> item { StateMessage("No health concerns recorded.") }
+            visible.isEmpty() -> item { StateMessage("No health concerns match these filters.") }
 
             // Higher-severity concerns come first without hiding the text severity label.
-            else -> LazyColumn(
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
+            else -> {
                 val sections = listOf(
                     "Active Concerns" to ConcernStatus.ACTIVE,
                     "Recently discussed" to ConcernStatus.DISCUSSED
@@ -233,9 +229,7 @@ fun HealthConcernsScreen(
                         }
 
                         items(sectionConcerns, key = { it.id }) { concern ->
-                            val severityLabel = concern.severity.name
-                                .lowercase()
-                                .replaceFirstChar(Char::uppercase)
+                            val severityLabel = concern.severity.displayLabel
                             val statusLabel = concern.status.name
                                 .lowercase()
                                 .replaceFirstChar(Char::uppercase)

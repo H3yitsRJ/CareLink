@@ -223,12 +223,10 @@ fun AddEditCareTaskScreen(
             modifier = buttonModifier,
             shape = actionShape
         ) {
-            Text(
-                when {
-                    isSaving -> "Saving..."
-                    task == null -> "Save care task"
-                    else -> "Save Changes"
-                }
+
+            SaveButtonLabel(
+              isSaving,
+              if (task == null) "Save care task" else "Save Changes"
             )
         }
     }

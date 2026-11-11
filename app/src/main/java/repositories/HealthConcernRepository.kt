@@ -6,7 +6,8 @@ import com.google.firebase.firestore.FirebaseFirestore
 
 class HealthConcernRepository(
     private val firestore: FirebaseFirestore
-) {
+) : com.example.carelink.data.HealthConcernRepository by
+    com.example.carelink.data.FirestoreHealthConcernRepository(firestore) {
 
     fun getHealthConcerns(
         patientId: String,
@@ -128,20 +129,10 @@ class HealthConcernRepository(
         onSuccess: () -> Unit,
         onError: (String) -> Unit
     ) {
-        firestore
-            .collection("users")
-            .document(patientId)
-            .collection("healthConcerns")
-            .document(concernId)
-            .update(
-                "appointmentId",
-                appointmentId
-            )
-            .addOnSuccessListener {
-                onSuccess()
-            }
-            .addOnFailureListener {
+        linkAppointment(patientId, concernId, appointmentId) { result ->
+            result.onSuccess { onSuccess() }.onFailure {
                 onError("Unable to link appointment. Please try again.")
             }
+        }
     }
 }

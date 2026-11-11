@@ -53,18 +53,22 @@ fun NotificationsScreen(
             onDispose { active = false; stop() }
         }
     }
-    Column(Modifier.fillMaxSize().safeDrawingPadding().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") }
-        Text("Notifications", style = MaterialTheme.typography.headlineMedium)
-        if (saveError != null) StateMessage(saveError!!, true)
-        if (loadError != null) {
-            StateMessage(loadError!!, true)
-            TextButton(onClick = { retry++ }, enabled = userId != null) { Text("Retry") }
+    LazyColumn(Modifier.fillMaxSize().safeDrawingPadding().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        item {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") }
+                Text("Notifications", style = MaterialTheme.typography.headlineMedium)
+                if (saveError != null) StateMessage(saveError!!, true)
+                if (loadError != null) {
+                    StateMessage(loadError!!, true)
+                    TextButton(onClick = { retry++ }, enabled = userId != null) { Text("Retry") }
+                }
+            }
         }
         when {
-            loading -> StateMessage("Loading notifications")
-            notifications.isEmpty() && loadError == null -> StateMessage("No notifications yet.")
-            else -> LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            loading -> item { LoadingState("Loading notifications") }
+            notifications.isEmpty() && loadError == null -> item { StateMessage("No notifications yet.") }
+            else -> {
                 items(notifications.sortedByDescending { it.timestamp }, key = { it.id }) { notification ->
                     Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(
                         containerColor = if (notification.isRead) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.primaryContainer

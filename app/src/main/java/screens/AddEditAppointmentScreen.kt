@@ -8,6 +8,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -127,25 +128,27 @@ fun AddEditAppointmentScreen(
 
     val titleField: @Composable () -> Unit = {
         OutlinedTextField(
-            value = title,
-            onValueChange = { title = it },
-            label = { Text("Appointment title") },
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true,
-            isError = titleError,
-            supportingText = {
-                if (titleError) {
-                    Text("Enter an appointment title")
-                }
-            },
-            shape = RoundedCornerShape(12.dp)
-        )
+          value = title,
+          onValueChange = { title = it },
+          enabled = !isSaving,
+          label = { Text("Appointment title") },
+          modifier = Modifier.fillMaxWidth(),
+          singleLine = true,
+          isError = titleError,
+          supportingText = {
+            if (titleError) {
+                Text("Enter an appointment title")
+            }
+         },
+          shape = RoundedCornerShape(12.dp)
+      )
     }
 
     val providerField: @Composable () -> Unit = {
         OutlinedTextField(
             value = provider,
             onValueChange = { provider = it },
+            enabled = !isSaving,
             label = { Text("Provider") },
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
@@ -216,6 +219,7 @@ fun AddEditAppointmentScreen(
         OutlinedTextField(
             value = notes,
             onValueChange = { notes = it },
+            enabled = !isSaving,
             label = { Text("What would you like to discuss?") },
             modifier = Modifier.fillMaxWidth(),
             minLines = 3,
@@ -252,12 +256,9 @@ fun AddEditAppointmentScreen(
             modifier = buttonModifier,
             shape = actionShape
         ) {
-            Text(
-                when {
-                    isSaving -> "Saving..."
-                    isAddingAppointment -> "Save appointment"
-                    else -> "Save Changes"
-                }
+           SaveButtonLabel(
+                isSaving,
+                if (isAddingAppointment) "Save appointment" else "Save Changes"
             )
         }
     }
@@ -278,6 +279,7 @@ fun AddEditAppointmentScreen(
             .fillMaxSize()
             .background(Color(0xFFDCEEEF))
             .statusBarsPadding()
+            .imePadding()
             .verticalScroll(rememberScrollState())
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)

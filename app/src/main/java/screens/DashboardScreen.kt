@@ -51,7 +51,7 @@ fun DashboardScreen(
     Scaffold(bottomBar = { BottomNavBar(BottomNavDestination.Home, onNavigate) }) { innerPadding ->
         Column(
             Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)
-                .verticalScroll(scrollState).padding(innerPadding).padding(16.dp),
+                .padding(innerPadding).verticalScroll(scrollState).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
 
@@ -91,7 +91,7 @@ fun DashboardScreen(
             }
 
             when {
-                isLoading -> StateMessage("Loading your care summary")
+                isLoading -> LoadingState("Loading your care summary")
                 error != null -> StateMessage(error, true)
                 summary == null -> StateMessage("Your care summary is not available.")
                 else -> listOf(

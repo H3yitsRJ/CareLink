@@ -185,4 +185,3 @@ await check('owner', 'PATCH',
 
 console.log('Owner create/read/update, ownership protection, and '
   + 'signed-out/stranger denials passed.');
-

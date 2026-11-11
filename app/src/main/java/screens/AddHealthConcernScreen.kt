@@ -86,6 +86,7 @@ fun AddHealthConcernScreen(
                         shape = RoundedCornerShape(8.dp),
                         enabled = !saving,
                         onClick = {
+                            if (saving) return@Button
                             attemptedSave = true
                             saveError = null
                             if (!connectionAvailable) {
@@ -138,7 +139,7 @@ fun AddHealthConcernScreen(
                             }
                         }
                     ) {
-                        Text(if (saving) "Saving..." else "Save Concern")
+                        SaveButtonLabel(saving, "Save Concern")
                     }
                 }
             }
@@ -209,6 +210,7 @@ fun AddHealthConcernScreen(
 
                     Text("Severity")
 
+
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -216,11 +218,7 @@ fun AddHealthConcernScreen(
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         ConcernSeverity.entries.forEach { severity ->
-                            val label = when (severity) {
-                                ConcernSeverity.LOW -> "Mild"
-                                ConcernSeverity.MEDIUM -> "Moderate"
-                                ConcernSeverity.HIGH -> "Severe"
-                            }
+                            val label = severity.displayLabel
                             val selected = severityName == severity.name
 
                             Row(

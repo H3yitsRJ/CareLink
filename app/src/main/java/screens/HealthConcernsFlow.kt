@@ -85,6 +85,7 @@ fun HealthConcernsFlow(
                     onDispose { active = false; stop() }
                 }
 
+
                 Scaffold(Modifier.safeDrawingPadding()) { padding ->
                     Column(Modifier.padding(padding)) {
                         successMessage?.let { message ->
@@ -266,10 +267,7 @@ fun CaregiverHealthConcernsRoute(
                 )
 
                 when {
-                    loading -> {
-                        CircularProgressIndicator()
-                        Text("Checking caregiver access...")
-                    }
+                    loading -> LoadingState("Checking caregiver access...")
 
                     !verified -> {
                         Text(
@@ -361,15 +359,17 @@ fun CaregiverAppointmentsRoute(
                     style = MaterialTheme.typography.headlineMedium
                 )
 
-                Text(
-                    when {
-                        checking -> "Checking caregiver access..."
-                        !verified ->
+                if (checking) {
+                    LoadingState("Checking caregiver access...")
+                } else {
+                    Text(
+                        if (!verified) {
                             "We couldn't verify your access. Check your connection and retry."
-                        else ->
+                        } else {
                             "Appointment access is unavailable or has been revoked."
-                    }
-                )
+                        }
+                    )
+                }
 
                 if (!checking) {
                     Button(onClick = { retry++ }) {
@@ -433,6 +433,7 @@ fun CaregiverAppointmentsRoute(
                     onAppointmentSelected = { selectedId = it.id },
                     onRetry = { reload++ },
                     onNavigate = onNavigate,
+                    onBack = onBack,
                     canManage = false
                 )
             }

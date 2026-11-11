@@ -88,7 +88,7 @@ fun AppointmentDetailsScreen(
         }
 
         when {
-            isLoading -> StateMessage("Loading appointment")
+            isLoading -> LoadingState("Loading appointment")
             appointment == null -> StateMessage("This appointment could not be found.", true)
 
             else -> {
