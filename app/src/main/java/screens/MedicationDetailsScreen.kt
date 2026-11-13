@@ -171,6 +171,7 @@ private fun MedicationDetailsContent(
     canRecordDose: Boolean,
     onRecordDose: (DoseStatus) -> Unit
 ) {
+    val clockFormat = LocalClockFormat.current
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -198,7 +199,7 @@ private fun MedicationDetailsContent(
             MedicationBadge(medication.dose)
             MedicationBadge(medication.frequency)
 
-            medication.reminderTimes.forEach { reminderTime -> MedicationBadge(formatReminderTime(reminderTime)) }
+            medication.reminderTimes.forEach { reminderTime -> MedicationBadge(clockFormat.displayTime(reminderTime)) }
 
             MedicationBadge(if (medication.active) "Scheduled" else "Inactive" )
         }
@@ -216,7 +217,7 @@ private fun MedicationDetailsContent(
         Spacer(modifier = Modifier.height(24.dp))
 
         Text(
-            text = medicationInstructions(medication),
+            text = medicationInstructions(medication, clockFormat),
             textAlign = TextAlign.Center,
             style = MaterialTheme.typography.bodyLarge
         )
@@ -235,7 +236,7 @@ private fun MedicationDetailsContent(
                     FilterChip(
                         selected = selectedReminder == time,
                         onClick = { onSelectReminder(time) },
-                        label = { Text(formatReminderTime(time)) }
+                        label = { Text(clockFormat.displayTime(time)) }
                     )
                 }
             }
@@ -350,33 +351,18 @@ private fun MedicationMissingState(
 }
 
 private fun medicationInstructions(
-    medication: Medication
+    medication: Medication,
+    clockFormat: ClockFormat
 ): String {
     if (medication.instructions.isNotBlank()) { return medication.instructions }
 
     val nextDose = medication.reminderTimes
         .firstOrNull()
-        ?.let(::formatReminderTime)
+        ?.let(clockFormat::displayTime)
         ?: "the scheduled time"
 
     return "Your next scheduled dose is at $nextDose. " +
             "Follow the instructions on your medication label."
-}
-
-private fun formatReminderTime(time: String): String {
-    val parts = time.split(":")
-    if (parts.size != 2) return time
-
-    val hour = parts[0].toIntOrNull() ?: return time
-    val minute = parts[1].toIntOrNull() ?: return time
-    val suffix = if (hour < 12) "AM" else "PM"
-    val displayHour = when {
-        hour == 0 -> 12
-        hour > 12 -> hour - 12
-        else -> hour
-    }
-
-    return "%d:%02d %s".format(displayHour, minute, suffix)
 }
 
 /** Reminder times are local HH:mm values, so use today's device-local date. */

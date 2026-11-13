@@ -14,6 +14,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
+import com.example.carelink.ui.keepKeyboardOnTap
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -54,7 +55,7 @@ fun CareHistoryScreen(
                 TextButton(onClick = {
                     picker.selectedDateMillis?.let { millis ->
                         // Material date picker dates are UTC calendar dates, not local instants.
-                        val date = SimpleDateFormat("yyyy-MM-dd", Locale.US).apply {
+                        val date = SimpleDateFormat(DATE_FIELD_PATTERN, Locale.US).apply {
                             timeZone = TimeZone.getTimeZone("UTC")
                         }.format(Date(millis))
                         if (dateField == "start") start = date else end = date
@@ -64,7 +65,7 @@ fun CareHistoryScreen(
             },
             dismissButton = { TextButton(onClick = { dateField = null }) { Text("Cancel") } }
         ) {
-            DatePicker(state = picker)
+            DatePicker(state = picker, showModeToggle = false)
         }
     }
 
@@ -82,14 +83,14 @@ fun CareHistoryScreen(
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedTextField(
                         start, { start = it }, label = { Text("Start date") },
-                        placeholder = { Text("YYYY-MM-DD") }, singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
+                        placeholder = { Text(DATE_FIELD_HINT) }, singleLine = true,
+                        modifier = Modifier.fillMaxWidth().keepKeyboardOnTap()
                     )
                     TextButton(onClick = { dateField = "start" }) { Text("Choose start date") }
                     OutlinedTextField(
                         end, { end = it }, label = { Text("End date") },
-                        placeholder = { Text("YYYY-MM-DD") }, singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
+                        placeholder = { Text(DATE_FIELD_HINT) }, singleLine = true,
+                        modifier = Modifier.fillMaxWidth().keepKeyboardOnTap()
                     )
                     TextButton(onClick = { dateField = "end" }) { Text("Choose end date") }
                 }
@@ -114,10 +115,10 @@ fun CareHistoryScreen(
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Button(onClick = {
-                        val first = historyDateBoundary(start.trim())
-                        val last = historyDateBoundary(end.trim(), endOfDay = true)
+                        val first = storedFieldDate(start)?.let { historyDateBoundary(it) }
+                        val last = storedFieldDate(end)?.let { historyDateBoundary(it, endOfDay = true) }
                         error = if ((start.isNotBlank() && first == null) || (end.isNotBlank() && last == null)) {
-                            "Enter dates as YYYY-MM-DD or leave them blank."
+                            "Enter dates as $DATE_FIELD_HINT or leave them blank."
                         } else CareHistoryFilter(first, last).validate()
                         if (error == null) {
                             appliedStart = first
@@ -136,7 +137,7 @@ fun CareHistoryScreen(
 
             if (applied.isActive) {
                 item {
-                    val dateFormat = SimpleDateFormat("MMM d, yyyy", Locale.getDefault())
+                    val dateFormat = SimpleDateFormat(DATE_FIELD_PATTERN, Locale.US)
                     Text("Active filters: " + listOfNotNull(
                         appliedStart?.let { "From ${dateFormat.format(Date(it))}" },
                         appliedEnd?.let { "Through ${dateFormat.format(Date(it))}" },
@@ -228,9 +229,10 @@ private fun CareHistoryCard(
     onOpenMedication: ((CareHistoryEntry) -> Unit)? = null,
     onOpenCaregiverAccess: ((CareHistoryEntry) -> Unit)? = null
 ) {
-    val date = remember(entry.occurredAtMillis) {
+    val clockFormat = LocalClockFormat.current
+    val date = remember(entry.occurredAtMillis, clockFormat) {
         SimpleDateFormat(
-            "MMM d, yyyy • h:mm a",
+            "MMM d, yyyy • ${clockFormat.pattern}",
             Locale.getDefault()
         ).format(Date(entry.occurredAtMillis))
     }

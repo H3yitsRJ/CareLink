@@ -17,26 +17,28 @@ class AppointmentFormTest {
     @Test fun editingPrefillsAllFieldsAndPreservesAppointment() {
         var saved: Appointment? = null
         compose.setContent { AddEditAppointmentScreen(original, onSave = { saved = it }) }
-        listOf(original.title, original.date, original.time, original.provider, original.location, original.notes)
+        listOf(original.title, "09-23-2099", "10:30 AM", original.provider, original.location, original.notes)
             .forEach { compose.onNodeWithText(it).assertExists() }
-        compose.onNodeWithText("Save appointment").performScrollTo().performClick()
+        compose.onNodeWithText("Save Changes").performScrollTo().performClick()
         compose.runOnIdle { assertEquals(original, saved) }
     }
 
     @Test fun pastDateBlocksSaveAndCanBeCorrected() {
         var saved: Appointment? = null
         compose.setContent { AddEditAppointmentScreen(original.copy(date = "2000-01-01"), onSave = { saved = it }) }
-        compose.onNodeWithText("Save appointment").performScrollTo().performClick()
+        compose.onNodeWithText("Save Changes").performScrollTo().performClick()
         compose.onNodeWithText("Choose today or a future date").assertExists()
         compose.runOnIdle { assertNull(saved) }
-        compose.onNodeWithText("Date").performScrollTo().performTextReplacement(original.date)
-        compose.onNodeWithText("Save appointment").performScrollTo().performClick()
+        compose.onNodeWithText("Date").performScrollTo().performTextReplacement("09-23-2099")
+        compose.onNodeWithText("Save Changes").performScrollTo().performClick()
         compose.runOnIdle { assertEquals(original, saved) }
     }
     @Test fun savingLocksEveryFieldAndFailureAllowsEditingAgain() {
         val saving = androidx.compose.runtime.mutableStateOf(true)
         compose.setContent { AddEditAppointmentScreen(original, isSaving = saving.value) }
-        val labels = listOf("Appointment title", "Provider", "Date", "Time", "Location", "Notes")
+        val labels = listOf(
+            "Appointment title", "Provider", "Date", "Time", "Location", "What would you like to discuss?"
+        )
         labels.forEach { compose.onNodeWithText(it).assertIsNotEnabled() }
         compose.runOnIdle { saving.value = false }
         labels.forEach { compose.onNodeWithText(it).assertIsEnabled() }

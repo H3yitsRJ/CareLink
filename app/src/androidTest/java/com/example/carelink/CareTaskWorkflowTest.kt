@@ -21,8 +21,8 @@ class CareTaskWorkflowTest {
     private fun fill() {
         compose.onNodeWithText("Task title").performScrollTo().performTextReplacement("Call clinic")
         compose.onNodeWithText("Description (optional)").performScrollTo().performTextReplacement("Ask about results")
-        compose.onNodeWithText("Due date").performScrollTo().performTextReplacement("2099-01-01")
-        compose.onNodeWithText("Time").performScrollTo().performTextReplacement("09:00")
+        compose.onNodeWithText("Due date").performScrollTo().performTextReplacement("01-01-2099")
+        compose.onNodeWithText("Time").performScrollTo().performTextReplacement("9:00 AM")
     }
     private fun save() = compose.onNodeWithText("Save care task").performScrollTo().performClick()
 
@@ -31,7 +31,7 @@ class CareTaskWorkflowTest {
         compose.onNodeWithText("Care tasks").assertExists()
         compose.onNodeWithText("Call clinic").assertExists()
         compose.onNodeWithText("Ask about results").assertExists()
-        compose.onNodeWithText("Due 2099-01-01 at 09:00").assertExists()
+        compose.onNodeWithText("Due 01-01-2099 at 9:00 AM").assertExists()
         compose.runOnIdle {
             repository.list("patient1") {
                 val task = it.getOrThrow().single()
@@ -45,14 +45,14 @@ class CareTaskWorkflowTest {
     @Test fun requiredAndPastDatesBlockSavingUntilCorrected() {
         open(); save()
         compose.onNodeWithText("Enter a task title").assertExists()
-        compose.onNodeWithText("Use a valid date in YYYY-MM-DD format").assertExists()
-        compose.onNodeWithText("Use 24-hour time in HH:MM format").assertExists()
+        compose.onNodeWithText("Use a valid date in MM-DD-YYYY format").assertExists()
+        compose.onNodeWithText("Enter a valid time with AM or PM").assertExists()
         fill()
-        compose.onNodeWithText("Due date").performScrollTo().performTextReplacement("2000-01-01")
+        compose.onNodeWithText("Due date").performScrollTo().performTextReplacement("01-01-2000")
         save()
         compose.onNodeWithText("Choose a future due date and time").assertExists()
         compose.runOnIdle { repository.list("patient1") { assertTrue(it.getOrThrow().isEmpty()) } }
-        compose.onNodeWithText("Due date").performScrollTo().performTextReplacement("2099-01-01")
+        compose.onNodeWithText("Due date").performScrollTo().performTextReplacement("01-01-2099")
         save()
         compose.onNodeWithText("Call clinic").assertExists()
         compose.onNodeWithText("Save care task").assertDoesNotExist()

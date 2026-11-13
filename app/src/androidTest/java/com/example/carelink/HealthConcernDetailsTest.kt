@@ -54,10 +54,10 @@ class HealthConcernDetailsTest {
     @Test fun selectionDisplaysAllSavedFieldsAndBackReturnsToList() {
         open()
         compose.runOnIdle { assertEquals("two", store.selected) }
-        listOf("Knee concern", "Description: Pain after walking", "Severity: High", "Date: 2026-09-21", "Status: Active",
-            "Linked appointment: Clinic visit — 2099-01-01 at 09:00").forEach { compose.onNodeWithText(it).assertExists() }
+        listOf("Knee concern", "Description: Pain after walking", "Severity: Severe", "Date: 09-21-2026", "Status: Active",
+            "Linked appointment: Clinic visit — 01-01-2099 at 9:00 AM").forEach { compose.onNodeWithText(it).assertExists() }
         compose.onNodeWithText("Back to health concerns").performScrollTo().performClick()
-        compose.onNodeWithText("Health concerns").assertExists()
+        compose.onNodeWithText("Health Concerns").assertExists()
         compose.onNodeWithText("Sleep concern").performClick()
         compose.onNodeWithText("Description: Waking overnight").assertExists()
     }
@@ -76,8 +76,8 @@ class HealthConcernDetailsTest {
         open("Sleep concern")
         compose.onNodeWithText("Linked appointment: None").assertExists()
         compose.onNodeWithText("Link to Appointment").performScrollTo().performClick()
-        compose.onNodeWithText("Clinic visit — 2099-01-01 at 09:00").performClick()
-        compose.onNodeWithText("Linked appointment: Clinic visit — 2099-01-01 at 09:00").assertExists()
+        compose.onNodeWithText("Clinic visit — 01-01-2099 at 9:00 AM").performClick()
+        compose.onNodeWithText("Linked appointment: Clinic visit — 01-01-2099 at 9:00 AM").assertExists()
         compose.runOnIdle { assertEquals("appt", store.records.getValue("one").appointmentId) }
         compose.onNodeWithText("Link to Appointment").performScrollTo().performClick()
         compose.onNodeWithText("Remove appointment link").performClick()
@@ -91,7 +91,7 @@ class HealthConcernDetailsTest {
         compose.onNodeWithText("This health concern could not be found.").assertExists()
         compose.onNodeWithText("Link to Appointment").assertDoesNotExist()
         compose.onNodeWithText("Back to health concerns").performClick()
-        compose.onNodeWithText("Health concerns").assertExists()
+        compose.onNodeWithText("Health Concerns").assertExists()
     }
     @Test fun loadFailureOffersRetryAndRecovers() {
         store.delay = true

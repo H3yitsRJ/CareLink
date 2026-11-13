@@ -45,7 +45,7 @@ class CreateProfileScreenTest {
             zipCode = "123"
         )
 
-        assertEquals("Use MM/DD/YYYY", errors.dateOfBirth)
+        assertEquals("Use MM-DD-YYYY", errors.dateOfBirth)
         assertEquals("Enter a 10-digit phone number", errors.phoneNumber)
         assertEquals("Use the 2-letter state code", errors.state)
         assertEquals("Enter a 5-digit ZIP code", errors.zipCode)

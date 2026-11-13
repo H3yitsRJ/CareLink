@@ -7,6 +7,14 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.coroutines.resume
 
+internal fun profileReadSource(networkAvailable: Boolean, firebaseAvailable: Boolean?): Source? =
+    when {
+        !networkAvailable -> Source.CACHE
+        firebaseAvailable == null -> null
+        firebaseAvailable -> Source.DEFAULT
+        else -> Source.CACHE
+    }
+
 // A validated network can still fail to reach Firebase. A server-only read distinguishes
 // that state from the cached reads used to keep the patient's information available.
 internal suspend fun canReachFirebase(reference: DocumentReference): Boolean =

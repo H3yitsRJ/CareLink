@@ -19,6 +19,7 @@ import com.example.carelink.data.RefillRequestAlreadyActiveException
 import com.example.carelink.model.CarePermission
 import com.example.carelink.model.CaregiverAccess
 import com.example.carelink.model.Medication
+import com.example.carelink.ui.keepKeyboardOnTap
 import com.google.firebase.firestore.FirebaseFirestore
 
 /** The same medication form is used for patient and caregiver edits. */
@@ -233,7 +234,7 @@ fun CaregiverMedicationsScreen(actorId: String, onBack: () -> Unit, data: Caregi
             else -> Column(Modifier.verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text("Caregiver medications", style = MaterialTheme.typography.headlineMedium)
                 if (initialPatientId == null) {
-                OutlinedTextField(patientInput, { patientInput = it }, label = { Text("Patient CareLink ID") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+                OutlinedTextField(patientInput, { patientInput = it }, label = { Text("Patient CareLink ID") }, modifier = Modifier.fillMaxWidth().keepKeyboardOnTap(), singleLine = true)
                 Button(onClick = {
                     val candidate = patientInput.trim()
                     if (!MedicationCaregiverStore.validId(candidate) || candidate == actorId) {
@@ -310,7 +311,7 @@ fun MedicationCaregiverAccessScreen(patientId: String, patientName: String, onBa
         Text("Your CareLink ID")
         SelectionContainer { Text(patientId) }
         Text("Give this ID to your caregiver. Ask for their CareLink ID before granting access.")
-        OutlinedTextField(caregiverId, { caregiverId = it }, label = { Text("Caregiver CareLink ID") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+        OutlinedTextField(caregiverId, { caregiverId = it }, label = { Text("Caregiver CareLink ID") }, singleLine = true, modifier = Modifier.fillMaxWidth().keepKeyboardOnTap())
         Button(onClick = {
             val id = caregiverId.trim()
             if (!MedicationCaregiverStore.validId(id) || id == patientId) error = "Enter a different person's CareLink ID."

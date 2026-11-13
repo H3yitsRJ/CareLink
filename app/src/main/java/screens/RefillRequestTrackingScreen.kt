@@ -145,7 +145,7 @@ fun RefillRequestTrackingScreen(
                     Text("Note: ${request.note.ifBlank { "None" }}")
                     Text(
                         if (request.requestedAt > 0) "Date: " + SimpleDateFormat(
-                            "MMM d, yyyy h:mm a",
+                            "MMM d, yyyy ${LocalClockFormat.current.pattern}",
                             Locale.getDefault()
                         ).format(Date(request.requestedAt)) else "Date unavailable"
                     )

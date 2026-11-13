@@ -20,6 +20,8 @@ import androidx.compose.ui.unit.dp
 import com.example.carelink.model.Appointment
 import com.example.carelink.model.CareTask
 import com.example.carelink.model.validationErrors
+import com.example.carelink.ui.keepKeyboardOnTap
+import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
 import java.util.UUID
@@ -46,11 +48,12 @@ fun AddEditCareTaskScreen(
     var description by rememberSaveable(task?.id) {
         mutableStateOf(task?.description ?: sourceAppointment?.notes.orEmpty())
     }
+    val clockFormat = LocalClockFormat.current
     var dueDate by rememberSaveable(task?.id) {
-        mutableStateOf(task?.dueDate.orEmpty())
+        mutableStateOf(displayFieldDate(task?.dueDate.orEmpty()))
     }
     var time by rememberSaveable(task?.id) {
-        mutableStateOf(task?.time.orEmpty())
+        mutableStateOf(clockFormat.displayTime(task?.time.orEmpty()))
     }
     var attempted by rememberSaveable(task?.id) {
         mutableStateOf(false)
@@ -63,13 +66,11 @@ fun AddEditCareTaskScreen(
 
     fun showDueDatePicker() {
         val initialDate = Calendar.getInstance()
-        val parts = dueDate.split("-")
-        val year = parts.getOrNull(0)?.toIntOrNull()
-        val month = parts.getOrNull(1)?.toIntOrNull()
-        val day = parts.getOrNull(2)?.toIntOrNull()
-
-        if (year != null && month != null && day != null) {
-            initialDate.set(year, month - 1, day)
+        val dateFormat = SimpleDateFormat(DATE_FIELD_PATTERN, Locale.US).apply { isLenient = false }
+        if (storedFieldDate(dueDate) != null) {
+            dateFormat.parse(dueDate.trim(), java.text.ParsePosition(0))?.let {
+                initialDate.time = it
+            }
         }
 
         DatePickerDialog(
@@ -77,10 +78,10 @@ fun AddEditCareTaskScreen(
             { _, selectedYear, selectedMonth, selectedDay ->
                 dueDate = String.format(
                     Locale.US,
-                    "%04d-%02d-%02d",
-                    selectedYear,
+                    "%02d-%02d-%04d",
                     selectedMonth + 1,
-                    selectedDay
+                    selectedDay,
+                    selectedYear
                 )
             },
             initialDate.get(Calendar.YEAR),
@@ -100,28 +101,31 @@ fun AddEditCareTaskScreen(
 
     fun showTaskTimePicker() {
         val now = Calendar.getInstance()
-        val parts = time.split(":")
+        val parts = clockFormat.storedTime(time)?.split(":").orEmpty()
         val hour = parts.getOrNull(0)?.toIntOrNull()
         val minute = parts.getOrNull(1)?.toIntOrNull()
 
         TimePickerDialog(
             context,
             { _, selectedHour, selectedMinute ->
-                time = String.format(Locale.US, "%02d:%02d", selectedHour, selectedMinute)
+                time = clockFormat.displayTime(String.format(Locale.US, "%02d:%02d", selectedHour, selectedMinute))
             },
             hour ?: now.get(Calendar.HOUR_OF_DAY),
             minute ?: now.get(Calendar.MINUTE),
-            false
+            clockFormat.is24Hour
         ).show()
     }
+
+    val storedDate = storedFieldDate(dueDate)
+    val storedTime = clockFormat.storedTime(time)
 
     fun draft() = CareTask(
         id,
         task?.patientId ?: patientId,
         title.trim(),
         description.trim(),
-        dueDate.trim(),
-        time.trim(),
+        storedDate.orEmpty(),
+        storedTime.orEmpty(),
         task?.completed ?: false,
         task?.appointmentId ?: sourceAppointment?.id
     )
@@ -149,7 +153,7 @@ fun AddEditCareTaskScreen(
             isError = errors.containsKey("title"),
             supportingText = { errors["title"]?.let { Text(it) } },
             shape = fieldShape,
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth().keepKeyboardOnTap()
         )
 
         OutlinedTextField(
@@ -159,17 +163,16 @@ fun AddEditCareTaskScreen(
             enabled = !isSaving,
             minLines = 3,
             shape = fieldShape,
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth().keepKeyboardOnTap()
         )
     }
 
     val dueDateAndTimeFields: @Composable () -> Unit = {
         OutlinedTextField(
             value = dueDate,
-            onValueChange = {},
-            readOnly = true,
+            onValueChange = { dueDate = it },
             label = { Text("Due date") },
-            placeholder = { Text("Select date") },
+            placeholder = { Text(DATE_FIELD_HINT) },
             enabled = !isSaving,
             singleLine = true,
             trailingIcon = {
@@ -178,17 +181,18 @@ fun AddEditCareTaskScreen(
                 }
             },
             isError = errors.containsKey("dueDate"),
-            supportingText = { errors["dueDate"]?.let { Text(it) } },
+            supportingText = { errors["dueDate"]?.let {
+                    Text(if (storedDate == null) "Use a valid date in $DATE_FIELD_HINT format" else it)
+                } },
             shape = fieldShape,
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth().keepKeyboardOnTap()
         )
 
         OutlinedTextField(
             value = time,
-            onValueChange = {},
-            readOnly = true,
+            onValueChange = { time = it },
             label = { Text("Time") },
-            placeholder = { Text("Select time") },
+            placeholder = { Text(clockFormat.hint) },
             enabled = !isSaving,
             singleLine = true,
             trailingIcon = {
@@ -198,7 +202,7 @@ fun AddEditCareTaskScreen(
             },
             isError = errors.containsKey("time"),
             supportingText = {
-                errors["time"]?.let { Text(it) }
+                errors["time"]?.let { Text(clockFormat.timeError) }
                 if (time.isNotBlank()) {
                     TextButton(onClick = { time = "" }, enabled = !isSaving) {
                         Text("Clear time")
@@ -206,7 +210,7 @@ fun AddEditCareTaskScreen(
                 }
             },
             shape = fieldShape,
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth().keepKeyboardOnTap()
         )
     }
 
@@ -276,7 +280,7 @@ fun AddEditCareTaskScreen(
         }
 
         if (sourceAppointment != null) {
-            Text("From ${sourceAppointment.title} on ${sourceAppointment.date}")
+            Text("From ${sourceAppointment.title} on ${displayFieldDate(sourceAppointment.date)}")
         }
 
         Surface(

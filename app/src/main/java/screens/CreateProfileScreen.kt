@@ -43,6 +43,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.example.carelink.ui.theme.CareLinkTheme
+import com.example.carelink.ui.keepKeyboardOnTap
 
 // One value object lets the caller save the profile as a single operation.
 data class PatientProfileDetails(
@@ -89,7 +90,7 @@ internal fun validateProfile(
     firstName = if (firstName.trim().isEmpty()) "Enter your first name" else null,
     lastName = if (lastName.trim().isEmpty()) "Enter your last name" else null,
     dateOfBirth = if (dateOfBirth.isNotBlank() && !isValidDateOfBirth(dateOfBirth)) {
-        "Use MM/DD/YYYY"
+        "Use $DATE_FIELD_HINT"
     } else {
         null
     },
@@ -116,7 +117,7 @@ internal fun validateProfile(
 
 // This checks the agreed display format without introducing a date dependency into the form.
 private fun isValidDateOfBirth(value: String): Boolean {
-    val parts = value.trim().split("/")
+    val parts = value.trim().split("-")
 
     if (parts.size != 3 || parts[0].length != 2 || parts[1].length != 2 || parts[2].length != 4) {
         return false
@@ -126,7 +127,7 @@ private fun isValidDateOfBirth(value: String): Boolean {
     val day = parts[1].toIntOrNull() ?: return false
     val year = parts[2].toIntOrNull() ?: return false
 
-    return month in 1..12 && day in 1..31 && year in 1900..2100
+    return month in 1..12 && day in 1..31 && year in 1900..2100 && storedFieldDate(value) != null
 }
 
 @Composable
@@ -150,7 +151,7 @@ fun CreateProfileScreen(
         mutableStateOf(initialProfile?.preferredName.orEmpty())
     }
     var dateOfBirth by rememberSaveable {
-        mutableStateOf(initialProfile?.dateOfBirth.orEmpty())
+        mutableStateOf(displayFieldDate(initialProfile?.dateOfBirth.orEmpty().replace('/', '-')))
     }
     var phoneNumber by rememberSaveable {
         mutableStateOf(initialProfile?.phoneNumber.orEmpty())
@@ -207,7 +208,7 @@ fun CreateProfileScreen(
                     firstName = firstName.trim(),
                     lastName = lastName.trim(),
                     preferredName = preferredName.trim(),
-                    dateOfBirth = dateOfBirth.trim(),
+                    dateOfBirth = dateOfBirth.trim().replace('-', '/'),
                     phoneNumber = phoneNumber.trim(),
                     addressLine1 = addressLine1.trim(),
                     addressLine2 = addressLine2.trim(),
@@ -286,7 +287,7 @@ fun CreateProfileScreen(
                     value = dateOfBirth,
                     onValueChange = { dateOfBirth = it.take(10) },
                     label = "Date of birth (optional)",
-                    placeholder = "MM/DD/YYYY",
+                    placeholder = DATE_FIELD_HINT,
                     error = errors.dateOfBirth,
                     imeAction = ImeAction.Next,
                     keyboardType = KeyboardType.Text,
@@ -438,7 +439,7 @@ private fun ProfileTextField(
         OutlinedTextField(
             value = value,
             onValueChange = onValueChange,
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().keepKeyboardOnTap(),
             placeholder = { Text(placeholder) },
             singleLine = true,
             isError = error != null,

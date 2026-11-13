@@ -42,6 +42,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.ui.platform.LocalContext
 import java.util.Calendar
 import androidx.compose.foundation.layout.Box
+import com.example.carelink.ui.keepKeyboardOnTap
 
 
 
@@ -116,11 +117,14 @@ fun AddEditMedicationScreen(
             .show()
     }
 
+    val clockFormat = LocalClockFormat.current
+
     fun showTimePicker() {
         TimePickerDialog(
             context,
             { _, hourOfDay, minute ->
                 val selectedTime = String.format(
+                    java.util.Locale.US,
                     "%02d:%02d",
                     hourOfDay,
                     minute
@@ -134,7 +138,7 @@ fun AddEditMedicationScreen(
             },
             calendar.get(Calendar.HOUR_OF_DAY),
             calendar.get(Calendar.MINUTE),
-            false
+            clockFormat.is24Hour
         ).show()
     }
 
@@ -224,7 +228,7 @@ fun AddEditMedicationScreen(
             )
 
             MedicationField(
-                value = reminderTime,
+                value = reminderTime.split(", ").joinToString(", ", transform = clockFormat::displayTime),
                 onValueChange = { },
                 label = "Reminder times",
                 error = errors.reminderTime,
@@ -239,7 +243,7 @@ fun AddEditMedicationScreen(
                 value = instructions,
                 onValueChange = { instructions = it },
                 label = { Text("Instructions (optional)") },
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().keepKeyboardOnTap(),
                 minLines = 3,
                 shape = RoundedCornerShape(12.dp)
             )
@@ -377,7 +381,7 @@ private fun MedicationField(
                 keyboardType = keyboardType
             ),
             singleLine = true,
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().keepKeyboardOnTap(enabled = !readOnly && onClick == null),
             enabled = onClick == null,
             shape = RoundedCornerShape(12.dp)
         )

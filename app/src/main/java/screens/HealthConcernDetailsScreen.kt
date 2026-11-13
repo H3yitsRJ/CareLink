@@ -58,7 +58,7 @@ fun HealthConcernDetailsScreen(
                 Text(concern.title, style = MaterialTheme.typography.titleLarge)
                 Text("Description: ${concern.description}")
                 Text("Severity: ${concern.severity.displayLabel}")
-                Text("Date: ${concern.recordedDate}")
+                Text("Date: ${displayFieldDate(concern.recordedDate)}")
                 Text("Status: ${concern.status.name.lowercase().replaceFirstChar(Char::uppercase)}")
                 val linked = appointments.find { it.id == concern.appointmentId }
 
@@ -69,7 +69,7 @@ fun HealthConcernDetailsScreen(
                         appointmentsError != null -> "Linked appointment: ${concern.appointmentId} (unavailable)"
                         linked == null -> "Linked appointment: ${concern.appointmentId} (no longer available)"
 
-                        else -> "Linked appointment: ${linked.title} — ${linked.date} at ${linked.time}"
+                        else -> "Linked appointment: ${linked.title} — ${displayFieldDate(linked.date)} at ${LocalClockFormat.current.displayTime(linked.time)}"
                     }
                 )
 
@@ -153,7 +153,7 @@ fun HealthConcernDetailsScreen(
                     else -> appointments.forEach { appointment ->
                         TextButton(enabled = !isSaving && canEdit, onClick = {
                             choosingAppointment = false; onLinkAppointment(appointment.id)
-                        }) { Text("${appointment.title} — ${appointment.date} at ${appointment.time}") }
+                        }) { Text("${appointment.title} — ${displayFieldDate(appointment.date)} at ${LocalClockFormat.current.displayTime(appointment.time)}") }
                     }
                 }
                 if (concern.appointmentId != null) TextButton(enabled = !isSaving && canEdit, onClick = {

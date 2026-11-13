@@ -58,7 +58,7 @@ class MedicationWorkflowTest {
         compose.onNodeWithText("Save medication").performScrollTo().performClick()
         compose.onNodeWithText("Enter a medication name").assertExists()
         compose.onNodeWithText("Could not save. Try again.").assertExists()
-        compose.onNodeWithText("08:00, 20:00").assertExists()
+        compose.onNodeWithText("8:00 AM, 8:00 PM").assertExists()
         compose.runOnIdle { assertNull(saved) }
     }
 

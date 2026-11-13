@@ -31,12 +31,12 @@ class CareHistoryScreenTest {
     }
     @Test fun invalidRangePreservesListAndEmptyFiltersExplainRecovery() {
         open()
-        compose.onNodeWithText("Start date").performScrollTo().performTextReplacement("2026-10-02")
-        compose.onNodeWithText("End date").performScrollTo().performTextReplacement("2026-10-01")
+        compose.onNodeWithText("Start date").performScrollTo().performTextReplacement("10-02-2026")
+        compose.onNodeWithText("End date").performScrollTo().performTextReplacement("10-01-2026")
         compose.onNodeWithText("Apply filters").performScrollTo().performClick()
         compose.onNodeWithText("Start date must be on or before end date.").assertExists()
         compose.onNodeWithText("Aspirin taken").assertExists()
-        compose.onNodeWithText("End date").performScrollTo().performTextReplacement("2026-10-03")
+        compose.onNodeWithText("End date").performScrollTo().performTextReplacement("10-03-2026")
         compose.onNodeWithText("Apply filters").performScrollTo().performClick()
         compose.onNodeWithText("No history matches these filters. Clear filters or choose other dates or activity types.").performScrollTo().assertIsDisplayed()
     }

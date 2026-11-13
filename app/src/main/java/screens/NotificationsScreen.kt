@@ -77,7 +77,7 @@ fun NotificationsScreen(
                             Text(notification.title, style = MaterialTheme.typography.titleMedium)
                             Text(notification.message)
                             Text(if (notification.isRead) "Read" else "Unread", style = MaterialTheme.typography.labelLarge)
-                            Text(SimpleDateFormat("MMM d, yyyy • h:mm a", Locale.getDefault()).format(notification.timestamp.toDate()), style = MaterialTheme.typography.bodySmall)
+                            Text(SimpleDateFormat("MMM d, yyyy • ${LocalClockFormat.current.pattern}", Locale.getDefault()).format(notification.timestamp.toDate()), style = MaterialTheme.typography.bodySmall)
                             if (!notification.isRead && userId != null) {
                                 TextButton(enabled = connected && notification.id !in pending, onClick = {
                                     if (!connected || notification.id in pending) return@TextButton

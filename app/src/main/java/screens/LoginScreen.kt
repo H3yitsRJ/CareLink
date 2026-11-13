@@ -26,6 +26,7 @@ import androidx.compose.ui.text.input.*
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.example.carelink.R
+import com.example.carelink.ui.keepKeyboardOnTap
 import com.example.carelink.ui.theme.CareLinkTheme
 
 // Keeping credentials in a short-lived value object makes the screen callback explicit.
@@ -90,7 +91,7 @@ fun LoginScreen(
                 OutlinedTextField(
                     value = email,
                     onValueChange = { email = it },
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().keepKeyboardOnTap(),
                     label = { Text("Email address") },
                     placeholder = { Text("name@example.com") },
                     singleLine = true,
@@ -105,7 +106,7 @@ fun LoginScreen(
                 OutlinedTextField(
                     value = password,
                     onValueChange = { password = it },
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().keepKeyboardOnTap(),
                     label = { Text("Password") },
                     singleLine = true,
                     isError = passwordError != null,

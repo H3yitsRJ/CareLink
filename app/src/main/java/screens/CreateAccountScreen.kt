@@ -51,6 +51,7 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.example.carelink.R
+import com.example.carelink.ui.keepKeyboardOnTap
 import com.example.carelink.ui.theme.CareLinkTheme
 
 // The screen returns only the values Firebase Authentication needs.
@@ -321,7 +322,7 @@ private fun RegistrationTextField(
         OutlinedTextField(
             value = value,
             onValueChange = onValueChange,
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().keepKeyboardOnTap(),
             placeholder = { Text(placeholder) },
             singleLine = true,
             isError = error != null,
