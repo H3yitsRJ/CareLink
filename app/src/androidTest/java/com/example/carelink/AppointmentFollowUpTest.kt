@@ -32,8 +32,8 @@ class AppointmentFollowUpTest {
     }
     private fun fill() {
         compose.onNodeWithText("Task title").performScrollTo().performTextReplacement("Call provider")
-        compose.onNodeWithText("Due date").performScrollTo().performTextReplacement("2099-01-01")
-        compose.onNodeWithText("Time").performScrollTo().performTextReplacement("09:00")
+        compose.onNodeWithText("Due date").performScrollTo().performTextReplacement("01-01-2099")
+        compose.onNodeWithText("Time").performScrollTo().performTextReplacement("9:00 AM")
     }
     private fun saveBeforeListReturns(result: Result<List<CareTask>>) {
         lateinit var finish: (Result<List<CareTask>>) -> Unit
@@ -64,11 +64,11 @@ class AppointmentFollowUpTest {
             }
         }
         compose.onNodeWithText("Generate follow-up task").performScrollTo().assertIsDisplayed().performClick()
-        compose.onNodeWithText("Back to appointments").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithContentDescription("Back to appointments").performScrollTo().assertIsDisplayed()
     }
     @Test fun editableFollowUpSavesWithAppointmentLinkAndAppearsInList() {
         open()
-        compose.onNodeWithText("From Checkup on 2026-10-01").assertExists()
+        compose.onNodeWithText("From Checkup on 10-01-2026").assertExists()
         compose.onNodeWithText("Follow up after Checkup").assertExists()
         compose.onNodeWithText("Ask about results").assertExists()
         fill()
@@ -77,12 +77,12 @@ class AppointmentFollowUpTest {
         compose.onNodeWithText("Linked to appointment").assertExists()
         compose.runOnIdle { store.list("patient") { assertEquals("appointment", it.getOrThrow().single().appointmentId) } }
         compose.onNodeWithText("Add care task").performClick()
-        compose.onNodeWithText("From Checkup on 2026-10-01").assertDoesNotExist()
+        compose.onNodeWithText("From Checkup on 10-01-2026").assertDoesNotExist()
     }
     @Test fun cancelReturnsToAppointmentWithoutCreatingTask() {
         open()
         compose.onNodeWithText("Cancel").performScrollTo().performClick()
-        compose.onNodeWithText("Appointment details").assertExists()
+        compose.onNodeWithText("Appointment Details").assertExists()
         compose.runOnIdle { store.list("patient") { assertTrue(it.getOrThrow().isEmpty()) } }
     }
     @Test fun failedSavePreservesEditedDraftAndRetryCreatesOneTask() {

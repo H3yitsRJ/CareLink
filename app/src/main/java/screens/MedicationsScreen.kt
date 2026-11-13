@@ -279,7 +279,7 @@ fun MedicationCard(
 
             if (medication.reminderTimes.isNotEmpty()) {
                 Text(
-                    text = "Reminder: ${medication.reminderTimes.first()}",
+                    text = "Reminder: ${LocalClockFormat.current.displayTime(medication.reminderTimes.first())}",
                     fontSize = 16.sp
                 )
             }

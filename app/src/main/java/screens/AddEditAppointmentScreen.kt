@@ -39,6 +39,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.example.carelink.model.Appointment
 import com.example.carelink.model.AppointmentStatus
+import com.example.carelink.ui.keepKeyboardOnTap
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -56,6 +57,7 @@ fun AddEditAppointmentScreen(
         if (!isSaving) onCancel()
     }
 
+    val clockFormat = LocalClockFormat.current
     var title by rememberSaveable(appointment?.id) {
         mutableStateOf(appointment?.title.orEmpty())
     }
@@ -63,10 +65,10 @@ fun AddEditAppointmentScreen(
         mutableStateOf(appointment?.provider.orEmpty())
     }
     var date by rememberSaveable(appointment?.id) {
-        mutableStateOf(appointment?.date.orEmpty())
+        mutableStateOf(displayFieldDate(appointment?.date.orEmpty()))
     }
     var time by rememberSaveable(appointment?.id) {
-        mutableStateOf(appointment?.time.orEmpty())
+        mutableStateOf(clockFormat.displayTime(appointment?.time.orEmpty()))
     }
     var location by rememberSaveable(appointment?.id) {
         mutableStateOf(appointment?.location.orEmpty())
@@ -94,10 +96,10 @@ fun AddEditAppointmentScreen(
             { _, year, month, dayOfMonth ->
                 date = String.format(
                     Locale.US,
-                    "%04d-%02d-%02d",
-                    year,
+                    "%02d-%02d-%04d",
                     month + 1,
-                    dayOfMonth
+                    dayOfMonth,
+                    year
                 )
             },
             calendar.get(Calendar.YEAR),
@@ -110,21 +112,28 @@ fun AddEditAppointmentScreen(
 
     fun showTimePicker() {
         val calendar = Calendar.getInstance()
+        val currentTime = clockFormat.storedTime(time)?.split(':')
 
         TimePickerDialog(
             context,
             { _, hourOfDay, minute ->
-                time = String.format(Locale.US, "%02d:%02d", hourOfDay, minute)
+                time = clockFormat.displayTime(String.format(Locale.US, "%02d:%02d", hourOfDay, minute))
             },
-            calendar.get(Calendar.HOUR_OF_DAY),
-            calendar.get(Calendar.MINUTE),
-            false
+            currentTime?.get(0)?.toInt() ?: calendar.get(Calendar.HOUR_OF_DAY),
+            currentTime?.get(1)?.toInt() ?: calendar.get(Calendar.MINUTE),
+            clockFormat.is24Hour
         ).show()
     }
 
+    val storedDate = storedFieldDate(date)
+    val storedTime = clockFormat.storedTime(time)
     val titleError = attemptedSave && title.isBlank()
-    val dateError = if (attemptedSave) appointmentDateError(date) else null
-    val timeError = attemptedSave && !isValidTime(time.trim())
+    val dateError = when {
+        !attemptedSave -> null
+        storedDate == null -> "Use a valid date in $DATE_FIELD_HINT format"
+        else -> appointmentDateError(storedDate)
+    }
+    val timeError = attemptedSave && storedTime == null
 
     val titleField: @Composable () -> Unit = {
         OutlinedTextField(
@@ -132,7 +141,7 @@ fun AddEditAppointmentScreen(
           onValueChange = { title = it },
           enabled = !isSaving,
           label = { Text("Appointment title") },
-          modifier = Modifier.fillMaxWidth(),
+          modifier = Modifier.fillMaxWidth().keepKeyboardOnTap(),
           singleLine = true,
           isError = titleError,
           supportingText = {
@@ -150,7 +159,7 @@ fun AddEditAppointmentScreen(
             onValueChange = { provider = it },
             enabled = !isSaving,
             label = { Text("Provider") },
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().keepKeyboardOnTap(),
             singleLine = true,
             shape = RoundedCornerShape(12.dp)
         )
@@ -160,8 +169,9 @@ fun AddEditAppointmentScreen(
         OutlinedTextField(
             value = location,
             onValueChange = { location = it },
+            enabled = !isSaving,
             label = { Text("Location") },
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().keepKeyboardOnTap(),
             singleLine = true,
             shape = RoundedCornerShape(12.dp)
         )
@@ -172,8 +182,8 @@ fun AddEditAppointmentScreen(
             value = date,
             onValueChange = { date = it },
             label = { Text("Date") },
-            placeholder = { Text("YYYY-MM-DD") },
-            modifier = Modifier.fillMaxWidth(),
+            placeholder = { Text(DATE_FIELD_HINT) },
+            modifier = Modifier.fillMaxWidth().keepKeyboardOnTap(),
             singleLine = true,
             enabled = !isSaving,
             trailingIcon = {
@@ -196,8 +206,8 @@ fun AddEditAppointmentScreen(
             value = time,
             onValueChange = { time = it },
             label = { Text("Time") },
-            placeholder = { Text("HH:MM") },
-            modifier = Modifier.fillMaxWidth(),
+            placeholder = { Text(clockFormat.hint) },
+            modifier = Modifier.fillMaxWidth().keepKeyboardOnTap(),
             singleLine = true,
             enabled = !isSaving,
             trailingIcon = {
@@ -208,7 +218,7 @@ fun AddEditAppointmentScreen(
             isError = timeError,
             supportingText = {
                 if (timeError) {
-                    Text("Enter a valid time (HH:MM)")
+                    Text(clockFormat.timeError)
                 }
             },
             shape = RoundedCornerShape(12.dp)
@@ -221,7 +231,7 @@ fun AddEditAppointmentScreen(
             onValueChange = { notes = it },
             enabled = !isSaving,
             label = { Text("What would you like to discuss?") },
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().keepKeyboardOnTap(),
             minLines = 3,
             shape = RoundedCornerShape(12.dp)
         )
@@ -234,16 +244,16 @@ fun AddEditAppointmentScreen(
 
                 if (
                     title.isNotBlank() &&
-                    appointmentDateError(date) == null &&
-                    isValidTime(time.trim())
+                    storedDate != null && appointmentDateError(storedDate) == null &&
+                    storedTime != null
                 ) {
                     onSave(
                         Appointment(
                             id = appointment?.id.orEmpty(),
                             patientId = appointment?.patientId.orEmpty(),
                             title = title.trim(),
-                            date = date.trim(),
-                            time = time.trim(),
+                            date = storedDate,
+                            time = storedTime,
                             provider = provider.trim(),
                             location = location.trim(),
                             notes = notes.trim(),
@@ -423,8 +433,4 @@ private fun isValidDate(value: String): Boolean {
     }
 
     return day in 1..daysInMonth
-}
-
-internal fun isValidTime(value: String): Boolean {
-    return Regex("""([01]\d|2[0-3]):[0-5]\d""").matches(value)
 }

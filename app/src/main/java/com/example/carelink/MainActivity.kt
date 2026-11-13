@@ -36,6 +36,7 @@ import androidx.compose.ui.Modifier
 import com.example.carelink.data.CareHistoryStore
 import com.example.carelink.data.ConnectivityMonitor
 import com.example.carelink.data.canReachFirebase
+import com.example.carelink.data.profileReadSource
 import com.example.carelink.data.showOfflineWarning
 import com.example.carelink.screens.LocalConnectionAvailable
 import com.example.carelink.screens.OfflineBanner
@@ -77,9 +78,12 @@ import com.example.carelink.screens.PasswordResetEmailScreen
 import com.example.carelink.screens.PatientProfileDetails
 import com.example.carelink.screens.ProfileScreen
 import com.example.carelink.screens.SettingsScreen
+import com.example.carelink.screens.ClockFormat
+import com.example.carelink.screens.LocalClockFormat
 import com.example.carelink.screens.CaregiverMedicationsScreen
 import com.example.carelink.screens.MedicationCaregiverAccessScreen
 import com.example.carelink.screens.MedicationScheduleScreen
+import com.example.carelink.ui.DismissKeyboardOnOutsideTapColumn
 import com.example.carelink.ui.theme.CareLinkTheme
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseAuthInvalidUserException
@@ -163,6 +167,13 @@ class MainActivity : ComponentActivity() {
 
             CareLinkTheme {
                 val auth = remember { FirebaseAuth.getInstance() }
+                val displayPreferences = remember { getSharedPreferences("display_settings", MODE_PRIVATE) }
+                var clockFormat by remember {
+                    mutableStateOf(
+                        if (displayPreferences.getBoolean("use_24_hour_clock", false)) ClockFormat.TwentyFourHour
+                        else ClockFormat.TwelveHour
+                    )
+                }
                 val notificationPermissionLauncher = rememberLauncherForActivityResult(
                     ActivityResultContracts.RequestPermission()
                 ) { _: Boolean ->
@@ -424,6 +435,7 @@ class MainActivity : ComponentActivity() {
                 var submitError by remember { mutableStateOf<String?>(null) }
                 var requestSucceeded by remember { mutableStateOf(false) }
                 var hasProfile by remember { mutableStateOf<Boolean?>(null) }
+                var profileLoadError by remember { mutableStateOf<String?>(null) }
                 var fullName by remember { mutableStateOf("") }
                 var firstName by remember { mutableStateOf("") }
                 var lastName by remember { mutableStateOf("") }
@@ -537,36 +549,44 @@ class MainActivity : ComponentActivity() {
 
                 }
 
+                val profileSource = profileReadSource(networkAvailable, firebaseAvailable)
+                val latestProfileSource by rememberUpdatedState(profileSource)
                 LaunchedEffect(
                     isAuthenticated,
                     auth.currentUser?.uid,
-                    connectionAvailable
+                    profileSource
                 ) {
                     val user = auth.currentUser
 
                     if (!isAuthenticated || user == null) {
                         hasProfile = null
+                        profileLoadError = null
                         fullName = ""
                         appointments = emptyList()
                         selectedAppointment = null
                         appointmentLoadError = null
                         appointmentSuccessMessage = null
                     } else {
+                        // Wait for the initial reachability check before relying on the local cache.
+                        profileSource ?: return@LaunchedEffect
+                        profileLoadError = null
                         medicationReminderScheduler.restore(user.uid)
                         loadAppointments()
                         firestore
                             .collection("users")
                             .document(user.uid)
-                            .get(if (connectionAvailable) Source.DEFAULT else Source.CACHE)
+                            .get(profileSource)
                             .addOnSuccessListener { document ->
-                                if (!isAuthenticated || auth.currentUser?.uid != user.uid) return@addOnSuccessListener
+                                if (!isAuthenticated || auth.currentUser?.uid != user.uid ||
+                                    latestProfileSource != profileSource
+                                ) return@addOnSuccessListener
                                 // An empty cache cannot establish that a patient needs a new profile.
-                                if (!document.exists() && !connectionAvailable) {
-                                    submitError = "Connect to the internet to load your profile."
+                                if (!document.exists() && (profileSource == Source.CACHE || document.metadata.isFromCache)) {
+                                    profileLoadError = "Connect to the internet to load your profile."
                                     return@addOnSuccessListener
                                 }
                                 hasProfile = document.exists()
-                                submitError = null
+                                profileLoadError = null
                                 fullName = document.getString("fullName").orEmpty()
                                 firstName = document.getString("firstName").orEmpty()
                                 lastName = document.getString("lastName").orEmpty()
@@ -580,9 +600,14 @@ class MainActivity : ComponentActivity() {
                                 zipCode = document.getString("zipCode").orEmpty()
                             }
                             .addOnFailureListener {
-                                if (!isAuthenticated || auth.currentUser?.uid != user.uid) return@addOnFailureListener
-                                submitError =
+                                if (!isAuthenticated || auth.currentUser?.uid != user.uid ||
+                                    latestProfileSource != profileSource
+                                ) return@addOnFailureListener
+                                profileLoadError = if (profileSource == Source.CACHE) {
+                                    "Connect to the internet to load your profile."
+                                } else {
                                     "We couldn't load your profile."
+                                }
                             }
                     }
                 }
@@ -607,9 +632,12 @@ class MainActivity : ComponentActivity() {
                     return null
                 }
 
-                CompositionLocalProvider(LocalConnectionAvailable provides connectionAvailable) {
+                CompositionLocalProvider(
+                    LocalConnectionAvailable provides connectionAvailable,
+                    LocalClockFormat provides clockFormat
+                ) {
 
-                    Column(Modifier
+                    DismissKeyboardOnOutsideTapColumn(Modifier
                         .fillMaxSize()
                         .background(MaterialTheme.colorScheme.background)
                         .safeDrawingPadding()
@@ -621,9 +649,10 @@ class MainActivity : ComponentActivity() {
                             when {
                                 isAuthenticated && hasProfile == null -> {
                                     BackHandler { submitError = signOut() }
-                                    if (submitError != null) {
+                                    val error = submitError ?: profileLoadError
+                                    if (error != null) {
                                         Column(Modifier.safeDrawingPadding()) {
-                                            CareErrorState(message = submitError!!)
+                                            CareErrorState(message = error)
                                             TextButton(
                                                 onClick = {
                                                     submitError = signOut()
@@ -1808,6 +1837,11 @@ class MainActivity : ComponentActivity() {
                                         }
                                         AppScreen.Settings -> {
                                             SettingsScreen(
+                                                clockFormat = clockFormat,
+                                                onClockFormatChange = {
+                                                    clockFormat = it
+                                                    displayPreferences.edit().putBoolean("use_24_hour_clock", it.is24Hour).apply()
+                                                },
                                                 onCaregiverAccess = {
                                                     caregiverAccessReturnScreen = AppScreen.Settings
                                                     appScreen = AppScreen.MedicationCaregiverAccess
@@ -1849,6 +1883,7 @@ class MainActivity : ComponentActivity() {
                                                 isSubmitting = isSubmitting,
                                                 submitError = submitError,
                                                 onSignIn = { details ->
+                                                    if (isSubmitting) return@LoginScreen
                                                     if (!connectionAvailable) {
                                                         submitError = "Connect to the internet to sign in."
                                                         return@LoginScreen
@@ -1863,6 +1898,8 @@ class MainActivity : ComponentActivity() {
                                                         )
                                                         .addOnSuccessListener {
                                                             isSubmitting = false
+                                                            submitError = null
+                                                            profileLoadError = null
                                                             hasProfile = null
                                                             isAuthenticated = true
                                                         }

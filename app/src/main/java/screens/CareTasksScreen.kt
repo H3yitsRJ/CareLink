@@ -132,8 +132,8 @@ fun CareTasksScreen(
                                 Text(
                                     when {
                                         task.dueDate.isBlank() -> "No due date"
-                                        task.time.isBlank() -> "Due ${task.dueDate} • No time set"
-                                        else -> "Due ${task.dueDate} at ${task.time}"
+                                        task.time.isBlank() -> "Due ${displayFieldDate(task.dueDate)} • No time set"
+                                        else -> "Due ${displayFieldDate(task.dueDate)} at ${LocalClockFormat.current.displayTime(task.time)}"
                                     }
                                 )
 

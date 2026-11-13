@@ -131,8 +131,8 @@ fun AppointmentDetailsScreen(
                 }
 
                 CareCard("Visit information") {
-                    AppointmentInfoRow("Date", appointment.date)
-                    AppointmentInfoRow("Time", appointment.time)
+                    AppointmentInfoRow("Date", displayFieldDate(appointment.date))
+                    AppointmentInfoRow("Time", LocalClockFormat.current.displayTime(appointment.time))
 
                     if (appointment.location.isNotBlank()) {
                         AppointmentInfoRow("Location", appointment.location)

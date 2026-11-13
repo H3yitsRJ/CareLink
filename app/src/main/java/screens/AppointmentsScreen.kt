@@ -245,7 +245,7 @@ private fun AppointmentCard(
                 }
 
                 Text(
-                    text = "${appointment.date} • ${appointment.time}",
+                    text = "${displayFieldDate(appointment.date)} • ${LocalClockFormat.current.displayTime(appointment.time)}",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

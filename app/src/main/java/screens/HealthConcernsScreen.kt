@@ -80,7 +80,7 @@ fun HealthConcernsScreen(
                         IconButton(onClick = onBack) {
                             Icon(
                                 imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = "Back to home"
+                                contentDescription = "Back"
                             )
                         }
                     }
@@ -194,7 +194,7 @@ fun HealthConcernsScreen(
                 }
             }
         }
-        
+
         when {
             isLoading -> item { LoadingState("Loading health concerns") }
             error != null -> item { CareErrorState(message = error) }
@@ -307,7 +307,7 @@ fun HealthConcernsScreen(
                                         }
 
                                         Text(
-                                            text = "$severityLabel severity · ${concern.recordedDate}",
+                                            text = "$severityLabel severity · ${displayFieldDate(concern.recordedDate)}",
                                             style = MaterialTheme.typography.bodySmall
                                         )
                                     }

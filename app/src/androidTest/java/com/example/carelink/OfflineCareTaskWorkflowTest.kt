@@ -88,8 +88,8 @@ class OfflineCareTaskWorkflowTest {
         compose.onNodeWithText("Add care task").performClick()
         compose.onNodeWithText("Task title").performScrollTo().performTextReplacement("Call clinic")
         compose.onNodeWithText("Description (optional)").performScrollTo().performTextReplacement("Ask about results")
-        compose.onNodeWithText("Due date").performScrollTo().performTextReplacement("2099-01-01")
-        compose.onNodeWithText("Time").performScrollTo().performTextReplacement("09:00")
+        compose.onNodeWithText("Due date").performScrollTo().performTextReplacement("01-01-2099")
+        compose.onNodeWithText("Time").performScrollTo().performTextReplacement("9:00 AM")
         compose.onNodeWithText("Save care task").performScrollTo().performClick()
         compose.onNodeWithText(OFFLINE_ACTION_MESSAGE).assertExists()
         compose.runOnIdle { assertEquals(0, createRequests); connection.value = true }

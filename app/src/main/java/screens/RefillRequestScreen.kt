@@ -33,6 +33,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.TextButton
+import com.example.carelink.ui.keepKeyboardOnTap
 
 // Only one open request per medication prevents accidental duplicate submissions.
 internal fun canCreateRefill(medicationId: String, activeRequests: List<RefillRequest>) = medicationId.isNotBlank() && activeRequests.none {
@@ -75,7 +76,7 @@ fun RefillRequestScreen(
             StateMessage("No active medications are available. Add a medication in Medications before requesting a refill.")
             if (onOpenMedications != null) TextButton(onClick = onOpenMedications) { Text("Open medications") }
         }
-        OutlinedTextField(note, { note = it }, label = { Text("Request note (optional)") }, enabled = !isSaving && !saved, isError = attempted && "note" in errors, supportingText = { if (attempted && "note" in errors) Text(errors.getValue("note")) }, modifier = Modifier.fillMaxWidth(), minLines = 3)
+        OutlinedTextField(note, { note = it }, label = { Text("Request note (optional)") }, enabled = !isSaving && !saved, isError = attempted && "note" in errors, supportingText = { if (attempted && "note" in errors) Text(errors.getValue("note")) }, modifier = Modifier.fillMaxWidth().keepKeyboardOnTap(), minLines = 3)
         // Recalculate from current inputs so the message and submit action agree.
         if (attempted && !valid) StateMessage(when {
             eligible.none { it.id == medicationId } -> "Select an eligible medication."

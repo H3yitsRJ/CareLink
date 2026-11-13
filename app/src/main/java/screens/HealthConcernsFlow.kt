@@ -85,7 +85,6 @@ fun HealthConcernsFlow(
                     onDispose { active = false; stop() }
                 }
 
-
                 Scaffold(Modifier.safeDrawingPadding()) { padding ->
                     Column(Modifier.padding(padding)) {
                         successMessage?.let { message ->
@@ -113,7 +112,6 @@ fun HealthConcernsFlow(
                             onBack = onBack,
                             onOpenCareRecipientConcerns = onOpenCareRecipientConcerns
                         )
-
                     }
                 }
             }

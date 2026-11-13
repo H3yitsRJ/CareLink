@@ -25,6 +25,7 @@ import com.example.carelink.data.HealthConcernRepository
 import com.example.carelink.model.ConcernSeverity
 import com.example.carelink.model.ConcernStatus
 import com.example.carelink.model.HealthConcern
+import com.example.carelink.ui.keepKeyboardOnTap
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -66,9 +67,7 @@ fun AddHealthConcernScreen(
 
     val titleInvalid = attemptedSave && title.isBlank()
     val onsetDate = Date(dateMillis)
-    val dateParts = listOf("d", "MMM", "yyyy").map { pattern ->
-        SimpleDateFormat(pattern, Locale.getDefault()).format(onsetDate)
-    }
+    val dateLabel = SimpleDateFormat(DATE_FIELD_PATTERN, Locale.US).format(onsetDate)
 
     Scaffold(
         modifier = Modifier
@@ -184,19 +183,14 @@ fun AddHealthConcernScreen(
                         style = MaterialTheme.typography.titleMedium
                     )
 
-                    Text(
-                        text = "Concern or symptom",
-                        style = MaterialTheme.typography.labelLarge
-                    )
-
                     OutlinedTextField(
                         value = title,
                         onValueChange = {
                             title = it
                             saveError = null
                         },
-                        placeholder = { Text("Enter concern or symptom") },
-                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("Concern or symptom") },
+                        modifier = Modifier.fillMaxWidth().keepKeyboardOnTap(),
                         shape = RoundedCornerShape(8.dp),
                         enabled = !saving,
                         singleLine = true,
@@ -209,7 +203,6 @@ fun AddHealthConcernScreen(
                     )
 
                     Text("Severity")
-
 
                     Row(
                         modifier = Modifier
@@ -283,24 +276,13 @@ fun AddHealthConcernScreen(
                         ).show()
                     }
 
-                    Row(
+                    OutlinedButton(
+                        onClick = openDatePicker,
+                        enabled = !saving,
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        shape = RoundedCornerShape(8.dp)
                     ) {
-                        dateParts.forEach { part ->
-                            OutlinedButton(
-                                onClick = openDatePicker,
-                                enabled = !saving,
-                                modifier = Modifier.weight(1f),
-                                shape = RoundedCornerShape(8.dp),
-                                colors = ButtonDefaults.outlinedButtonColors(
-                                    contentColor = MaterialTheme.colorScheme.onSurface
-                                ),
-                                contentPadding = PaddingValues(horizontal = 4.dp)
-                            ) {
-                                Text(part)
-                            }
-                        }
+                        Text(dateLabel)
                     }
                 }
             }
@@ -331,7 +313,7 @@ fun AddHealthConcernScreen(
                             notes = it
                             saveError = null
                         },
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth().keepKeyboardOnTap(),
                         shape = RoundedCornerShape(8.dp),
                         enabled = !saving,
                         minLines = 3

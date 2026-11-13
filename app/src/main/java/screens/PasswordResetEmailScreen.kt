@@ -21,6 +21,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import com.example.carelink.ui.keepKeyboardOnTap
 import com.example.carelink.ui.theme.CareLinkTheme
 
 // The same validator drives the visible error and its unit tests.
@@ -114,7 +115,7 @@ fun PasswordResetEmailScreen(
                 OutlinedTextField(
                     value = email,
                     onValueChange = { email = it },
-                    modifier = Modifier.fillMaxWidth().padding(16.dp),
+                    modifier = Modifier.fillMaxWidth().padding(16.dp).keepKeyboardOnTap(),
                     label = { Text("Email address") },
                     placeholder = { Text("name@example.com") },
                     singleLine = true,
