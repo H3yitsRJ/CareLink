@@ -71,7 +71,6 @@ import com.example.carelink.screens.CreateProfileScreen
 import com.example.carelink.screens.DashboardScreen
 import com.example.carelink.screens.DashboardSummary
 import com.example.carelink.screens.LoginScreen
-import com.example.carelink.screens.LogoutScreen
 import com.example.carelink.screens.MedicationDetailsScreen
 import com.example.carelink.screens.MedicationsScreen
 import com.example.carelink.screens.PasswordResetEmailScreen
@@ -136,7 +135,6 @@ private enum class AppScreen {
     Settings,
     CaregiverMedications,
     MedicationCaregiverAccess,
-    Logout,
     AddMedication,
 
     MedicationScheduler
@@ -1752,7 +1750,8 @@ class MainActivity : ComponentActivity() {
                                                     appScreen =
                                                         AppScreen.Settings
                                                 },
-                                                onNavigate = ::openTopLevel
+                                                onNavigate = ::openTopLevel,
+                                                onLogout = ::signOut
                                             )
                                         }
                                         AppScreen.EditProfile -> {
@@ -1848,9 +1847,6 @@ class MainActivity : ComponentActivity() {
                                                 },
                                                 onBack = {
                                                     appScreen = AppScreen.Profile
-                                                },
-                                                onOpenLogout = {
-                                                    appScreen = AppScreen.Logout
                                                 }
                                             )
                                         }
@@ -1859,20 +1855,6 @@ class MainActivity : ComponentActivity() {
                                         AppScreen.MedicationCaregiverAccess -> MedicationCaregiverAccessScreen(
                                             patientId = auth.currentUser!!.uid, patientName = fullName,
                                             onBack = { appScreen = caregiverAccessReturnScreen })
-                                        AppScreen.Logout -> {
-                                            var logoutError by remember { mutableStateOf<String?>(null) }
-                                            LogoutScreen(
-                                                errorMessage = logoutError,
-                                                onBack = {
-                                                    appScreen = AppScreen.Settings
-                                                },
-
-                                                onLogout = {
-                                                    logoutError = signOut()
-                                                }
-
-                                            )
-                                        }
                                     }
                                 }
 

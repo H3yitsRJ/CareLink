@@ -36,7 +36,6 @@ import androidx.compose.ui.unit.dp
 @Composable
 fun SettingsScreen(
     onBack: () -> Unit,
-    onOpenLogout: () -> Unit,
     onCaregiverAccess: () -> Unit = {},
     clockFormat: ClockFormat = ClockFormat.TwelveHour,
     onClockFormatChange: (ClockFormat) -> Unit = {}
@@ -62,15 +61,6 @@ fun SettingsScreen(
         }
         Row(Modifier.fillMaxWidth().sizeIn(minHeight = 56.dp).clickable(onClick = onCaregiverAccess).padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
             Text("Medication caregiver access", Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
-            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null)
-        }
-        Row(
-            Modifier.fillMaxWidth().padding(top = 24.dp).sizeIn(minHeight = 56.dp)
-                .clickable(onClickLabel = "Open log out confirmation", onClick = onOpenLogout)
-                .padding(horizontal = 4.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text("Log out", Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
             Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null)
         }
     }

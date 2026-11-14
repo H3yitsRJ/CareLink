@@ -28,7 +28,6 @@ class ClockFormatSettingsTest {
                 if (inSettings.value) {
                     SettingsScreen(
                         onBack = { inSettings.value = false },
-                        onOpenLogout = {},
                         clockFormat = format.value,
                         onClockFormatChange = { format.value = it }
                     )
