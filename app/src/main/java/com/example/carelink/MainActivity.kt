@@ -1347,6 +1347,7 @@ class MainActivity : ComponentActivity() {
                                                 onBack = {
                                                     appScreen = AppScreen.Medications
                                                 },
+                                                onNavigate = ::openTopLevel,
                                                 onOpenMedication = { entry ->
                                                     val medicationId = entry.relatedRecordId
 
