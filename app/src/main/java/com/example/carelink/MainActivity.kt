@@ -866,7 +866,6 @@ class MainActivity : ComponentActivity() {
                                             NotificationsScreen(onBack = { appScreen = AppScreen.Home })
                                         }
                                         AppScreen.Home -> {
-
                                             val overdueMedicationCount =
                                                 if (
                                                     !dashboardMedicationsLoading &&
@@ -929,8 +928,165 @@ class MainActivity : ComponentActivity() {
                                                 } else {
                                                     null
                                                 }
+
+                                            val appointmentFormat = java.text.SimpleDateFormat(
+                                                "yyyy-MM-dd HH:mm",
+                                                java.util.Locale.US
+                                            ).apply {
+                                                isLenient = false
+                                            }
+
+                                            val now = System.currentTimeMillis()
+                                            val nextAppointment = appointments
+                                                .asSequence()
+                                                .filter { it.status == AppointmentStatus.SCHEDULED }
+                                                .mapNotNull { appointment ->
+                                                    val value = "${appointment.date} ${appointment.time}"
+                                                    val position = java.text.ParsePosition(0)
+                                                    val start = appointmentFormat.parse(value, position)
+
+                                                    if (start != null && position.index == value.length && start.time >= now) {
+                                                        appointment to start
+                                                    } else {
+                                                        null
+                                                    }
+                                                }
+                                                .minByOrNull { (_, start) -> start.time }
+
+                                            val appointmentPreview = when {
+                                                appointmentsLoading -> "Loading appointments…"
+                                                appointmentLoadError != null -> "Couldn’t load appointments."
+                                                nextAppointment == null -> "No upcoming appointments."
+                                                else -> {
+                                                    val (appointment, start) = nextAppointment
+
+                                                    val date = java.text.SimpleDateFormat(
+                                                        "MMM d",
+                                                        java.util.Locale.getDefault()
+                                                    ).format(start)
+                                                    val time = clockFormat.displayTime(appointment.time)
+
+                                                    listOf(
+                                                        appointment.title,
+                                                        appointment.provider,
+                                                        "$date • $time"
+                                                    ).filter { it.isNotBlank() }.joinToString("\n")
+                                                }
+                                            }
+
+                                            val openTaskTitles = dashboardCareTasks
+                                                .filterNot { it.completed }
+                                                .map { it.title.trim() }
+                                                .filter { it.isNotEmpty() }
+                                                .take(2)
+
+                                            val homeMedication = dashboardMedications.firstOrNull()
+                                            val homeReminder = homeMedication?.reminderTimes?.firstOrNull()
+
+                                            val homeScheduledTime = homeReminder?.let { reminder ->
+                                                val parts = reminder.split(":")
+                                                val hour = parts.getOrNull(0)?.toIntOrNull()
+                                                val minute = parts.getOrNull(1)?.toIntOrNull()
+
+                                                if (
+                                                    parts.size == 2 &&
+                                                    hour != null && hour in 0..23 &&
+                                                    minute != null && minute in 0..59
+                                                ) {
+                                                    java.util.Calendar.getInstance().apply {
+                                                        set(java.util.Calendar.HOUR_OF_DAY, hour)
+                                                        set(java.util.Calendar.MINUTE, minute)
+                                                        set(java.util.Calendar.SECOND, 0)
+                                                        set(java.util.Calendar.MILLISECOND, 0)
+                                                    }.timeInMillis
+                                                } else {
+                                                    null
+                                                }
+                                            }
+
+                                            val homeRecordedStatus = dashboardDoseHistory
+                                                .firstOrNull { item ->
+                                                    item.record.medicationId == homeMedication?.id &&
+                                                            item.record.scheduledTimeMillis == homeScheduledTime
+                                                }
+                                                ?.record
+                                                ?.status
+
                                             DashboardScreen(
                                                 fullName = fullName,
+                                                doseActionsEnabled =
+                                                    homeMedication != null &&
+                                                            homeScheduledTime != null &&
+                                                            !dashboardMedicationsLoading &&
+                                                            dashboardMedicationsError == null &&
+                                                            !dashboardDoseHistoryLoading &&
+                                                            dashboardDoseHistoryError == null &&
+                                                            connectionAvailable,
+                                                isSavingDose = isSavingDose,
+                                                recordedDoseStatus = homeRecordedStatus,
+                                                doseMessage = doseMessage,
+                                                doseError = doseError,
+                                                onRecordDose = { status ->
+                                                    val medication = homeMedication
+                                                    val scheduledTime = homeScheduledTime
+                                                    val user = auth.currentUser
+
+                                                    when {
+                                                        !connectionAvailable -> {
+                                                            doseMessage = null
+                                                            doseError = OFFLINE_ACTION_MESSAGE
+                                                        }
+
+                                                        user == null || medication?.patientId != user.uid -> {
+                                                            doseMessage = null
+                                                            doseError = "Sign in to record a dose."
+                                                        }
+
+                                                        scheduledTime == null -> {
+                                                            doseMessage = null
+                                                            doseError = "Choose a medication with a reminder time."
+                                                        }
+
+                                                        !isSavingDose -> {
+                                                            isSavingDose = true
+                                                            doseMessage = null
+                                                            doseError = null
+
+                                                            doseHistoryStore.record(
+                                                                patientId = user.uid,
+                                                                medication = medication,
+                                                                scheduledTimeMillis = scheduledTime,
+                                                                status = status,
+                                                                onComplete = { result ->
+                                                                    isSavingDose = false
+
+                                                                    if (auth.currentUser?.uid == user.uid) {
+                                                                        result.fold(
+                                                                            onSuccess = { item ->
+                                                                                dashboardDoseHistory =
+                                                                                    (dashboardDoseHistory.filterNot {
+                                                                                        it.record.id == item.record.id
+                                                                                    } + item)
+                                                                                        .sortedByDescending {
+                                                                                            it.record.scheduledTimeMillis
+                                                                                        }
+
+                                                                                doseMessage =
+                                                                                    "Dose recorded as ${status.firestoreValue}."
+                                                                                doseError = null
+                                                                            },
+                                                                            onFailure = {
+                                                                                doseMessage = null
+                                                                                doseError =
+                                                                                    "We couldn't record the dose. Please try again."
+                                                                            }
+                                                                        )
+                                                                    }
+                                                                }
+                                                            )
+                                                        }
+                                                    }
+                                                },
                                                 unreadNotificationCount = unreadNotificationCount,
                                                 summary = DashboardSummary(
                                                     medication = when {
@@ -938,36 +1094,65 @@ class MainActivity : ComponentActivity() {
                                                         dashboardMedicationsError != null -> dashboardMedicationsError!!
                                                         dashboardMedications.isEmpty() -> ""
                                                         else -> {
-                                                            val activeCount = dashboardMedications.size
-                                                            val overdueCount = overdueMedicationCount ?: 0
+                                                            val medication = dashboardMedications.first()
+                                                            val nameAndStrength = listOf(medication.name, medication.strength)
+                                                                .filter { it.isNotBlank() }
+                                                                .joinToString(" ")
+                                                            val reminder = medication.reminderTimes.firstOrNull()
+                                                            val overdue = overdueMedicationCount ?: 0
 
-                                                            if (overdueCount > 0) {
-                                                                "$activeCount active medication(s)\n" +
-                                                                        "Attention: $overdueCount dose(s) may be overdue"
-                                                            } else {
-                                                                "$activeCount active medication(s)"
-                                                            }
+                                                            buildList {
+                                                                add(nameAndStrength)
+                                                                reminder?.let {
+                                                                    add("Reminder: ${clockFormat.displayTime(it)}")
+                                                                }
+                                                                if (overdue > 0) {
+                                                                    add("Attention: $overdue dose(s) may be overdue")
+                                                                }
+                                                            }.joinToString("\n")
                                                         }
                                                     },
-                                                    appointment = "View upcoming appointments",
-                                                    healthConcern = if (highSeverityConcernCount > 0) {
-                                                        "Review active health concerns\n" +
-                                                                "Attention: $highSeverityConcernCount high-severity health concern(s)"
-                                                    } else {
-                                                        "Review active health concerns"
+                                                    appointment = appointmentPreview,
+                                                    healthConcern = run {
+                                                        val activeConcerns = dashboardHealthConcerns.filter {
+                                                            it.status == ConcernStatus.ACTIVE
+                                                        }
+
+                                                        val preview = activeConcerns
+                                                            .map { it.title }
+                                                            .filter { it.isNotBlank() }
+                                                            .take(2)
+                                                            .joinToString(" • ")
+
+                                                        buildList {
+                                                            add(
+                                                                when {
+                                                                    activeConcerns.isEmpty() -> "No active health concerns."
+                                                                    preview.isBlank() -> "Review active health concerns"
+                                                                    else -> preview
+                                                                }
+                                                            )
+
+                                                            if (highSeverityConcernCount > 0) {
+                                                                add(
+                                                                    "Attention: $highSeverityConcernCount high-severity health concern(s)"
+                                                                )
+                                                            }
+                                                        }.joinToString("\n")
                                                     },
                                                     careTask = when {
                                                         dashboardCareTasksLoading -> "Loading care tasks..."
-
-                                                        dashboardCareTasksError != null ->
-                                                            dashboardCareTasksError!!
-
-                                                        overdueCareTaskCount != null && overdueCareTaskCount > 0 ->
-                                                            "Check open care tasks\n" +
-                                                                    "Attention: $overdueCareTaskCount care task(s) overdue"
-
-                                                        else -> "Check open care tasks"
-                                                    }
+                                                        dashboardCareTasksError != null -> dashboardCareTasksError!!
+                                                        openTaskTitles.isEmpty() -> "No open care tasks."
+                                                        (overdueCareTaskCount ?: 0) > 0 ->
+                                                            "Attention: ${overdueCareTaskCount ?: 0} overdue"
+                                                        else -> ""
+                                                    },
+                                                    openTaskTitles = if (!dashboardCareTasksLoading && dashboardCareTasksError == null) {
+                                                        openTaskTitles
+                                                    } else {
+                                                        emptyList()
+                                                    },
                                                 ),
                                                 onOpen = { destination ->
                                                     if (destination == "add-medication") {
@@ -1112,10 +1297,20 @@ class MainActivity : ComponentActivity() {
                                                                 isSavingDose = false
 
                                                                 result.fold(
-                                                                    onSuccess = {
-                                                                        val statusLabel = status.name.lowercase()
-                                                                        doseMessage = "Dose recorded as $statusLabel."
-                                                                        doseError = null
+                                                                    onSuccess = { item ->
+                                                                        if (auth.currentUser?.uid == user.uid) {
+                                                                            dashboardDoseHistory = (
+                                                                                    dashboardDoseHistory.filterNot {
+                                                                                        it.record.id == item.record.id
+                                                                                    } + item
+                                                                                    ).sortedByDescending {
+                                                                                    it.record.scheduledTimeMillis
+                                                                                }
+
+                                                                            val statusLabel = item.record.status.firestoreValue
+                                                                            doseMessage = "Dose recorded as $statusLabel."
+                                                                            doseError = null
+                                                                        }
                                                                     },
                                                                     onFailure = {
                                                                         doseMessage = null
@@ -2023,8 +2218,6 @@ class MainActivity : ComponentActivity() {
                         }
                     )
                 }
-
-
 
             }
         }
